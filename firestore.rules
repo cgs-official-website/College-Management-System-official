@@ -1,0 +1,112 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for Role-Based Access Control
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserData().role == 'superadmin';
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role == 'admin';
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && getUserData().role == 'teacher';
+    }
+
+    function isStudent() {
+      return isAuthenticated() && getUserData().role == 'student';
+    }
+
+    function getUserCollegeId() {
+      return getUserData().collegeId;
+    }
+
+    function isSameCollege(resourceData) {
+      return ('collegeId' in resourceData) && (resourceData.collegeId in [getUserCollegeId(), 'all']);
+    }
+
+    // USERS COLLECTION
+    match /users/{userId} {
+      // Users can read their own profile
+      // SuperAdmins can read everyone
+      // Admins can read users in their college
+      // Teachers/Students can read basic profiles in their college
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId || 
+        isSuperAdmin() || 
+        (getUserCollegeId() != null && resource.data.collegeId == getUserCollegeId())
+      );
+      
+      // Creating a user happens from the client during registration, so we allow create if authenticated
+      // For strict production, you'd use Firebase Admin SDK (Cloud Functions) for this.
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      
+      allow update: if isAuthenticated() && (
+        request.auth.uid == userId || 
+        isSuperAdmin() || 
+        (isAdmin() && isSameCollege(resource.data))
+      );
+      
+      allow delete: if isSuperAdmin() || (isAdmin() && isSameCollege(resource.data));
+    }
+
+    // COLLEGES COLLECTION
+    match /colleges/{collegeId} {
+      allow read: if isAuthenticated(); // Anyone authenticated can view college details
+      allow create: if isSuperAdmin() || (isAuthenticated() && request.resource.data.adminUid == request.auth.uid && request.resource.data.status == 'pending');
+      allow delete: if isSuperAdmin(); // Only SuperAdmin deletes colleges
+      allow update: if isSuperAdmin() || (isAdmin() && resource.data.id == getUserCollegeId());
+    }
+
+    // COUNTERS COLLECTION (for auto-increment IDs)
+    match /counters/{counterId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // MULTI-TENANT COLLECTIONS (students, teachers, departments, etc.)
+    match /{collection}/{docId} {
+      // This is a wildcard rule applying to all other collections
+      // (students, teachers, departments, courses, subjects, attendance, assignments, marks)
+      
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() || 
+        (isSameCollege(resource.data)) // Only read data belonging to their college
+      );
+
+      allow create: if isAuthenticated() && (
+        isSuperAdmin() || 
+        (isAdmin() && request.resource.data.collegeId == getUserCollegeId()) ||
+        // Teachers can create attendance, marks, assignments for their college
+        (isTeacher() && request.resource.data.collegeId == getUserCollegeId() && collection in ['attendance', 'marks', 'assignments', 'ptmMeetings']) ||
+        // Students can create leaveRequests or submissions
+        (isStudent() && request.resource.data.collegeId == getUserCollegeId() && collection in ['leaveRequests', 'submissions']) ||
+        // Allow creating their own profile record upon registration
+        (request.auth.uid == docId && collection in ['students', 'teachers', 'parents'])
+      );
+
+      allow update: if isAuthenticated() && (
+        isSuperAdmin() ||
+        (isAdmin() && isSameCollege(resource.data)) ||
+        (isTeacher() && isSameCollege(resource.data) && collection in ['attendance', 'marks', 'assignments', 'ptmMeetings', 'teachers']) ||
+        (isStudent() && isSameCollege(resource.data) && collection in ['leaveRequests', 'students'] && request.auth.uid == resource.data.userId)
+      );
+
+      allow delete: if isAuthenticated() && (
+        isSuperAdmin() ||
+        (isAdmin() && isSameCollege(resource.data)) ||
+        (isTeacher() && isSameCollege(resource.data) && collection in ['attendance', 'marks', 'assignments', 'ptmMeetings'])
+      );
+    }
+  }
+}
