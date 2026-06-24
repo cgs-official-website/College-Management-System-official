@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, useAnimation } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { 
+import {
   Menu,
   X,
   Moon,
@@ -37,7 +37,7 @@ const FloatingCard = ({ icon: Icon, title, delay, className }) => (
     <div>
       <div className="text-xs text-white/60 font-bold uppercase tracking-wider">{title}</div>
       <div className="w-20 h-2 mt-2 bg-white/20 rounded-full overflow-hidden">
-        <motion.div 
+        <motion.div
           initial={{ width: 0 }}
           animate={{ width: '100%' }}
           transition={{ delay: delay + 0.5, duration: 1.5, repeat: Infinity, repeatType: 'reverse' }}
@@ -58,7 +58,7 @@ const LandingPage = () => {
       setIsScrolled(window.scrollY > 50);
     };
     window.addEventListener('scroll', handleScroll);
-    
+
     if (localStorage.theme === 'light') {
       setIsDarkMode(false);
       document.documentElement.classList.remove('dark');
@@ -66,7 +66,7 @@ const LandingPage = () => {
       setIsDarkMode(true);
       document.documentElement.classList.add('dark');
     }
-    
+
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -84,20 +84,20 @@ const LandingPage = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#020813] text-slate-900 dark:text-slate-200 font-sans transition-colors duration-300 overflow-hidden">
-      
+
       {/* Navbar */}
       <nav className={`fixed w-full z-50 transition-all duration-300 ${isScrolled ? 'bg-white/90 dark:bg-[#020813]/90 backdrop-blur-md border-b border-slate-200 dark:border-white/5 py-4' : 'bg-white/50 dark:bg-[#020813]/50 backdrop-blur-sm py-6'}`}>
         <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
-          
+
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 flex items-center justify-center">
               <img src="/logo.png" alt="Zuna" className="w-full h-full object-contain drop-shadow-lg" />
             </div>
             <span className="text-xl font-extrabold tracking-tighter text-slate-900 dark:text-white uppercase">
-              Zuna ERP
+              Zuna
             </span>
           </div>
-          
+
           <div className="hidden md:flex items-center gap-10 text-sm font-bold uppercase tracking-wider">
             <a href="#home" className="text-primary-600 dark:text-primary-400 hover:text-primary-500 transition-colors">Home</a>
             <a href="#about" className="text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-white transition-colors">About</a>
@@ -139,32 +139,32 @@ const LandingPage = () => {
       {/* Ultra-Animated Hero Section */}
       <section id="home" className="pt-24 pb-12 px-4 md:px-6 max-w-[1400px] mx-auto perspective-[2000px]">
         <div className="relative w-full h-[650px] md:h-[800px] rounded-[3rem] overflow-hidden shadow-[0_0_100px_rgba(16,185,129,0.15)] bg-[#020813] border border-white/5">
-          
+
           {/* Animated Background Gradients */}
-          <motion.div 
-            animate={{ 
+          <motion.div
+            animate={{
               scale: [1, 1.2, 1],
               rotate: [0, 90, 0],
             }}
             transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
             className="absolute -top-[50%] -left-[50%] w-[200%] h-[200%] bg-[conic-gradient(from_90deg_at_50%_50%,#020813_0%,#064e3b_50%,#020813_100%)] opacity-30"
           />
-          
+
           {/* Breathing Orbs */}
-          <motion.div 
+          <motion.div
             animate={{ scale: [1, 1.5, 1], opacity: [0.3, 0.6, 0.3] }}
             transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute top-1/4 right-1/4 w-96 h-96 bg-primary-500/30 rounded-full blur-[120px] pointer-events-none mix-blend-screen" 
+            className="absolute top-1/4 right-1/4 w-96 h-96 bg-primary-500/30 rounded-full blur-[120px] pointer-events-none mix-blend-screen"
           />
-          <motion.div 
+          <motion.div
             animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.4, 0.2] }}
             transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-            className="absolute bottom-1/4 left-1/4 w-96 h-96 bg-emerald-500/30 rounded-full blur-[120px] pointer-events-none mix-blend-screen" 
+            className="absolute bottom-1/4 left-1/4 w-96 h-96 bg-emerald-500/30 rounded-full blur-[120px] pointer-events-none mix-blend-screen"
           />
 
           {/* Dynamic Grid Overlay */}
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none"></div>
-          
+
           {/* Floating UI Elements */}
           <motion.div
             animate={{ y: [-10, 10, -10], rotate: [-2, 2, -2] }}
@@ -186,31 +186,31 @@ const LandingPage = () => {
           >
             <FloatingCard icon={ShieldCheck} title="Secured Data" delay={1.1} className="top-64 left-20" />
           </motion.div>
-          
+
           {/* Hero Content */}
           <div className="absolute inset-0 flex flex-col justify-center items-center text-center px-8 md:px-16 z-20">
-            
-            <motion.div 
+
+            <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.8, type: "spring", bounce: 0.5 }}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-primary-500/50 bg-primary-500/10 backdrop-blur-md text-primary-300 text-xs font-bold tracking-widest uppercase shadow-[0_0_20px_rgba(16,185,129,0.3)] mb-8"
             >
-              <Zap className="w-4 h-4 text-primary-400 animate-pulse" /> 
+              <Zap className="w-4 h-4 text-primary-400 animate-pulse" />
               Next-Gen Campus OS
             </motion.div>
 
-            <motion.h1 
+            <motion.h1
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2 }}
               className="text-6xl md:text-8xl lg:text-[7rem] font-extrabold text-white leading-[1.05] mb-6 uppercase tracking-tighter"
             >
-              Architect <br className="hidden md:block"/>
+              Architect <br className="hidden md:block" />
               Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-emerald-400 to-teal-300 drop-shadow-[0_0_30px_rgba(16,185,129,0.5)]">Future.</span>
             </motion.h1>
 
-            <motion.p 
+            <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 1, delay: 0.6 }}
@@ -218,8 +218,8 @@ const LandingPage = () => {
             >
               The most powerful, beautifully animated, and strictly secured digital environment for educational institutions worldwide.
             </motion.p>
-            
-            <motion.div 
+
+            <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.8 }}
@@ -232,7 +232,7 @@ const LandingPage = () => {
                   Launch Platform <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
               </div>
-              
+
               <a href="#pricing" className="flex items-center justify-center px-10 py-5 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 text-white font-bold uppercase tracking-wider text-sm transition-colors rounded-xl">
                 View Pricing
               </a>
@@ -243,43 +243,43 @@ const LandingPage = () => {
 
       {/* Middle Green Section */}
       <section className="bg-gradient-to-b from-primary-800 to-primary-950 dark:from-[#064e3b] dark:to-[#022c22] pt-24 pb-48 px-6 relative mt-10 rounded-[3rem] mx-4 md:mx-6 shadow-2xl overflow-hidden border border-white/5">
-        
+
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none mix-blend-overlay"></div>
 
         <div className="max-w-7xl mx-auto text-center relative z-10">
-          <motion.h2 
+          <motion.h2
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             className="text-4xl md:text-5xl font-extrabold text-white uppercase tracking-wide leading-snug mb-20 drop-shadow-xl"
           >
-            Pioneering Creative <br/>
+            Pioneering Creative <br />
             Ecosystems
           </motion.h2>
 
           {/* 3 Vertical Abstract Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 max-w-6xl mx-auto mb-20">
             {[
-              { 
-                title: 'Student Hub', 
+              {
+                title: 'Student Hub',
                 desc: 'Digital assignments, live attendance, and real-time grades delivered instantly.',
                 icon: GraduationCap,
                 bg: 'bg-white/5 border border-white/10'
               },
-              { 
-                title: 'Faculty Portal', 
+              {
+                title: 'Faculty Portal',
                 desc: 'Seamless class management, automated grading, and smart scheduling algorithms.',
                 icon: Users,
                 bg: 'bg-white/5 border border-white/10'
               },
-              { 
-                title: 'Admin Command', 
+              {
+                title: 'Admin Command',
                 desc: 'Complete departmental oversight and full control over all college operations.',
                 icon: LayoutDashboard,
                 bg: 'bg-white/5 border border-white/10'
               }
             ].map((item, idx) => (
-              <motion.div 
+              <motion.div
                 key={idx}
                 initial={{ opacity: 0, y: 50 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -317,7 +317,7 @@ const LandingPage = () => {
             { title: "Cloud Hosted Scalability", icon: Cloud },
             { title: "24/7 Priority Support", icon: Headset }
           ].map((item, idx) => (
-            <motion.div 
+            <motion.div
               key={idx}
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -337,17 +337,17 @@ const LandingPage = () => {
       {/* Bottom Content Section */}
       <section id="about" className="pt-40 pb-32 px-6 relative max-w-7xl mx-auto">
         <div className="max-w-6xl mx-auto">
-          <motion.h2 
+          <motion.h2
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             className="text-4xl md:text-6xl font-extrabold text-slate-900 dark:text-white uppercase tracking-tight leading-[1.1] mb-8 max-w-xl"
           >
-            Precision <br/>
-            Engineered <br/>
+            Precision <br />
+            Engineered <br />
             Experience
           </motion.h2>
-          
+
           <motion.p
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -364,7 +364,7 @@ const LandingPage = () => {
               { icon: BarChart, title: 'Advanced Analytics', desc: 'Generate actionable insights and automated reports instantly.' },
               { icon: Lock, title: 'Role-Based Access', desc: 'Strict data isolation ensures users only see what they are supposed to.' }
             ].map((item, idx) => (
-              <motion.div 
+              <motion.div
                 key={idx}
                 initial={{ opacity: 0, y: 40 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -387,7 +387,7 @@ const LandingPage = () => {
       <section id="pricing" className="py-32 px-6 bg-slate-50 dark:bg-[#060D1A] relative border-t border-slate-200 dark:border-white/5">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-24">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
@@ -405,7 +405,7 @@ const LandingPage = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
             {/* Demo Plan - Fully Free */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -434,7 +434,7 @@ const LandingPage = () => {
             </motion.div>
 
             {/* Pro Plan - Coming Soon */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -467,7 +467,7 @@ const LandingPage = () => {
             </motion.div>
 
             {/* Enterprise Plan - Coming Soon */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -512,7 +512,7 @@ const LandingPage = () => {
                   <img src="/logo.png" alt="Zuna" className="w-full h-full object-contain drop-shadow-md" />
                 </div>
                 <span className="text-xl font-extrabold tracking-tighter text-slate-900 dark:text-white uppercase">
-                  Zuna ERP
+                  Zuna
                 </span>
               </div>
               <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed mb-6">
@@ -570,7 +570,7 @@ const LandingPage = () => {
 
           <div className="pt-8 border-t border-slate-200 dark:border-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-slate-500 dark:text-slate-500 text-sm font-medium">
-              © {new Date().getFullYear()} Zuna ERP Ecosystem. All rights reserved.
+              © {new Date().getFullYear()} Zuna Ecosystem. All rights reserved.
             </p>
             <div className="flex items-center gap-6 text-sm font-medium">
               <a href="#" className="text-slate-500 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors">Privacy Policy</a>
