@@ -30,9 +30,13 @@ export default function TeacherAssignments() {
       if (!userData?.collegeId) return;
       
       // Fetch courses for dropdown
-      const coursesQ = query(collection(db, 'courses'), where('collegeId', '==', userData.collegeId));
+      const coursesQ = query(
+        collection(db, 'courses'), 
+        where('collegeId', '==', userData.collegeId)
+      );
       const coursesSnap = await getDocs(coursesQ);
-      setCourses(coursesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const myCourses = coursesSnap.docs.filter(d => d.data().assignedTeacher === userData.uid);
+      setCourses(myCourses.map(d => ({ id: d.id, ...d.data() })));
 
       // Fetch assignments
       const assignQ = query(

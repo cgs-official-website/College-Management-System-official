@@ -22,7 +22,7 @@ export function useStaff(collegeId) {
         id: doc.id,
         ...doc.data()
       }));
-      staffData.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+      staffData.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
       setStaff(staffData);
       setIsLoading(false);
     }, (error) => {

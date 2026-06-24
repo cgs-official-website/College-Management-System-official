@@ -49,12 +49,19 @@ export default function TeacherDashboard() {
         
         setNotices(filteredNotices);
         
-        // Fetch actual stats
-        const coursesQ = query(collection(db, 'courses'), where('collegeId', '==', userData.collegeId));
+        const coursesQ = query(
+          collection(db, 'courses'), 
+          where('collegeId', '==', userData.collegeId)
+        );
         const coursesSnap = await getDocs(coursesQ);
+        const myCourses = coursesSnap.docs.filter(doc => doc.data().assignedTeacher === userData.uid);
         
-        const studentsQ = query(collection(db, 'students'), where('collegeId', '==', userData.collegeId));
-        const studentsSnap = await getDocs(studentsQ);
+        let totalStudentsTaught = 0;
+        await Promise.all(myCourses.map(async (docSnap) => {
+          const studentQ = query(collection(db, 'students'), where('courseId', '==', docSnap.id));
+          const studentSnap = await getDocs(studentQ);
+          totalStudentsTaught += studentSnap.size;
+        }));
 
         const assignmentsQ = query(
           collection(db, 'assignments'), 
@@ -63,8 +70,8 @@ export default function TeacherDashboard() {
         const assignmentsSnap = await getDocs(assignmentsQ);
 
         setStats({
-          totalClasses: coursesSnap.size,
-          studentsTaught: studentsSnap.size,
+          totalClasses: myCourses.length,
+          studentsTaught: totalStudentsTaught,
           attendanceRate: 0, // Placeholder until aggregation
           pendingGrades: assignmentsSnap.size
         });

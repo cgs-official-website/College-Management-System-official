@@ -5,9 +5,12 @@ import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useCourses } from '../../../hooks/useCourses';
 
 export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading }) {
   const { userData } = useAuth();
+  const collegeId = userData?.collegeId || 'default_college_id';
+  const { courses } = useCourses(collegeId);
   
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     defaultValues: initialData || {
@@ -110,15 +113,10 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Select 
-              label="Class" 
+              label="Class / Course" 
               {...register('class', { required: "Class is required" })}
               error={errors.class?.message}
-              options={[
-                { value: '1', label: 'Class 1' },
-                { value: '2', label: 'Class 2' },
-                { value: '10', label: 'Class 10' },
-                { value: '12', label: 'Class 12' }
-              ]}
+              options={courses.map(c => ({ value: c.id, label: c.name }))}
             />
             <Select 
               label="Section" 

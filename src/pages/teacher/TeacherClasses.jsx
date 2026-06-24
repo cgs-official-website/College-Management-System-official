@@ -18,13 +18,16 @@ export default function TeacherClasses() {
       try {
         if (!userData?.collegeId) return;
         
-        // In a real app, query where assignedTeacher == userData.uid
-        // For now, we query all college courses for demonstration
-        const q = query(collection(db, 'courses'), where('collegeId', '==', userData.collegeId));
+        // Fetch courses and filter by teacher client-side to avoid requiring composite indexes
+        const q = query(
+          collection(db, 'courses'), 
+          where('collegeId', '==', userData.collegeId)
+        );
         const snap = await getDocs(q);
+        const myCourses = snap.docs.filter(doc => doc.data().assignedTeacher === userData.uid);
         
         // Fetch actual enrollment counts
-        const fetchedCourses = await Promise.all(snap.docs.map(async (docSnap) => {
+        const fetchedCourses = await Promise.all(myCourses.map(async (docSnap) => {
           const courseData = docSnap.data();
           const studentQ = query(collection(db, 'students'), where('courseId', '==', docSnap.id));
           const studentSnap = await getDocs(studentQ);

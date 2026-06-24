@@ -69,7 +69,7 @@ export default function Admission() {
         lastName: data.lastName,
         email: data.email,
         phone: data.phone,
-        class: data.courseName,
+        class: data.courseId || data.courseName, // fallback to name if ID is missing from old records
         section: 'A',
         gender: 'Not Specified',
         address: ''

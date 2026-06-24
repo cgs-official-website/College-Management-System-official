@@ -21,7 +21,8 @@ export function CourseFormModal({ isOpen, onClose, onSubmit, initialData = null,
       duration: '4 Years',
       hodId: '',
       description: '',
-      sections: ''
+      sections: '',
+      assignedTeacher: ''
     }
   });
 
@@ -36,7 +37,8 @@ export function CourseFormModal({ isOpen, onClose, onSubmit, initialData = null,
         duration: '4 Years',
         hodId: '',
         description: '',
-        sections: ''
+        sections: '',
+        assignedTeacher: ''
       });
     }
   }, [isOpen, initialData, reset]);
@@ -101,6 +103,15 @@ export function CourseFormModal({ isOpen, onClose, onSubmit, initialData = null,
               { value: '5 Years', label: '5 Years' }
             ]}
           />
+          <Select 
+            label="Primary Teacher (Assigned)" 
+            {...register('assignedTeacher', { required: "Assigned Teacher is required" })}
+            error={errors.assignedTeacher?.message}
+            options={[{ value: '', label: 'Select Teacher...' }, ...staffOptions]}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Select 
             label="Head of Department (Optional)" 
             {...register('hodId')}

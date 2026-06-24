@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Search, BookOpen, Clock, Users, Edit, Trash2 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useCourses } from '../../../hooks/useCourses';
+import { useStaff } from '../../../hooks/useStaff';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { CourseFormModal } from './CourseFormModal';
@@ -12,6 +13,7 @@ export default function CoursesList() {
   const { userData } = useAuth();
   const collegeId = userData?.collegeId || 'default_college_id';
   const { courses, isLoading, addCourse, updateCourse, deleteCourse, isAdding, isUpdating } = useCourses(collegeId);
+  const { staff } = useStaff(collegeId);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -136,7 +138,15 @@ export default function CoursesList() {
               )}
 
               {course.description && (
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 line-clamp-2">{course.description}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 line-clamp-2">{course.description}</p>
+              )}
+
+              {course.assignedTeacher && (
+                <div className="mb-4 text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                  <Users className="w-4 h-4 text-indigo-400" />
+                  <span className="font-medium">Teacher: </span>
+                  {staff.find(s => s.id === course.assignedTeacher)?.firstName} {staff.find(s => s.id === course.assignedTeacher)?.lastName}
+                </div>
               )}
 
               <div className="mt-auto pt-4 border-t border-slate-100 dark:border-white/5 flex items-center justify-between">
