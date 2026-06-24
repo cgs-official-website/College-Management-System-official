@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
+import { StudentSettings } from './StudentSettings';
 
 const StudentLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -195,7 +196,7 @@ const StudentLayout = () => {
               <Route path="/assignments" element={<PlaceholderModule title="Assignments" icon={FileBarChart} description="Track your upcoming assignments, submit your work, and view grades." />} />
               <Route path="/attendance" element={<PlaceholderModule title="Attendance Records" icon={CheckSquare} description="Check your daily attendance, overall percentage, and leave history." />} />
               <Route path="/timetable" element={<PlaceholderModule title="Timetable" icon={Calendar} description="View your daily class schedule, upcoming exams, and academic calendar." />} />
-              <Route path="/settings" element={<PlaceholderModule title="Settings" icon={Settings} description="Manage your account preferences, notification settings, and profile details." />} />
+              <Route path="/settings" element={<StudentSettings />} />
             </Routes>
           </div>
         </main>

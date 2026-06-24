@@ -164,67 +164,161 @@ export default function TeacherDashboard() {
                   </div>
                 </div>
               ))}
+              {todayClasses.length === 0 && (
+                <div className="text-center py-8 text-slate-500">No classes scheduled for today.</div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Announcements */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Announcements</h2>
-          </div>
-          
-          <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm">
-            {loading ? (
-              <div className="space-y-4">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="animate-pulse flex gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800 shrink-0" />
-                    <div className="flex-1 space-y-2 py-1">
-                      <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-3/4" />
-                      <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-1/2" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : notices.length > 0 ? (
-              <div className="space-y-6">
-                {notices.map((notice) => (
-                  <div key={notice.id} className="group cursor-pointer">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary-50 dark:bg-primary-500/10 flex items-center justify-center shrink-0 text-primary-600 dark:text-primary-400">
-                        <Bell className="w-5 h-5" />
+        <div className="space-y-6">
+          {/* Announcements */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Announcements</h2>
+            </div>
+            
+            <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm">
+              {loading ? (
+                <div className="space-y-4">
+                  {[1, 2].map(i => (
+                    <div key={i} className="animate-pulse flex gap-3">
+                      <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800 shrink-0" />
+                      <div className="flex-1 space-y-2 py-1">
+                        <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-3/4" />
+                        <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-1/2" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-                          {notice.title}
-                        </h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
-                          {notice.content}
-                        </p>
-                        <div className="flex items-center gap-2 mt-2">
-                          <Clock className="w-3 h-3 text-slate-400" />
-                          <span className="text-[10px] font-medium text-slate-400">
-                            {notice.createdAt?.toDate?.()?.toLocaleDateString() || 'Recent'}
-                          </span>
+                    </div>
+                  ))}
+                </div>
+              ) : notices.length > 0 ? (
+                <div className="space-y-6">
+                  {notices.map((notice) => (
+                    <div key={notice.id} className="group cursor-pointer">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary-50 dark:bg-primary-500/10 flex items-center justify-center shrink-0 text-primary-600 dark:text-primary-400">
+                          <Bell className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                            {notice.title}
+                          </h4>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+                            {notice.content}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            <span className="text-[10px] font-medium text-slate-400">
+                              {notice.createdAt?.toDate?.()?.toLocaleDateString() || 'Recent'}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Bell className="w-6 h-6 text-slate-400" />
+                  ))}
                 </div>
-                <p className="text-sm font-medium text-slate-900 dark:text-white">No announcements</p>
-                <p className="text-xs text-slate-500 mt-1">You're all caught up!</p>
-              </div>
-            )}
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Bell className="w-6 h-6 text-slate-400" />
+                  </div>
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">No announcements</p>
+                  <p className="text-xs text-slate-500 mt-1">You're all caught up!</p>
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Manage Student Status */}
+          <ManageStudentStatus />
         </div>
       </div>
     </div>
   );
 }
+
+const ManageStudentStatus = () => {
+  const [studentId, setStudentId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { userData } = useAuth();
+  const [toastMsg, setToastMsg] = useState(null);
+
+  const handleUpdateStatus = async (status) => {
+    if (!studentId) {
+      setToastMsg({ type: 'error', text: 'Please enter a Student ID' });
+      return;
+    }
+    setLoading(true);
+    setToastMsg(null);
+    try {
+      // Find the student
+      const q = query(
+        collection(db, 'users'), 
+        where('collegeId', '==', userData.collegeId),
+        where('studentId', '==', studentId)
+      );
+      const snap = await getDocs(q);
+      
+      if (snap.empty) {
+        setToastMsg({ type: 'error', text: 'Student not found in your college' });
+        setLoading(false);
+        return;
+      }
+
+      const userDoc = snap.docs[0];
+      const uid = userDoc.id;
+
+      // Update both users and students collection
+      const { doc, updateDoc } = await import('firebase/firestore');
+      await updateDoc(doc(db, 'users', uid), { accountStatus: status });
+      await updateDoc(doc(db, 'students', uid), { accountStatus: status });
+
+      setToastMsg({ type: 'success', text: `Student marked as ${status}` });
+      setStudentId('');
+    } catch (error) {
+      console.error(error);
+      setToastMsg({ type: 'error', text: 'Failed to update student' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-xl font-bold text-slate-900 dark:text-white">Manage Student</h2>
+      <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm">
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Update student access status using their ID.</p>
+        <div className="space-y-4">
+          <input 
+            type="text" 
+            placeholder="Enter Student ID (e.g. STU123)"
+            value={studentId}
+            onChange={(e) => setStudentId(e.target.value)}
+            className="w-full px-4 py-2.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+          />
+          <div className="flex gap-3">
+            <button 
+              onClick={() => handleUpdateStatus('active')}
+              disabled={loading}
+              className="flex-1 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-500/20 dark:hover:bg-emerald-500/30 dark:text-emerald-400 font-bold rounded-xl text-sm transition-colors"
+            >
+              Activate
+            </button>
+            <button 
+              onClick={() => handleUpdateStatus('inactive')}
+              disabled={loading}
+              className="flex-1 py-2 bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-500/20 dark:hover:bg-rose-500/30 dark:text-rose-400 font-bold rounded-xl text-sm transition-colors"
+            >
+              Deactivate
+            </button>
+          </div>
+          {toastMsg && (
+            <p className={`text-xs font-bold mt-2 ${toastMsg.type === 'error' ? 'text-rose-500' : 'text-emerald-500'}`}>
+              {toastMsg.text}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

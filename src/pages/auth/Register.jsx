@@ -124,7 +124,7 @@ const Register = () => {
         }
       }
 
-      await registerUser(data.email, data.password, additionalData);
+      await registerUser(data.email.toLowerCase().trim(), data.password, additionalData);
       // Redirection is handled by useEffect when AuthContext resolves user role
     } catch (err) {
       console.error("Registration Error:", err);
@@ -431,7 +431,7 @@ const Register = () => {
                       {...register("email", { 
                         required: "Email is required",
                         pattern: {
-                          value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                          value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
                           message: "Invalid email address"
                         }
                       })}

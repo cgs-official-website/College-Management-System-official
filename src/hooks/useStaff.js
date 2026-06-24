@@ -13,7 +13,7 @@ export function useStaff(collegeId) {
     if (!collegeId) return;
 
     const q = query(
-      collection(db, 'staff'), 
+      collection(db, 'teachers'), 
       where('collegeId', '==', collegeId)
     );
 
@@ -37,7 +37,7 @@ export function useStaff(collegeId) {
   const addStaff = async (data) => {
     setIsAdding(true);
     try {
-      await addDoc(collection(db, 'staff'), {
+      await addDoc(collection(db, 'teachers'), {
         ...data,
         collegeId,
         createdAt: serverTimestamp(),
@@ -56,7 +56,7 @@ export function useStaff(collegeId) {
   const updateStaff = async ({ id, data }) => {
     setIsUpdating(true);
     try {
-      await updateDoc(doc(db, 'staff', id), {
+      await updateDoc(doc(db, 'teachers', id), {
         ...data,
         updatedAt: serverTimestamp()
       });
@@ -72,7 +72,7 @@ export function useStaff(collegeId) {
 
   const deleteStaff = async (id) => {
     try {
-      await deleteDoc(doc(db, 'staff', id));
+      await deleteDoc(doc(db, 'teachers', id));
       toast.success("Staff member removed.");
     } catch (error) {
       console.error("Error deleting staff:", error);

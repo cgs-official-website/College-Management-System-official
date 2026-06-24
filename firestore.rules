@@ -35,7 +35,7 @@ service cloud.firestore {
     }
 
     function isSameCollege(resourceData) {
-      return ('collegeId' in resourceData) && (resourceData.collegeId in [getUserCollegeId(), 'all']);
+      return ('collegeId' in resourceData) && (resourceData.collegeId == getUserCollegeId() || resourceData.collegeId == 'all');
     }
 
     // USERS COLLECTION
@@ -57,7 +57,8 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (
         request.auth.uid == userId || 
         isSuperAdmin() || 
-        (isAdmin() && isSameCollege(resource.data))
+        (isAdmin() && isSameCollege(resource.data)) ||
+        (isTeacher() && isSameCollege(resource.data))
       );
       
       allow delete: if isSuperAdmin() || (isAdmin() && isSameCollege(resource.data));
@@ -100,7 +101,7 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (
         isSuperAdmin() ||
         (isAdmin() && isSameCollege(resource.data)) ||
-        (isTeacher() && isSameCollege(resource.data) && collection in ['attendance', 'marks', 'assignments', 'ptmMeetings', 'teachers']) ||
+        (isTeacher() && isSameCollege(resource.data) && collection in ['attendance', 'marks', 'assignments', 'ptmMeetings', 'teachers', 'students']) ||
         (isStudent() && isSameCollege(resource.data) && collection in ['leaveRequests', 'students'] && request.auth.uid == resource.data.userId)
       );
 

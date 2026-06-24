@@ -34,7 +34,7 @@ const Login = () => {
     setError('');
     
     try {
-      await login(data.email, data.password);
+      await login(data.email.toLowerCase().trim(), data.password);
       // Redirection is handled by useEffect when AuthContext resolves user role
     } catch (err) {
       console.error("Login Error:", err);
@@ -120,7 +120,7 @@ const Login = () => {
                     {...register("email", { 
                       required: "Email is required",
                       pattern: {
-                        value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                        value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
                         message: "Invalid email address"
                       }
                     })}
