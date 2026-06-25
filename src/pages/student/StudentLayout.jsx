@@ -15,11 +15,32 @@ import {
   Menu,
   X,
   GraduationCap,
-  RefreshCw
+  RefreshCw,
+  MonitorPlay,
+  Video,
+  Film,
+  Award,
+  Home,
+  Bus,
+  ShoppingCart,
+  Briefcase,
+  MessageSquareWarning,
+  Files
 } from 'lucide-react';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
 import { StudentSettings } from './StudentSettings';
+import StoreDashboard from '../shared/StoreDashboard';
+import StudentCoursesDashboard from './StudentCoursesDashboard';
+import StudentAssignmentsDashboard from './StudentAssignmentsDashboard';
+import StudentAttendanceDashboard from './StudentAttendanceDashboard';
+import StudentTimetableDashboard from './StudentTimetableDashboard';
+import StudentDocumentsDashboard from './StudentDocumentsDashboard';
+import StudentLMS from './StudentLMS';
+import StudentHostel from './StudentHostel';
+import StudentTransport from './StudentTransport';
+import StudentComplaints from './StudentComplaints';
+import StudentPlacements from './StudentPlacements';
 
 const StudentLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -45,6 +66,16 @@ const StudentLayout = () => {
     { name: 'Assignments', path: '/student/assignments', icon: FileBarChart },
     { name: 'Attendance', path: '/student/attendance', icon: CheckSquare },
     { name: 'Timetable', path: '/student/timetable', icon: Calendar },
+    { name: 'LMS', path: '/student/lms', icon: MonitorPlay },
+    { name: 'Live Classes', path: '/student/live-classes', icon: Video },
+    { name: 'Video Library', path: '/student/video-library', icon: Film },
+    { name: 'Certificates', path: '/student/certificates', icon: Award },
+    { name: 'Hostel', path: '/student/hostel', icon: Home },
+    { name: 'Transport', path: '/student/transport', icon: Bus },
+    { name: 'Store', path: '/student/store', icon: ShoppingCart },
+    { name: 'Placement', path: '/student/placement', icon: Briefcase },
+    { name: 'Complaints', path: '/student/complaints', icon: MessageSquareWarning },
+    { name: 'Documents', path: '/student/documents', icon: Files },
     { name: 'Settings', path: '/student/settings', icon: Settings },
   ];
 
@@ -192,10 +223,20 @@ const StudentLayout = () => {
           <div className="max-w-7xl mx-auto relative">
             <Routes>
               <Route path="/" element={<StudentDashboardHome />} />
-              <Route path="/courses" element={<PlaceholderModule title="My Courses" icon={BookOpen} description="View and manage all your enrolled courses, syllabuses, and study materials." />} />
-              <Route path="/assignments" element={<PlaceholderModule title="Assignments" icon={FileBarChart} description="Track your upcoming assignments, submit your work, and view grades." />} />
-              <Route path="/attendance" element={<PlaceholderModule title="Attendance Records" icon={CheckSquare} description="Check your daily attendance, overall percentage, and leave history." />} />
-              <Route path="/timetable" element={<PlaceholderModule title="Timetable" icon={Calendar} description="View your daily class schedule, upcoming exams, and academic calendar." />} />
+              <Route path="/courses" element={<StudentCoursesDashboard />} />
+              <Route path="/assignments" element={<StudentAssignmentsDashboard />} />
+              <Route path="/attendance" element={<StudentAttendanceDashboard />} />
+              <Route path="/timetable" element={<StudentTimetableDashboard />} />
+              <Route path="/lms" element={<StudentLMS />} />
+              <Route path="/live-classes" element={<StudentLMS />} />
+              <Route path="/video-library" element={<StudentLMS />} />
+              <Route path="/certificates" element={<StudentLMS />} />
+              <Route path="/hostel" element={<StudentHostel />} />
+              <Route path="/transport" element={<StudentTransport />} />
+              <Route path="/store" element={<StoreDashboard />} />
+              <Route path="/placement" element={<StudentPlacements />} />
+              <Route path="/complaints" element={<StudentComplaints />} />
+              <Route path="/documents" element={<StudentDocumentsDashboard />} />
               <Route path="/settings" element={<StudentSettings />} />
             </Routes>
           </div>
@@ -247,22 +288,6 @@ const StudentDashboardHome = () => {
   );
 };
 
-const PlaceholderModule = ({ title, icon: Icon, description }) => {
-  return (
-    <div className="flex flex-col items-center justify-center h-[60vh] text-center max-w-md mx-auto">
-      <div className="w-20 h-20 bg-primary-50 dark:bg-primary-500/10 rounded-3xl flex items-center justify-center mb-6 shadow-sm border border-primary-100 dark:border-primary-500/20">
-        <Icon className="w-10 h-10 text-primary-500" />
-      </div>
-      <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white mb-3 tracking-tight">{title}</h2>
-      <p className="text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
-        {description}
-      </p>
-      <button className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl shadow-lg shadow-primary-500/30 transition-all flex items-center gap-2">
-        <RefreshCw className="w-4 h-4" />
-        Sync Module Data
-      </button>
-    </div>
-  );
-};
+
 
 export default StudentLayout;

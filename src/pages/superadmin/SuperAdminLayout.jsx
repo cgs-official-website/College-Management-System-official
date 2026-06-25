@@ -15,13 +15,15 @@ import {
   X,
   Zap,
   ShieldAlert,
-  RefreshCw
+  RefreshCw,
+  Package
 } from 'lucide-react';
 import SuperColleges from './SuperColleges';
 import SuperAdmins from './SuperAdmins';
 import SuperSettings from './SuperSettings';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
+import GlobalModulesDashboard from './GlobalModulesDashboard';
 
 const SuperAdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -45,6 +47,7 @@ const SuperAdminLayout = () => {
     { name: 'Dashboard', path: '/super', icon: LayoutDashboard },
     { name: 'Colleges', path: '/super/colleges', icon: Building2 },
     { name: 'Admins', path: '/super/admins', icon: Users },
+    { name: 'Modules', path: '/super/modules', icon: Package },
     { name: 'Settings', path: '/super/settings', icon: Settings },
   ];
 
@@ -196,6 +199,7 @@ const SuperAdminLayout = () => {
               <Route path="/" element={<SuperDashboardHome />} />
               <Route path="/colleges" element={<SuperColleges />} />
               <Route path="/admins" element={<SuperAdmins />} />
+              <Route path="/modules/*" element={<GlobalModulesDashboard />} />
               <Route path="/settings" element={<SuperSettings />} />
             </Routes>
           </div>

@@ -10,14 +10,24 @@ import {
   X,
   User,
   Shield,
-  RefreshCw
+  RefreshCw,
+  Home,
+  Bus,
+  ShoppingCart,
+  UsersRound,
+  MessageSquareWarning
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
 import { SearchBar } from '../../components/ui/SearchBar';
+import StoreDashboard from '../shared/StoreDashboard';
+import PTMDashboard from '../shared/PTMDashboard';
 import ParentDashboard from './ParentDashboard';
 import ParentAttendance from './ParentAttendance';
 import ParentGrades from './ParentGrades';
+import ParentHostel from './ParentHostel';
+import ParentTransport from './ParentTransport';
+import ParentComplaints from './ParentComplaints';
 
 export default function ParentLayout() {
   const { userData, logout } = useAuth();
@@ -46,6 +56,11 @@ export default function ParentLayout() {
     { name: 'Dashboard', icon: LayoutDashboard, path: '/parent' },
     { name: 'Child Attendance', icon: CalendarIcon, path: '/parent/attendance' },
     { name: 'Academic Records', icon: FileBarChart, path: '/parent/grades' },
+    { name: 'Hostel', icon: Home, path: '/parent/hostel' },
+    { name: 'Transport', icon: Bus, path: '/parent/transport' },
+    { name: 'Store', icon: ShoppingCart, path: '/parent/store' },
+    { name: 'PTM', icon: UsersRound, path: '/parent/ptm' },
+    { name: 'Complaints', icon: MessageSquareWarning, path: '/parent/complaints' },
   ];
 
   return (
@@ -182,6 +197,11 @@ export default function ParentLayout() {
               <Route path="/" element={<ParentDashboard />} />
               <Route path="/attendance" element={<ParentAttendance />} />
               <Route path="/grades" element={<ParentGrades />} />
+              <Route path="/hostel" element={<ParentHostel />} />
+              <Route path="/transport" element={<ParentTransport />} />
+              <Route path="/store" element={<StoreDashboard />} />
+              <Route path="/ptm" element={<PTMDashboard />} />
+              <Route path="/complaints" element={<ParentComplaints />} />
             </Routes>
           </div>
         </main>

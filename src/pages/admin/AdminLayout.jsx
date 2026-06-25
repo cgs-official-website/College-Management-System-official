@@ -26,9 +26,18 @@ import {
   Wallet,
   Library as LibraryIcon,
   Megaphone,
-  RefreshCw
+  RefreshCw,
+  Target,
+  MonitorPlay,
+  Home,
+  Bus,
+  Calculator,
+  Briefcase,
+  Smartphone,
+  MessageSquareWarning
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import PlaceholderModule from '../../components/ui/PlaceholderModule';
 import StudentList from './students/StudentList';
 import Admission from './admission/Admission';
 import HRManagement from './hr/HRManagement';
@@ -42,6 +51,13 @@ import NoticeBoard from './notices/NoticeBoard';
 import Timetable from './timetable/Timetable';
 import Reports from './reports/Reports';
 import Settings from './settings/Settings';
+import MarketingDashboard from './marketing/MarketingDashboard';
+import LMSDashboard from './lms/LMSDashboard';
+import HostelDashboard from './hostel/HostelDashboard';
+import TransportDashboard from './transport/TransportDashboard';
+import PlacementsDashboard from './placements/PlacementsDashboard';
+import ComplaintsDashboard from './complaints/ComplaintsDashboard';
+import MobileAppsDashboard from './apps/MobileAppsDashboard';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
 
@@ -66,17 +82,24 @@ const AdminLayout = () => {
   const navLinks = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { name: 'Admission', path: '/admin/admission', icon: UserPlus },
+    { name: 'Marketing', path: '/admin/marketing', icon: Target },
     { name: 'Students', path: '/admin/students', icon: GraduationCap },
     { name: 'HR & Staff', path: '/admin/hr', icon: Users },
-    { name: 'Classes & Sections', path: '/admin/courses', icon: BookOpen },
+    { name: 'Classes', path: '/admin/courses', icon: BookOpen },
     { name: 'Timetable', path: '/admin/timetable', icon: Calendar },
     { name: 'Attendance', path: '/admin/attendance', icon: Clock },
-    { name: 'Exams & Assignments', path: '/admin/exams', icon: ClipboardList },
-    { name: 'Fees', path: '/admin/fees', icon: Wallet },
+    { name: 'Exams', path: '/admin/exams', icon: ClipboardList },
+    { name: 'LMS', path: '/admin/lms', icon: MonitorPlay },
+    { name: 'Fees & Finance', path: '/admin/fees', icon: Calculator },
     { name: 'Library', path: '/admin/library', icon: LibraryIcon },
+    { name: 'Hostel', path: '/admin/hostel', icon: Home },
+    { name: 'Transport', path: '/admin/transport', icon: Bus },
     { name: 'Infrastructure', path: '/admin/infrastructure', icon: Building },
     { name: 'Notice Board', path: '/admin/notices', icon: Megaphone },
+    { name: 'Placements', path: '/admin/placements', icon: Briefcase },
+    { name: 'Complaints', path: '/admin/complaints', icon: MessageSquareWarning },
     { name: 'Reports', path: '/admin/reports', icon: FileText },
+    { name: 'Mobile Apps', path: '/admin/apps', icon: Smartphone },
     { name: 'Settings', path: '/admin/settings', icon: SettingsIcon },
   ];
 
@@ -246,17 +269,24 @@ const AdminLayout = () => {
             <Routes>
               <Route path="/" element={<AdminDashboardHome />} />
               <Route path="/admission" element={<Admission />} />
+              <Route path="/marketing/*" element={<MarketingDashboard />} />
               <Route path="/students/*" element={<StudentList />} />
               <Route path="/hr/*" element={<HRManagement />} />
               <Route path="/courses/*" element={<CoursesList />} />
               <Route path="/timetable/*" element={<Timetable />} />
               <Route path="/attendance/*" element={<Attendance />} />
               <Route path="/exams/*" element={<Exams />} />
+              <Route path="/lms/*" element={<LMSDashboard />} />
               <Route path="/fees/*" element={<Fees />} />
               <Route path="/library/*" element={<Library />} />
+              <Route path="/hostel/*" element={<HostelDashboard />} />
+              <Route path="/transport/*" element={<TransportDashboard />} />
               <Route path="/infrastructure/*" element={<Infrastructure />} />
               <Route path="/notices/*" element={<NoticeBoard />} />
+              <Route path="/placements/*" element={<PlacementsDashboard />} />
+              <Route path="/complaints/*" element={<ComplaintsDashboard />} />
               <Route path="/reports/*" element={<Reports />} />
+              <Route path="/apps/*" element={<MobileAppsDashboard />} />
               <Route path="/settings/*" element={<Settings />} />
             </Routes>
           </div>

@@ -16,10 +16,24 @@ import {
   Menu,
   X,
   Briefcase,
-  RefreshCw
+  RefreshCw,
+  MonitorPlay,
+  Video,
+  Film,
+  UsersRound,
+  MessageSquareWarning,
+  Clock,
+  FolderKanban,
+  Banknote
 } from 'lucide-react';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
+import PTMDashboard from '../shared/PTMDashboard';
+import TimesheetDashboard from './TimesheetDashboard';
+import ProjectTimesheetDashboard from './ProjectTimesheetDashboard';
+import PayrollDashboard from './PayrollDashboard';
+import TeacherLMS from './TeacherLMS';
+import TeacherComplaints from './TeacherComplaints';
 import TeacherDashboard from './TeacherDashboard';
 import TeacherClasses from './TeacherClasses';
 import TeacherAssignments from './TeacherAssignments';
@@ -53,6 +67,14 @@ const TeacherLayout = () => {
     { name: 'Attendance', path: '/teacher/attendance', icon: CheckSquare },
     { name: 'Schedule', path: '/teacher/schedule', icon: Calendar },
     { name: 'Marks & Grading', path: '/teacher/grades', icon: FileBarChart },
+    { name: 'LMS', path: '/teacher/lms', icon: MonitorPlay },
+    { name: 'Live Classes', path: '/teacher/live-classes', icon: Video },
+    { name: 'Video Library', path: '/teacher/video-library', icon: Film },
+    { name: 'PTM', path: '/teacher/ptm', icon: UsersRound },
+    { name: 'Complaints', path: '/teacher/complaints', icon: MessageSquareWarning },
+    { name: 'Timesheet', path: '/teacher/timesheet', icon: Clock },
+    { name: 'Projects', path: '/teacher/projects', icon: FolderKanban },
+    { name: 'Payroll', path: '/teacher/payroll', icon: Banknote },
     { name: 'Settings', path: '/teacher/settings', icon: SettingsIcon },
   ];
 
@@ -201,6 +223,14 @@ const TeacherLayout = () => {
               <Route path="/attendance" element={<TeacherAttendance />} />
               <Route path="/schedule" element={<TeacherSchedule />} />
               <Route path="/grades" element={<TeacherGrades />} />
+              <Route path="/lms" element={<TeacherLMS />} />
+              <Route path="/live-classes" element={<TeacherLMS />} />
+              <Route path="/video-library" element={<TeacherLMS />} />
+              <Route path="/ptm" element={<PTMDashboard />} />
+              <Route path="/complaints" element={<TeacherComplaints />} />
+              <Route path="/timesheet" element={<TimesheetDashboard />} />
+              <Route path="/projects" element={<ProjectTimesheetDashboard />} />
+              <Route path="/payroll" element={<PayrollDashboard />} />
               <Route path="/settings" element={<TeacherSettings />} />
             </Routes>
           </div>
