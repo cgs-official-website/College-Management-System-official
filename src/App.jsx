@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './contexts/AuthContext';
 import { ConfirmProvider } from './contexts/ConfirmContext';
 import LandingPage from './pages/landing/LandingPage';
+import DemoSeeder from './pages/landing/DemoSeeder';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import ProtectedRoute from './components/ui/ProtectedRoute';
@@ -26,6 +27,7 @@ function App() {
           <Routes>
             {/* Landing Page */}
             <Route path="/" element={<LandingPage />} />
+            <Route path="/setup-demo" element={<DemoSeeder />} />
             
             {/* Auth Routes */}
             <Route path="/login" element={<Login />} />
