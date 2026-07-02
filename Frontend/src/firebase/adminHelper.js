@@ -34,8 +34,7 @@ export const createAdminUser = async (adminData, collegeData) => {
     // 3. Create the College Document
     await setDoc(doc(db, 'colleges', collegeCode), {
       id: collegeCode,
-      name: collegeData.name,
-      email: collegeData.email,
+      ...collegeData,
       createdAt: serverTimestamp(),
       status: 'active'
     });

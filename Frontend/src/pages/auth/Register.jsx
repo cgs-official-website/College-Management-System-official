@@ -28,14 +28,14 @@ import { db } from '../../firebase/config';
 
 const Register = () => {
   const [searchParams] = useSearchParams();
-  const { collegeSlug } = useParams();
+  const { roleParam, collegeSlug } = useParams();
   const defaultCollegeCode = searchParams.get('code') || '';
   
-  const preselectedRole = searchParams.get('role');
+  const initialRole = roleParam || searchParams.get('role') || 'admin';
   
   const { register, handleSubmit, watch, formState: { errors }, setValue } = useForm({
     defaultValues: {
-      role: preselectedRole && ['student', 'teacher', 'admin', 'parent'].includes(preselectedRole) ? preselectedRole : 'student',
+      role: initialRole,
       collegeCode: defaultCollegeCode
     }
   });
@@ -178,12 +178,14 @@ const Register = () => {
               <img src="/logo.png" alt="Zuna" className="w-full h-full object-contain drop-shadow-2xl" />
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white mb-2">
-              {fetchedCollegeName ? `Join ${fetchedCollegeName}` : 'Join the Ecosystem'}
+              {selectedRole === 'admin' 
+                ? 'Register College' 
+                : fetchedCollegeName ? `Join ${fetchedCollegeName}` : `Join as ${selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1)}`}
             </h1>
             <p className="text-slate-500 dark:text-slate-400 text-center max-w-md">
-              {fetchedCollegeName 
-                ? 'Create your account to access your institution\'s portal.' 
-                : 'Register your college or join an existing one to get started.'}
+              {selectedRole === 'admin'
+                ? 'Create a new college account to get started.'
+                : 'Create your account to access your institution\'s portal.'}
             </p>
           </div>
 
@@ -204,44 +206,8 @@ const Register = () => {
             </AnimatePresence>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              <input type="hidden" {...register("role")} />
               
-              {/* Role Selection */}
-              <div>
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">I am a...</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <label className={`relative flex items-center justify-center gap-3 p-4 border rounded-xl cursor-pointer transition-all ${selectedRole === 'student' ? 'border-primary-500 bg-primary-50 dark:bg-primary-500/10 text-primary-700 dark:text-primary-400 shadow-sm' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'}`}>
-                    <input type="radio" value="student" {...register("role")} className="sr-only" />
-                    <GraduationCap className={`w-5 h-5 ${selectedRole === 'student' ? 'text-primary-500' : 'text-slate-400'}`} />
-                    <span className="font-bold text-sm">Student</span>
-                    {selectedRole === 'student' && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary-500"></div>}
-                  </label>
-                  
-                  <label className={`relative flex items-center justify-center gap-3 p-4 border rounded-xl cursor-pointer transition-all ${selectedRole === 'teacher' ? 'border-teal-500 bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-400 shadow-sm' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'}`}>
-                    <input type="radio" value="teacher" {...register("role")} className="sr-only" />
-                    <Briefcase className={`w-5 h-5 ${selectedRole === 'teacher' ? 'text-teal-500' : 'text-slate-400'}`} />
-                    <span className="font-bold text-sm">Teacher</span>
-                    {selectedRole === 'teacher' && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-teal-500"></div>}
-                  </label>
-
-                  <label className={`relative flex items-center justify-center gap-3 p-4 border rounded-xl cursor-pointer transition-all ${selectedRole === 'parent' ? 'border-amber-500 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 shadow-sm' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'}`}>
-                    <input type="radio" value="parent" {...register("role")} className="sr-only" />
-                    <Users className={`w-5 h-5 ${selectedRole === 'parent' ? 'text-amber-500' : 'text-slate-400'}`} />
-                    <span className="font-bold text-sm">Parent</span>
-                    {selectedRole === 'parent' && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-amber-500"></div>}
-                  </label>
-
-                  {/* Hide Admin option if registering via a specific college link */}
-                  {!fetchedCollegeId && (
-                    <label className={`relative flex items-center justify-center gap-3 p-4 border rounded-xl cursor-pointer transition-all ${selectedRole === 'admin' ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 shadow-sm' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'}`}>
-                      <input type="radio" value="admin" {...register("role")} className="sr-only" />
-                      <ShieldCheck className={`w-5 h-5 ${selectedRole === 'admin' ? 'text-indigo-500' : 'text-slate-400'}`} />
-                      <span className="font-bold text-sm">College Admin</span>
-                      {selectedRole === 'admin' && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-indigo-500"></div>}
-                    </label>
-                  )}
-                </div>
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Full Name */}
                 <div className="md:col-span-2">
@@ -354,7 +320,7 @@ const Register = () => {
 
                 {/* College Code (Hidden if Admin or if fetched from slug) */}
                 {selectedRole !== 'admin' && !fetchedCollegeId && (
-                  <div className={selectedRole === 'teacher' ? "md:col-span-1" : "md:col-span-2"}>
+                  <div className={selectedRole === 'teacher' || selectedRole === 'hod' ? "md:col-span-1" : "md:col-span-2"}>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">College Code</label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -373,23 +339,25 @@ const Register = () => {
                   </div>
                 )}
 
-                {/* Teacher ID (Conditional) */}
-                {selectedRole === 'teacher' && (
+                {/* Teacher / HOD Specific Fields */}
+                {(selectedRole === 'teacher' || selectedRole === 'hod') && (
                   <motion.div 
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     className={fetchedCollegeId ? "md:col-span-2" : "md:col-span-1"}
                   >
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Teacher ID</label>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
+                      {selectedRole === 'hod' ? 'HOD ID' : 'Teacher ID'}
+                    </label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                         <BadgeCheck className="h-5 w-5 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
                       </div>
                       <input
                         type="text"
-                        {...register("teacherId", { required: "Teacher ID is required for teachers" })}
+                        {...register("teacherId", { required: "ID is required for teachers/HODs" })}
                         className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500 transition-all"
-                        placeholder="TCH-8902"
+                        placeholder="ID-8902"
                       />
                     </div>
                     {errors.teacherId && <p className="mt-1.5 text-xs text-red-500 font-medium">{errors.teacherId.message}</p>}

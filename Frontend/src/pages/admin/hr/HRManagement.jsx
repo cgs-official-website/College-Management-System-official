@@ -17,11 +17,14 @@ export default function HRManagement() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
 
-  const filteredStaff = staff.filter(member => 
-    `${member.firstName} ${member.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredStaff = staff.filter(member => {
+    const fullName = `${member.firstName || ''} ${member.lastName || ''} ${member.name || ''}`.toLowerCase();
+    const dept = (member.department || '').toLowerCase();
+    const email = (member.email || '').toLowerCase();
+    const search = (searchTerm || '').toLowerCase();
+    
+    return fullName.includes(search) || dept.includes(search) || email.includes(search);
+  });
 
   const handleOpenAdd = () => {
     setEditingStaff(null);
@@ -131,11 +134,11 @@ export default function HRManagement() {
                     <td className="p-4 pl-6">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-emerald-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
-                          {member.firstName.charAt(0)}{member.lastName.charAt(0)}
+                          {member.firstName?.charAt(0) || member.name?.charAt(0) || 'U'}{member.lastName?.charAt(0) || ''}
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900 dark:text-white text-sm">{member.firstName} {member.lastName}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Joined: {member.joinDate}</p>
+                          <p className="font-bold text-slate-900 dark:text-white text-sm">{member.firstName || member.name} {member.lastName || ''}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Joined: {member.joinDate || 'N/A'}</p>
                         </div>
                       </div>
                     </td>
@@ -143,7 +146,7 @@ export default function HRManagement() {
                       <div className="flex flex-col gap-1.5">
                         {getRoleBadge(member.role)}
                         <span className="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                          <Building className="w-3 h-3" /> {member.department}
+                          <Building className="w-3 h-3" /> {member.department || 'N/A'}
                         </span>
                       </div>
                     </td>

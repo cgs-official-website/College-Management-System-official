@@ -38,6 +38,12 @@ export default function Timetable() {
     }
   };
 
+  const handleApprove = async (id) => {
+    if (await confirm({ message: "Approve this timetable schedule?" })) {
+      await updateSchedule({ id, data: { status: 'approved' } });
+    }
+  };
+
   const handleSubmit = async (data) => {
     try {
       if (editingSchedule) {
@@ -106,17 +112,24 @@ export default function Timetable() {
                 </div>
                 
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => handleOpenEdit(schedule)} className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg">
+                  <button onClick={() => handleOpenEdit(schedule)} className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg" title="Edit">
                     <Edit className="w-4 h-4" />
                   </button>
-                  <button onClick={() => handleDelete(schedule.id)} className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg">
+                  <button onClick={() => handleDelete(schedule.id)} className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg" title="Delete">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">{schedule.subject}</h3>
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-6">{schedule.courseName}</p>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white truncate pr-2">{schedule.subject}</h3>
+                {schedule.status === 'pending' && (
+                  <span className="shrink-0 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400">
+                    Pending
+                  </span>
+                )}
+              </div>
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-4">{schedule.courseName}</p>
 
               <div className="mt-auto space-y-3 pt-4 border-t border-slate-100 dark:border-white/5">
                 <div className="flex items-center justify-between text-sm text-slate-600 dark:text-slate-400">
@@ -129,6 +142,14 @@ export default function Timetable() {
                     <span className="font-bold text-slate-900 dark:text-white">{schedule.room}</span>
                   </div>
                 </div>
+                
+                {schedule.status === 'pending' && (userData?.role === 'admin' || userData?.role === 'superadmin') && (
+                  <div className="pt-2">
+                    <Button onClick={() => handleApprove(schedule.id)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/30 py-2">
+                      Approve Schedule
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           ))}

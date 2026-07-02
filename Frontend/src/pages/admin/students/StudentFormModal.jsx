@@ -86,7 +86,11 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
             />
             <Input 
               label="Phone Number" 
-              {...register('phone')}
+              {...register('phone', {
+                pattern: { value: /^[0-9]{10}$/, message: "Phone number must be 10 digits" }
+              })}
+              maxLength={10}
+              error={errors.phone?.message}
             />
             <Input 
               label="Date of Birth" 
@@ -143,7 +147,11 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
             />
             <Input 
               label="Parent Phone" 
-              {...register('parentPhone', { required: "Parent phone is required" })}
+              {...register('parentPhone', { 
+                required: "Parent phone is required",
+                pattern: { value: /^[0-9]{10}$/, message: "Phone number must be 10 digits" }
+              })}
+              maxLength={10}
               error={errors.parentPhone?.message}
             />
             <div className="md:col-span-2">

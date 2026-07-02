@@ -20,7 +20,7 @@ export default function TeacherSchedule() {
         if (!userData?.collegeId) return;
         
         const q = query(
-          collection(db, 'timetables'), 
+          collection(db, 'timetable'), 
           where('collegeId', '==', userData.collegeId),
           where('teacherId', '==', userData.uid)
         );
@@ -31,8 +31,18 @@ export default function TeacherSchedule() {
         
         snap.docs.forEach(doc => {
           const item = { id: doc.id, ...doc.data() };
-          if (data[item.day]) {
-            data[item.day].push(item);
+          
+          // Only show approved schedules for regular teachers
+          if (item.status === 'pending' && userData?.role !== 'hod' && userData?.role !== 'admin') {
+            return;
+          }
+
+          const day = item.dayOfWeek || item.day;
+          if (data[day]) {
+            data[day].push({
+              ...item,
+              time: `${item.startTime} - ${item.endTime}`
+            });
           }
         });
         

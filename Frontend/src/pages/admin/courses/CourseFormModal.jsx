@@ -92,16 +92,10 @@ export function CourseFormModal({ isOpen, onClose, onSubmit, initialData = null,
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Select 
+          <Input 
             label="Class Duration" 
+            placeholder="e.g. 6 Months, 4 Years"
             {...register('duration')}
-            options={[
-              { value: '1 Year', label: '1 Year' },
-              { value: '2 Years', label: '2 Years' },
-              { value: '3 Years', label: '3 Years' },
-              { value: '4 Years', label: '4 Years' },
-              { value: '5 Years', label: '5 Years' }
-            ]}
           />
           <Select 
             label="Primary Teacher (Assigned)" 

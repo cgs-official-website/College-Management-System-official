@@ -41,6 +41,7 @@ import TeacherAttendance from './TeacherAttendance';
 import TeacherSchedule from './TeacherSchedule';
 import TeacherGrades from './TeacherGrades';
 import TeacherSettings from './TeacherSettings';
+import Timetable from '../admin/timetable/Timetable';
 
 const TeacherLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -77,6 +78,10 @@ const TeacherLayout = () => {
     { name: 'Payroll', path: '/teacher/payroll', icon: Banknote },
     { name: 'Settings', path: '/teacher/settings', icon: SettingsIcon },
   ];
+
+  if (userData?.role === 'hod') {
+    navLinks.splice(4, 0, { name: 'Manage Timetable', path: '/teacher/timetable', icon: Calendar });
+  }
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-[#020813] text-slate-900 dark:text-slate-200 overflow-hidden font-sans transition-colors duration-300">
@@ -232,6 +237,7 @@ const TeacherLayout = () => {
               <Route path="/projects" element={<ProjectTimesheetDashboard />} />
               <Route path="/payroll" element={<PayrollDashboard />} />
               <Route path="/settings" element={<TeacherSettings />} />
+              {userData?.role === 'hod' && <Route path="/timetable" element={<Timetable />} />}
             </Routes>
           </div>
         </main>

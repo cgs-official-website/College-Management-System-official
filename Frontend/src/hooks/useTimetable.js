@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import toast from 'react-hot-toast';
+import { useAuth } from '../contexts/AuthContext';
 
 export function useTimetable(collegeId) {
+  const { userData } = useAuth();
   const [schedules, setSchedules] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -37,13 +39,33 @@ export function useTimetable(collegeId) {
   const addSchedule = async (data) => {
     setIsAdding(true);
     try {
-      await addDoc(collection(db, 'timetable'), {
+      const isHod = userData?.role === 'hod';
+      const status = isHod ? 'pending' : 'approved';
+      
+      const newDocRef = await addDoc(collection(db, 'timetable'), {
         ...data,
         collegeId,
+        status,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-      toast.success("Class scheduled successfully!");
+
+      if (isHod) {
+        // Send notification to admin
+        await addDoc(collection(db, 'notifications'), {
+          collegeId,
+          type: 'alert',
+          title: 'Timetable Approval Required',
+          message: `HOD ${userData.firstName || 'User'} has submitted a new timetable for ${data.subject} for approval.`,
+          readBy: [],
+          targetRole: 'admin',
+          relatedId: newDocRef.id,
+          createdAt: serverTimestamp()
+        });
+        toast.success("Class scheduled and sent to admin for approval!");
+      } else {
+        toast.success("Class scheduled successfully!");
+      }
     } catch (error) {
       console.error("Error adding schedule:", error);
       toast.error("Failed to schedule class.");

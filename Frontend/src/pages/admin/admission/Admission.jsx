@@ -48,6 +48,10 @@ export default function Admission() {
   const handleSubmit = async (data) => {
     try {
       if (editingAdmission) {
+        if (data.status === 'Approved' && editingAdmission.status !== 'Approved') {
+          const isConfirmed = await confirm({ message: "Are you sure you want to approve this application?" });
+          if (!isConfirmed) return;
+        }
         await updateAdmission({ id: editingAdmission.id, data });
         // If approved, optionally trigger auto-enrollment
         if (data.status === 'Approved' && editingAdmission.status !== 'Approved') {

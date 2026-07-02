@@ -5,7 +5,9 @@ import { db } from '../../../firebase/config';
 import { useAuth } from '../../../contexts/AuthContext';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
-import { Building, Shield, User, Camera } from 'lucide-react';
+import { Building, Shield, User, Camera, Eye, EyeOff } from 'lucide-react';
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
+import { auth } from '../../../firebase/config';
 import toast from 'react-hot-toast';
 
 export default function Settings() {
@@ -17,6 +19,10 @@ export default function Settings() {
   const [isLoading, setIsLoading] = useState(true);
   const [logoBase64, setLogoBase64] = useState('');
   const fileInputRef = React.useRef(null);
+  
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordData, setPasswordData] = useState({ current: '', new: '', confirm: '' });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     defaultValues: {
@@ -88,6 +94,40 @@ export default function Settings() {
         setLogoBase64(reader.result);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    if (passwordData.new !== passwordData.confirm) {
+      toast.error("New passwords do not match.");
+      return;
+    }
+    if (passwordData.new.length < 6) {
+      toast.error("Password must be at least 6 characters long.");
+      return;
+    }
+    setIsChangingPassword(true);
+    try {
+      const user = auth.currentUser;
+      if (user && user.email) {
+        const credential = EmailAuthProvider.credential(user.email, passwordData.current);
+        await reauthenticateWithCredential(user, credential);
+        await updatePassword(user, passwordData.new);
+        toast.success("Password updated successfully!");
+        setPasswordData({ current: '', new: '', confirm: '' });
+      } else {
+        toast.error("User not found.");
+      }
+    } catch (error) {
+      console.error("Error updating password:", error);
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+        toast.error("Incorrect current password.");
+      } else {
+        toast.error("Failed to update password.");
+      }
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -234,12 +274,45 @@ export default function Settings() {
 
                 <div className="pt-4 border-t border-slate-100 dark:border-white/5">
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Change Password</h3>
-                  <div className="space-y-4 max-w-md">
-                    <Input label="Current Password" type="password" />
-                    <Input label="New Password" type="password" />
-                    <Input label="Confirm New Password" type="password" />
-                    <Button>Update Password</Button>
-                  </div>
+                  <form onSubmit={handlePasswordChange} className="space-y-4 max-w-md">
+                    <Input 
+                      label="Current Password" 
+                      type={showPassword ? "text" : "password"} 
+                      value={passwordData.current}
+                      onChange={(e) => setPasswordData({...passwordData, current: e.target.value})}
+                      required
+                      rightElement={
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      }
+                    />
+                    <Input 
+                      label="New Password" 
+                      type={showPassword ? "text" : "password"} 
+                      value={passwordData.new}
+                      onChange={(e) => setPasswordData({...passwordData, new: e.target.value})}
+                      required
+                      rightElement={
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      }
+                    />
+                    <Input 
+                      label="Confirm New Password" 
+                      type={showPassword ? "text" : "password"} 
+                      value={passwordData.confirm}
+                      onChange={(e) => setPasswordData({...passwordData, confirm: e.target.value})}
+                      required
+                      rightElement={
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      }
+                    />
+                    <Button type="submit" isLoading={isChangingPassword}>Update Password</Button>
+                  </form>
                 </div>
               </div>
             </div>

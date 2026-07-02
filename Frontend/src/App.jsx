@@ -32,7 +32,8 @@ function App() {
             {/* Auth Routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/register/:collegeSlug" element={<Register />} />
+            <Route path="/register/:roleParam" element={<Register />} />
+            <Route path="/register/:roleParam/:collegeSlug" element={<Register />} />
             <Route path="/dashboard" element={<ProtectedRoute><DashboardRedirect /></ProtectedRoute>} />
             
             {/* Super Admin Routes */}
@@ -41,8 +42,8 @@ function App() {
             {/* Admin Routes */}
             <Route path="/admin/*" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminLayout /></ProtectedRoute>} />
             
-            {/* Teacher Routes */}
-            <Route path="/teacher/*" element={<ProtectedRoute allowedRoles={['teacher']}><TeacherLayout /></ProtectedRoute>} />
+            {/* Teacher / HOD Routes */}
+            <Route path="/teacher/*" element={<ProtectedRoute allowedRoles={['teacher', 'hod']}><TeacherLayout /></ProtectedRoute>} />
             
             {/* Student Routes */}
             <Route path="/student/*" element={<ProtectedRoute allowedRoles={['student']}><StudentLayout /></ProtectedRoute>} />

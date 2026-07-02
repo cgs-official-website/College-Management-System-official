@@ -15,9 +15,22 @@ import {
 
 const MarketingDashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [campaigns, setCampaigns] = useState([
+    { name: 'Fall Admission Push', type: 'Email', status: 'Running', performance: '45% Open' },
+    { name: 'Campus Tour Invites', type: 'WhatsApp', status: 'Running', performance: '80% Read' },
+    { name: 'B.Tech Promo', type: 'SMS', status: 'Completed', performance: '15% Clicked' }
+  ]);
 
   const handleCreateCampaign = (e) => {
     e.preventDefault();
+    const formData = new FormData(e.target);
+    const newCampaign = {
+      name: formData.get('name'),
+      type: formData.get('channel'),
+      status: 'Running',
+      performance: '0% Sent'
+    };
+    setCampaigns([newCampaign, ...campaigns]);
     toast.success('Campaign created successfully!');
     setIsModalOpen(false);
   };
@@ -83,11 +96,7 @@ const MarketingDashboard = () => {
             <button className="text-primary-600 dark:text-primary-400 text-sm font-bold hover:underline">View All</button>
           </div>
           <div className="space-y-4">
-            {[
-              { name: 'Fall Admission Push', type: 'Email', status: 'Running', performance: '45% Open' },
-              { name: 'Campus Tour Invites', type: 'WhatsApp', status: 'Running', performance: '80% Read' },
-              { name: 'B.Tech Promo', type: 'SMS', status: 'Completed', performance: '15% Clicked' }
-            ].map((camp, i) => (
+            {campaigns.map((camp, i) => (
               <div key={i} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/5">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 flex items-center justify-center">
@@ -171,12 +180,12 @@ const MarketingDashboard = () => {
               <form onSubmit={handleCreateCampaign} className="p-6 space-y-4">
                 <div>
                   <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Campaign Name</label>
-                  <input type="text" placeholder="e.g. Summer Admissions Push" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white" required />
+                  <input type="text" name="name" placeholder="e.g. Summer Admissions Push" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white" required />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Channel</label>
-                    <select className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white">
+                    <select name="channel" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white">
                       <option>Email</option>
                       <option>WhatsApp</option>
                       <option>SMS</option>

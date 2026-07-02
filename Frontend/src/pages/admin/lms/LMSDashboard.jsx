@@ -15,9 +15,18 @@ import {
 
 const LMSDashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [upcomingClasses, setUpcomingClasses] = useState([]);
 
   const handleScheduleClass = (e) => {
     e.preventDefault();
+    const formData = new FormData(e.target);
+    const newClass = {
+      title: formData.get('title'),
+      datetime: formData.get('datetime'),
+      duration: formData.get('duration'),
+      batch: formData.get('batch')
+    };
+    setUpcomingClasses([newClass, ...upcomingClasses]);
     toast.success('Live class scheduled successfully!');
     setIsModalOpen(false);
   };
@@ -79,13 +88,36 @@ const LMSDashboard = () => {
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">Upcoming Live Classes</h2>
             <button className="text-primary-600 dark:text-primary-400 text-sm font-bold hover:underline">View Calendar</button>
           </div>
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="w-16 h-16 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center mb-4">
-              <Video className="w-8 h-8 text-slate-400" />
+          {upcomingClasses.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="w-16 h-16 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center mb-4">
+                <Video className="w-8 h-8 text-slate-400" />
+              </div>
+              <h3 className="text-slate-900 dark:text-white font-bold text-lg mb-1">No Upcoming Classes</h3>
+              <p className="text-slate-500 dark:text-slate-400 text-sm max-w-sm">There are no live classes scheduled for today. Click "Schedule Live Class" to create one.</p>
             </div>
-            <h3 className="text-slate-900 dark:text-white font-bold text-lg mb-1">No Upcoming Classes</h3>
-            <p className="text-slate-500 dark:text-slate-400 text-sm max-w-sm">There are no live classes scheduled for today. Click "Schedule Live Class" to create one.</p>
-          </div>
+          ) : (
+            <div className="space-y-4">
+              {upcomingClasses.map((cls, i) => (
+                <div key={i} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/5">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 flex items-center justify-center">
+                      <PlayCircle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white">{cls.title}</h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        {cls.datetime ? new Date(cls.datetime).toLocaleString() : 'No date'} • {cls.duration} mins • {cls.batch}
+                      </p>
+                    </div>
+                  </div>
+                  <button className="px-3 py-1.5 bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-400 hover:bg-primary-200 dark:hover:bg-primary-500/30 text-xs font-bold rounded-lg transition-colors">
+                    Join Link
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </motion.div>
 
         {/* Recently Added Videos */}
@@ -137,21 +169,21 @@ const LMSDashboard = () => {
               <form onSubmit={handleScheduleClass} className="p-6 space-y-4">
                 <div>
                   <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Class Topic / Title</label>
-                  <input type="text" placeholder="e.g. Introduction to React Hooks" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white" required />
+                  <input type="text" name="title" placeholder="e.g. Introduction to React Hooks" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white" required />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Date & Time</label>
-                    <input type="datetime-local" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white" required />
+                    <input type="datetime-local" name="datetime" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white" required />
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Duration (Mins)</label>
-                    <input type="number" defaultValue="60" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white" required />
+                    <input type="number" name="duration" defaultValue="60" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white" required />
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Assigned Batch</label>
-                  <select className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white">
+                  <select name="batch" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white">
                     <option>B.Tech Computer Science - Year 3</option>
                     <option>BBA Marketing - Year 2</option>
                     <option>MCA - Year 1</option>

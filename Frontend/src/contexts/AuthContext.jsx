@@ -94,13 +94,14 @@ export function AuthProvider({ children }) {
         email: user.email,
         createdAt: serverTimestamp()
       });
-    } else if (additionalData.role === 'teacher') {
+    } else if (additionalData.role === 'teacher' || additionalData.role === 'hod') {
       await setDoc(doc(db, 'teachers', user.uid), {
         userId: user.uid,
         collegeId: collegeIdToUse,
         teacherId: additionalData.teacherId,
         name: additionalData.name,
         email: user.email,
+        role: additionalData.role, // Explicitly store role in teacher doc as well
         createdAt: serverTimestamp()
       });
     } else if (additionalData.role === 'parent') {
@@ -142,8 +143,8 @@ export function AuthProvider({ children }) {
             const role = fetchedUserData.role;
             
             // Fetch role-specific details to ensure synced data (like name, course, etc.)
-            if (['student', 'teacher', 'parent'].includes(role)) {
-              const collectionName = role + 's';
+            if (['student', 'teacher', 'parent', 'hod'].includes(role)) {
+              const collectionName = role === 'hod' ? 'teachers' : role + 's';
               try {
                 const roleDoc = await getDoc(doc(db, collectionName, user.uid));
                 if (roleDoc.exists()) {

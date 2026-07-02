@@ -156,7 +156,32 @@ const TransportDashboard = () => {
                 {/* Map Area */}
                 <div className="flex-1 bg-slate-100 dark:bg-[#0F172A] relative flex items-center justify-center overflow-hidden">
                   <div className="absolute inset-0 opacity-20 dark:opacity-10 pointer-events-none" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cartographer.png")' }}></div>
-                  
+                  {/* Mock Buses on Map */}
+                  <motion.div 
+                    animate={{ x: [0, 20, 0], y: [0, -10, 0] }}
+                    transition={{ repeat: Infinity, duration: 5 }}
+                    className="absolute top-1/4 left-1/4"
+                  >
+                    <div className="relative">
+                      <div className="w-10 h-10 bg-primary-500/20 rounded-full animate-ping absolute -inset-2"></div>
+                      <div className="w-6 h-6 bg-primary-500 rounded-full border-2 border-white dark:border-[#0F172A] flex items-center justify-center shadow-lg relative z-10">
+                        <Bus className="w-3 h-3 text-white" />
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  <motion.div 
+                    animate={{ x: [0, -15, 0], y: [0, 15, 0] }}
+                    transition={{ repeat: Infinity, duration: 7 }}
+                    className="absolute top-1/2 right-1/3"
+                  >
+                    <div className="relative">
+                      <div className="w-10 h-10 bg-emerald-500/20 rounded-full animate-ping absolute -inset-2"></div>
+                      <div className="w-6 h-6 bg-emerald-500 rounded-full border-2 border-white dark:border-[#0F172A] flex items-center justify-center shadow-lg relative z-10">
+                        <Bus className="w-3 h-3 text-white" />
+                      </div>
+                    </div>
+                  </motion.div>
 
                   <div className="absolute bottom-4 left-4 bg-white/90 dark:bg-[#0A0F1C]/90 backdrop-blur p-3 rounded-xl shadow-lg border border-slate-200 dark:border-white/10 text-xs font-bold space-y-2">
                     <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-primary-500"></div> On Route</div>
@@ -170,9 +195,32 @@ const TransportDashboard = () => {
                   <div className="p-4 border-b border-slate-100 dark:border-white/5">
                     <input type="text" placeholder="Search bus or route..." className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white text-sm" />
                   </div>
-                  <div className="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col items-center justify-center text-center">
-                    <Bus className="w-8 h-8 text-slate-300 dark:text-slate-600 mb-2" />
-                    <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">No active buses on route</p>
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    {[
+                      { id: 'BUS-01', route: 'Route 4 (City Center)', driver: 'John Doe', speed: '45 km/h', status: 'On Route', time: '2 mins ago', color: 'bg-primary-500' },
+                      { id: 'BUS-03', route: 'Route 7 (North Park)', driver: 'Mike Smith', speed: '0 km/h', status: 'Delayed', time: '5 mins ago', color: 'bg-amber-500' },
+                      { id: 'BUS-05', route: 'Route 2 (East Side)', driver: 'Sarah Jones', speed: '30 km/h', status: 'Arrived', time: '1 min ago', color: 'bg-emerald-500' },
+                    ].map((bus, i) => (
+                      <div key={i} className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <h4 className="font-bold text-slate-900 dark:text-white text-sm">{bus.id}</h4>
+                            <p className="text-xs text-slate-500">{bus.route}</p>
+                          </div>
+                          <span className={`w-2 h-2 rounded-full ${bus.color}`}></span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-400 mt-3 pt-3 border-t border-slate-200 dark:border-white/10">
+                          <div>
+                            <span className="block text-slate-400 text-[10px] uppercase">Driver</span>
+                            <span className="font-medium text-slate-700 dark:text-slate-300">{bus.driver}</span>
+                          </div>
+                          <div>
+                            <span className="block text-slate-400 text-[10px] uppercase">Speed</span>
+                            <span className="font-medium text-slate-700 dark:text-slate-300">{bus.speed}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

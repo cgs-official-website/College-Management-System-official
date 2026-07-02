@@ -13,9 +13,29 @@ import {
 
 const HostelDashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [blocks, setBlocks] = useState([
+    { name: 'A Block (Boys)', occupied: 180, total: 200, status: 'Active' },
+    { name: 'B Block (Boys)', occupied: 150, total: 150, status: 'Full' },
+    { name: 'C Block (Girls)', occupied: 120, total: 150, status: 'Active' }
+  ]);
 
   const handleAllocateRoom = (e) => {
     e.preventDefault();
+    const formData = new FormData(e.target);
+    const blockName = formData.get('block');
+    
+    setBlocks(blocks.map(b => {
+      if (b.name === blockName && b.occupied < b.total) {
+        const newOccupied = b.occupied + 1;
+        return {
+          ...b,
+          occupied: newOccupied,
+          status: newOccupied >= b.total ? 'Full' : 'Active'
+        };
+      }
+      return b;
+    }));
+
     toast.success('Room allocated successfully!');
     setIsModalOpen(false);
   };
@@ -78,11 +98,7 @@ const HostelDashboard = () => {
             <button className="text-primary-600 dark:text-primary-400 text-sm font-bold hover:underline">View All</button>
           </div>
           <div className="space-y-4">
-            {[
-              { name: 'A Block (Boys)', occupied: 180, total: 200, status: 'Active' },
-              { name: 'B Block (Boys)', occupied: 150, total: 150, status: 'Full' },
-              { name: 'C Block (Girls)', occupied: 120, total: 150, status: 'Active' }
-            ].map((block, i) => (
+            {blocks.map((block, i) => (
               <div key={i} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-white/5 rounded-xl">
                 <div>
                   <h4 className="font-bold text-slate-900 dark:text-white">{block.name}</h4>
@@ -164,7 +180,7 @@ const HostelDashboard = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Hostel Block</label>
-                    <select className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white">
+                    <select name="block" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white">
                       <option>A Block (Boys)</option>
                       <option>B Block (Boys)</option>
                       <option>C Block (Girls)</option>

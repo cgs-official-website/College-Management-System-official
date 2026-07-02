@@ -7,6 +7,7 @@ export const Input = forwardRef(({
   label, 
   error, 
   id,
+  rightElement,
   ...props 
 }, ref) => {
   const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
@@ -18,22 +19,30 @@ export const Input = forwardRef(({
           {label}
         </label>
       )}
-      <input
-        id={inputId}
-        ref={ref}
-        className={twMerge(
-          clsx(
-            "w-full px-4 py-2.5 bg-white dark:bg-[#0A0F1C] border rounded-xl text-sm transition-all duration-200",
-            "focus:outline-none focus:ring-2 focus:ring-primary-500/50",
-            "text-slate-900 dark:text-white placeholder-slate-400",
-            error 
-              ? "border-red-500 focus:border-red-500 focus:ring-red-500/50" 
-              : "border-slate-200 dark:border-white/10 focus:border-primary-500",
-            className
-          )
+      <div className="relative">
+        <input
+          id={inputId}
+          ref={ref}
+          className={twMerge(
+            clsx(
+              "w-full px-4 py-2.5 bg-white dark:bg-[#0A0F1C] border rounded-xl text-sm transition-all duration-200",
+              "focus:outline-none focus:ring-2 focus:ring-primary-500/50",
+              "text-slate-900 dark:text-white placeholder-slate-400",
+              rightElement && "pr-10",
+              error 
+                ? "border-red-500 focus:border-red-500 focus:ring-red-500/50" 
+                : "border-slate-200 dark:border-white/10 focus:border-primary-500",
+              className
+            )
+          )}
+          {...props}
+        />
+        {rightElement && (
+          <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+            {rightElement}
+          </div>
         )}
-        {...props}
-      />
+      </div>
       {error && (
         <p className="mt-1.5 text-sm text-red-500">{error}</p>
       )}

@@ -56,6 +56,7 @@ export const addStudent = async (studentData) => {
       id: newStudentId,
       admissionNo,
       status: 'active',
+      password: 'Student@123', // Default password for new students
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });

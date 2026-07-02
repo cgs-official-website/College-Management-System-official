@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import toast from 'react-hot-toast';
 
@@ -56,10 +56,22 @@ export function useCourses(collegeId) {
   const updateCourse = async ({ id, data }) => {
     setIsUpdating(true);
     try {
-      await updateDoc(doc(db, 'courses', id), {
+      const batch = writeBatch(db);
+      const courseRef = doc(db, 'courses', id);
+      batch.update(courseRef, {
         ...data,
         updatedAt: serverTimestamp()
       });
+
+      if (data.name) {
+        const tQuery = query(collection(db, 'timetable'), where('courseId', '==', id));
+        const tSnap = await getDocs(tQuery);
+        tSnap.forEach(tDoc => {
+          batch.update(tDoc.ref, { courseName: data.name });
+        });
+      }
+
+      await batch.commit();
       toast.success("Course updated successfully!");
     } catch (error) {
       console.error("Error updating course:", error);
@@ -72,7 +84,17 @@ export function useCourses(collegeId) {
 
   const deleteCourse = async (id) => {
     try {
-      await deleteDoc(doc(db, 'courses', id));
+      const batch = writeBatch(db);
+      const courseRef = doc(db, 'courses', id);
+      batch.delete(courseRef);
+
+      const tQuery = query(collection(db, 'timetable'), where('courseId', '==', id));
+      const tSnap = await getDocs(tQuery);
+      tSnap.forEach(tDoc => {
+        batch.delete(tDoc.ref);
+      });
+
+      await batch.commit();
       toast.success("Course deleted.");
     } catch (error) {
       console.error("Error deleting course:", error);
