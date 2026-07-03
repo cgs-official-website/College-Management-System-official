@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, useAnimation } from 'framer-motion';
 import { Link } from 'react-router-dom';
+import { collection, query, getDocs, where } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 import {
   Menu,
   X,
@@ -52,6 +54,23 @@ const LandingPage = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const [activePlans, setActivePlans] = useState([]);
+  const [fetchError, setFetchError] = useState(null);
+
+  useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const q = query(collection(db, 'subscription_plans'), where('status', '==', 'active'));
+        const snapshot = await getDocs(q);
+        const fetchedPlans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setActivePlans(fetchedPlans.sort((a, b) => a.order - b.order));
+      } catch (error) {
+        console.error("Error fetching plans:", error);
+        setFetchError(error.message);
+      }
+    };
+    fetchPlans();
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -403,101 +422,57 @@ const LandingPage = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {/* Demo Plan - Fully Free */}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="bg-primary-700 dark:bg-primary-900 border border-primary-600 dark:border-primary-800 rounded-[2.5rem] p-10 flex flex-col relative transform md:-translate-y-4 shadow-2xl shadow-primary-900/20 z-10"
-            >
-              <div className="absolute top-0 right-10 -translate-y-1/2 bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-900 text-xs font-extrabold px-4 py-1.5 rounded-full uppercase tracking-widest shadow-lg">
-                Available Now
+          <div className={`grid grid-cols-1 md:grid-cols-${Math.min(activePlans.length, 3) || 1} gap-8 max-w-6xl mx-auto`}>
+            {fetchError ? (
+              <div className="col-span-full text-center py-20 text-red-500">
+                <p className="text-xl font-bold">Error fetching plans.</p>
+                <p className="mt-2">{fetchError}</p>
               </div>
-              <h3 className="text-2xl font-extrabold text-white mb-2 uppercase tracking-wider">Demo Plan</h3>
-              <p className="text-primary-200 text-sm mb-8 font-medium">30 Days Trial Pack • Fully Free</p>
-              <div className="mb-8 flex items-baseline gap-1 text-white">
-                <span className="text-6xl font-extrabold">₹0</span>
-                <span className="text-primary-300 font-bold">/30 days</span>
+            ) : activePlans.length === 0 ? (
+              <div className="col-span-full text-center py-20 text-slate-500">
+                <p className="text-xl font-bold">Pricing plans are currently being updated.</p>
+                <p className="mt-2">Check back later or contact support for more information.</p>
               </div>
-              <ul className="space-y-5 mb-10 flex-1">
-                {['Full System Access', 'Unlimited Students & Staff', 'Complete Analytics Dashboard', 'Priority Onboarding Support', 'No Credit Card Required'].map((feature, i) => (
-                  <li key={i} className="flex items-center gap-4 text-sm text-white font-medium">
-                    <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0 drop-shadow-md" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-              <Link to="/login" className="w-full py-4 rounded-2xl bg-white text-primary-900 font-extrabold uppercase tracking-wider text-sm text-center hover:bg-slate-50 transition-all shadow-[0_0_30px_rgba(255,255,255,0.2)] hover:scale-105">
-                Start Free Trial
-              </Link>
-            </motion.div>
-
-            {/* Pro Plan - Coming Soon */}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/5 rounded-[2.5rem] p-10 flex flex-col opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all duration-500 relative overflow-hidden"
-            >
-              {/* Coming soon overlay */}
-              <div className="absolute inset-0 bg-slate-50/50 dark:bg-[#0A0F1C]/80 backdrop-blur-[2px] z-20 flex items-center justify-center pointer-events-none">
-                <div className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-6 py-2 rounded-full font-extrabold uppercase tracking-widest text-sm shadow-xl transform -rotate-12">
-                  Coming Soon
-                </div>
-              </div>
-
-              <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mb-2 uppercase tracking-wider">Professional</h3>
-              <p className="text-slate-500 dark:text-slate-400 text-sm mb-8">For established institutions.</p>
-              <div className="mb-8 flex items-baseline gap-1">
-                <span className="text-6xl font-extrabold text-slate-900 dark:text-white">TBD</span>
-              </div>
-              <ul className="space-y-5 mb-10 flex-1">
-                {['Multi-Campus Support', 'Advanced API Access', 'Custom Domain Integration', 'White-labeling Options'].map((feature, i) => (
-                  <li key={i} className="flex items-center gap-4 text-sm text-slate-700 dark:text-slate-400">
-                    <CheckCircle2 className="w-6 h-6 text-slate-300 dark:text-slate-600 shrink-0" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-              <button disabled className="w-full py-4 rounded-2xl bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-slate-500 font-extrabold uppercase tracking-wider text-sm text-center cursor-not-allowed">
-                Waitlist
-              </button>
-            </motion.div>
-
-            {/* Enterprise Plan - Coming Soon */}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 }}
-              className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/5 rounded-[2.5rem] p-10 flex flex-col opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all duration-500 relative overflow-hidden"
-            >
-              {/* Coming soon overlay */}
-              <div className="absolute inset-0 bg-slate-50/50 dark:bg-[#0A0F1C]/80 backdrop-blur-[2px] z-20 flex items-center justify-center pointer-events-none">
-                <div className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-6 py-2 rounded-full font-extrabold uppercase tracking-widest text-sm shadow-xl transform -rotate-12">
-                  Coming Soon
-                </div>
-              </div>
-
-              <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mb-2 uppercase tracking-wider">Enterprise</h3>
-              <p className="text-slate-500 dark:text-slate-400 text-sm mb-8">For global educational networks.</p>
-              <div className="mb-8 flex items-baseline gap-1">
-                <span className="text-6xl font-extrabold text-slate-900 dark:text-white">TBD</span>
-              </div>
-              <ul className="space-y-5 mb-10 flex-1">
-                {['Unlimited Scale', 'On-Premise Deployment', 'Dedicated Success Manager', 'Custom Development'].map((feature, i) => (
-                  <li key={i} className="flex items-center gap-4 text-sm text-slate-700 dark:text-slate-400">
-                    <CheckCircle2 className="w-6 h-6 text-slate-300 dark:text-slate-600 shrink-0" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-              <button disabled className="w-full py-4 rounded-2xl bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-slate-500 font-extrabold uppercase tracking-wider text-sm text-center cursor-not-allowed">
-                Waitlist
-              </button>
-            </motion.div>
+            ) : (
+              activePlans.map((plan, idx) => (
+                <motion.div
+                  key={plan.id}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: idx * 0.1 }}
+                  className="w-full max-w-sm mx-auto bg-primary-700 dark:bg-primary-900 border border-primary-600 dark:border-primary-800 rounded-[2.5rem] p-10 flex flex-col relative shadow-2xl shadow-primary-900/20 z-10 hover:scale-[1.02] transition-transform duration-300"
+                >
+                  {idx === 0 && (
+                    <div className="absolute top-0 right-10 -translate-y-1/2 bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-900 text-xs font-extrabold px-4 py-1.5 rounded-full uppercase tracking-widest shadow-lg">
+                      Recommended
+                    </div>
+                  )}
+                  <h3 className="text-2xl font-extrabold text-white mb-2 uppercase tracking-wider">{plan.name}</h3>
+                  <div className="mb-8 flex items-baseline gap-1 text-white mt-4">
+                    <span className="text-5xl font-extrabold">{plan.price}</span>
+                    <span className="text-primary-300 font-bold">/{plan.duration}</span>
+                  </div>
+                  <ul className="space-y-5 mb-10 flex-1">
+                    <li className="flex items-center gap-4 text-sm text-white font-medium">
+                      <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0 drop-shadow-md" />
+                      Storage: {plan.storage}
+                    </li>
+                    <li className="flex items-center gap-4 text-sm text-white font-medium">
+                      <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0 drop-shadow-md" />
+                      Duration: {plan.duration}
+                    </li>
+                    <li className="flex items-center gap-4 text-sm text-white font-medium">
+                      <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0 drop-shadow-md" />
+                      Students: {plan.studentCount}
+                    </li>
+                  </ul>
+                  <Link to="/login" className="w-full py-4 rounded-2xl bg-white text-primary-900 font-extrabold uppercase tracking-wider text-sm text-center hover:bg-slate-50 transition-all shadow-[0_0_30px_rgba(255,255,255,0.2)]">
+                    Select Plan
+                  </Link>
+                </motion.div>
+              ))
+            )}
           </div>
         </div>
       </section>
