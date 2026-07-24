@@ -34,10 +34,12 @@ import {
   Calculator,
   Briefcase,
   Smartphone,
-  MessageSquareWarning
+  MessageSquareWarning,
+  LifeBuoy
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import PlaceholderModule from '../../components/ui/PlaceholderModule';
+import RaiseTicketModal from '../../components/ui/RaiseTicketModal';
 import StudentList from './students/StudentList';
 import Admission from './admission/Admission';
 import HRManagement from './hr/HRManagement';
@@ -63,6 +65,7 @@ import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showTicketModal, setShowTicketModal] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { logout, userData } = useAuth();
@@ -243,6 +246,22 @@ const AdminLayout = () => {
             >
               <RefreshCw className="w-5 h-5" />
             </button>
+
+            <button 
+              onClick={() => setShowTicketModal(true)}
+              className="p-2.5 text-amber-600 hover:text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 rounded-xl hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-colors"
+              title="Raise Support Ticket to Zuna"
+            >
+              <LifeBuoy className="w-5 h-5" />
+            </button>
+
+            <RaiseTicketModal 
+              isOpen={showTicketModal}
+              onClose={() => setShowTicketModal(false)}
+              collegeName={userData?.firstName ? `${userData.firstName} ${userData.lastName || ''}` : 'College Admin'}
+              collegeEmail={userData?.email || ''}
+            />
+
             <NotificationDropdown />
             
             <div className="h-8 w-px bg-slate-200 dark:bg-white/10 mx-1"></div>
