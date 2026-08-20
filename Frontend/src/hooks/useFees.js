@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { api } from '../services/api';
 import toast from 'react-hot-toast';
 
 export function useFees(collegeId) {
@@ -12,37 +11,26 @@ export function useFees(collegeId) {
   useEffect(() => {
     if (!collegeId) return;
 
-    const q = query(
-      collection(db, 'fees'), 
-      where('collegeId', '==', collegeId)
-    );
+    const fetchFees = async () => {
+      setIsLoading(true);
+      try {
+        const response = await api.get('/fees');
+        setFees(response.data || []);
+      } catch (error) {
+        console.error("Error fetching fees:", error);
+        toast.error("Failed to load fee records");
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const feesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      feesData.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
-      setFees(feesData);
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Error fetching fees:", error);
-      toast.error("Failed to load fee records");
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
+    fetchFees();
   }, [collegeId]);
 
   const addFee = async (data) => {
     setIsAdding(true);
     try {
-      await addDoc(collection(db, 'fees'), {
-        ...data,
-        collegeId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
+      await api.post('/fees', data);
       toast.success("Fee record created successfully!");
     } catch (error) {
       console.error("Error adding fee:", error);
@@ -56,10 +44,7 @@ export function useFees(collegeId) {
   const updateFee = async ({ id, data }) => {
     setIsUpdating(true);
     try {
-      await updateDoc(doc(db, 'fees', id), {
-        ...data,
-        updatedAt: serverTimestamp()
-      });
+      await api.put(`/fees/${id}`, data);
       toast.success("Fee record updated successfully!");
     } catch (error) {
       console.error("Error updating fee:", error);
@@ -72,7 +57,7 @@ export function useFees(collegeId) {
 
   const deleteFee = async (id) => {
     try {
-      await deleteDoc(doc(db, 'fees', id));
+      await api.delete(`/fees/${id}`);
       toast.success("Fee record deleted.");
     } catch (error) {
       console.error("Error deleting fee:", error);

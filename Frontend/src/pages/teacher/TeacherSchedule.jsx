@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar as CalendarIcon, Clock, MapPin, Users, BookOpen } from 'lucide-react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+
+
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -19,12 +19,12 @@ export default function TeacherSchedule() {
       try {
         if (!userData?.collegeId) return;
         
-        const q = query(
-          collection(db, 'timetable'), 
-          where('collegeId', '==', userData.collegeId),
-          where('teacherId', '==', userData.uid)
+// TODO: Migrate to REST API ->         const q = query(
+// TODO: Migrate to REST API ->           collection(db, 'timetable'), 
+// TODO: Migrate to REST API ->           where('collegeId', '==', userData.collegeId),
+// TODO: Migrate to REST API ->           where('teacherId', '==', userData.uid)
         );
-        const snap = await getDocs(q);
+// TODO: Migrate to REST API ->         const snap = await getDocs(q);
         
         const data = {};
         days.forEach(d => data[d] = []); // Initialize all days empty

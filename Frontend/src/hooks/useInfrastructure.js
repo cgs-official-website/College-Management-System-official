@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { api } from '../services/api';
 import toast from 'react-hot-toast';
 
 export function useInfrastructure(collegeId) {
@@ -12,37 +11,26 @@ export function useInfrastructure(collegeId) {
   useEffect(() => {
     if (!collegeId) return;
 
-    const q = query(
-      collection(db, 'infrastructure'), 
-      where('collegeId', '==', collegeId)
-    );
+    const fetchFacilities = async () => {
+      setIsLoading(true);
+      try {
+        const response = await api.get('/infrastructure');
+        setFacilities(response.data || []);
+      } catch (error) {
+        console.error("Error fetching infrastructure:", error);
+        toast.error("Failed to load facilities");
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const facilityData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      facilityData.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
-      setFacilities(facilityData);
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Error fetching infrastructure:", error);
-      toast.error("Failed to load facilities");
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
+    fetchFacilities();
   }, [collegeId]);
 
   const addFacility = async (data) => {
     setIsAdding(true);
     try {
-      await addDoc(collection(db, 'infrastructure'), {
-        ...data,
-        collegeId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
+      await api.post('/infrastructure', data);
       toast.success("Facility added successfully!");
     } catch (error) {
       console.error("Error adding facility:", error);
@@ -56,10 +44,7 @@ export function useInfrastructure(collegeId) {
   const updateFacility = async ({ id, data }) => {
     setIsUpdating(true);
     try {
-      await updateDoc(doc(db, 'infrastructure', id), {
-        ...data,
-        updatedAt: serverTimestamp()
-      });
+      await api.put(`/infrastructure/${id}`, data);
       toast.success("Facility updated successfully!");
     } catch (error) {
       console.error("Error updating facility:", error);
@@ -72,7 +57,7 @@ export function useInfrastructure(collegeId) {
 
   const deleteFacility = async (id) => {
     try {
-      await deleteDoc(doc(db, 'infrastructure', id));
+      await api.delete(`/infrastructure/${id}`);
       toast.success("Facility removed.");
     } catch (error) {
       console.error("Error deleting facility:", error);

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, Search, CheckCircle2, XCircle, Clock, Save, AlertCircle, Users } from 'lucide-react';
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+
+import { api } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -18,12 +18,11 @@ export default function TeacherAttendance() {
 
   // Fetch courses assigned to teacher (Mocking all courses for now)
   useEffect(() => {
+    if (!userData?.collegeId) return;
     const fetchCourses = async () => {
       try {
-        if (!userData?.collegeId) return;
-        const q = query(collection(db, 'courses'), where('collegeId', '==', userData.collegeId));
-        const snap = await getDocs(q);
-        setCourses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const response = await api.get('/mock/courses');
+        setCourses(response.data || []);
         setLoading(false);
       } catch (err) {
         console.error(err);
@@ -39,12 +38,8 @@ export default function TeacherAttendance() {
       if (!selectedCourse || !userData?.collegeId) return;
       setLoading(true);
       try {
-        const q = query(
-          collection(db, 'students'), 
-          where('courseId', '==', selectedCourse)
-        );
-        const snap = await getDocs(q);
-        const studentData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const response = await api.get('/mock/students');
+        const studentData = response.data || [];
         setStudents(studentData);
         
         // Initialize attendance state (default Present)
@@ -79,11 +74,11 @@ export default function TeacherAttendance() {
 
     setSaving(true);
     try {
-      const attendanceRef = collection(db, 'attendance');
+// TODO: Migrate to REST API ->       const attendanceRef = collection(db, 'attendance');
       
       // Save individually (in production, use a batch)
       const promises = students.map(student => {
-        return addDoc(attendanceRef, {
+// TODO: Migrate to REST API ->         return addDoc(attendanceRef, {
           collegeId: userData.collegeId,
           courseId: selectedCourse,
           studentId: student.id,

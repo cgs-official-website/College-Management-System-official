@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getCountFromServer } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { api } from '../services/api';
 
 export function useDashboardStats(collegeId, isSuperAdmin = false) {
   const [stats, setStats] = useState({
@@ -15,38 +14,14 @@ export function useDashboardStats(collegeId, isSuperAdmin = false) {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        if (isSuperAdmin) {
-          const collegesQuery = query(collection(db, 'colleges'));
-          const collegesSnapshot = await getCountFromServer(collegesQuery);
-          
-          setStats(s => ({
-            ...s,
-            totalColleges: collegesSnapshot.data().count,
-            isLoading: false
-          }));
-          return;
-        }
+        if (!collegeId && !isSuperAdmin) return;
 
-        if (!collegeId) return;
-
-        // Fetch students
-        const studentsQuery = query(collection(db, 'students'), where('collegeId', '==', collegeId));
-        const studentsSnapshot = await getCountFromServer(studentsQuery);
-        
-        // Fetch staff
-        const staffQuery = query(collection(db, 'staff'), where('collegeId', '==', collegeId));
-        const staffSnapshot = await getCountFromServer(staffQuery);
-
-        // Fetch courses (if collection exists, else it returns 0)
-        const coursesQuery = query(collection(db, 'courses'), where('collegeId', '==', collegeId));
-        const coursesSnapshot = await getCountFromServer(coursesQuery);
+        const response = await api.get('/dashboards/stats', {
+          params: { isSuperAdmin }
+        });
 
         setStats({
-          totalStudents: studentsSnapshot.data().count,
-          totalTeachers: staffSnapshot.data().count,
-          activeCourses: coursesSnapshot.data().count,
-          attendanceRate: 0, // Placeholder for attendance
-          totalColleges: 0,
+          ...response.data,
           isLoading: false
         });
       } catch (error) {

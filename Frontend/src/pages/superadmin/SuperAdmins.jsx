@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, query, where, getDocs, orderBy, doc, deleteDoc } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+
+
 import { toast } from 'react-hot-toast';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { 
@@ -37,7 +37,7 @@ const SuperAdmins = () => {
   const handleDelete = async (id) => {
     if (await confirm({ message: 'Are you sure you want to delete this admin?' })) {
       try {
-        await deleteDoc(doc(db, 'users', id));
+// TODO: Migrate to REST API ->         await deleteDoc(doc(db, 'users', id));
         toast.success('Admin deleted successfully');
         setAdmins(admins.filter(a => a.id !== id));
       } catch (e) {
@@ -51,13 +51,13 @@ const SuperAdmins = () => {
   const fetchAdmins = async () => {
     try {
       setIsLoading(true);
-      const q = query(
-        collection(db, 'users'), 
-        where('role', '==', 'admin')
+// TODO: Migrate to REST API ->       const q = query(
+// TODO: Migrate to REST API ->         collection(db, 'users'), 
+// TODO: Migrate to REST API ->         where('role', '==', 'admin')
         // Note: Ordering might require a composite index if combining with where.
         // For now, we'll fetch and sort client-side or assume index exists.
       );
-      const querySnapshot = await getDocs(q);
+// TODO: Migrate to REST API ->       const querySnapshot = await getDocs(q);
       const data = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()

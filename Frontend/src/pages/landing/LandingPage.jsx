@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, useAnimation } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { collection, query, getDocs, where } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+
+
 import {
   Menu,
   X,
@@ -60,10 +60,14 @@ const LandingPage = () => {
   useEffect(() => {
     const fetchPlans = async () => {
       try {
-        const q = query(collection(db, 'subscription_plans'), where('status', '==', 'active'));
-        const snapshot = await getDocs(q);
-        const fetchedPlans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setActivePlans(fetchedPlans.sort((a, b) => a.order - b.order));
+        const response = await fetch('http://localhost:5000/api/v1/public/plans');
+        const data = await response.json();
+        
+        if (response.ok && data.data) {
+          setActivePlans(data.data.sort((a, b) => a.order - b.order));
+        } else {
+          setFetchError(data.error || 'Failed to load plans');
+        }
       } catch (error) {
         console.error("Error fetching plans:", error);
         setFetchError(error.message);

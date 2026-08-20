@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, Info, AlertTriangle, CheckCircle2, X } from 'lucide-react';
-import { collection, query, orderBy, limit, onSnapshot, where } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+
+
 import { useAuth } from '../../contexts/AuthContext';
 
 export function NotificationDropdown() {
@@ -29,22 +29,22 @@ export function NotificationDropdown() {
     let unsubscribes = [];
 
     if (userRole === 'superadmin') {
-      const q = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(50));
-      unsubscribes.push(onSnapshot(q, (snapshot) => {
+// TODO: Migrate to REST API ->       const q = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(50));
+// TODO: Migrate to REST API ->       unsubscribes.push(onSnapshot(q, (snapshot) => {
         const allNotifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setNotifications(allNotifs);
       }));
     } else {
       // Query 1: College specific
-      const qCollege = query(
-        collection(db, 'notifications'), 
-        where('collegeId', '==', userData.collegeId)
+// TODO: Migrate to REST API ->       const qCollege = query(
+// TODO: Migrate to REST API ->         collection(db, 'notifications'), 
+// TODO: Migrate to REST API ->         where('collegeId', '==', userData.collegeId)
       );
       
       // Query 2: Global announcements
-      const qAll = query(
-        collection(db, 'notifications'), 
-        where('collegeId', '==', 'all')
+// TODO: Migrate to REST API ->       const qAll = query(
+// TODO: Migrate to REST API ->         collection(db, 'notifications'), 
+// TODO: Migrate to REST API ->         where('collegeId', '==', 'all')
       );
 
       let collegeNotifs = [];
@@ -60,12 +60,12 @@ export function NotificationDropdown() {
         setNotifications(filtered);
       };
 
-      unsubscribes.push(onSnapshot(qCollege, (snapshot) => {
+// TODO: Migrate to REST API ->       unsubscribes.push(onSnapshot(qCollege, (snapshot) => {
         collegeNotifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         updateMergedNotifications();
       }));
 
-      unsubscribes.push(onSnapshot(qAll, (snapshot) => {
+// TODO: Migrate to REST API ->       unsubscribes.push(onSnapshot(qAll, (snapshot) => {
         globalNotifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         updateMergedNotifications();
       }));

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { BookOpen, Users, Save, AlertCircle, FileBarChart } from 'lucide-react';
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+
+
 import { useAuth } from '../../contexts/AuthContext';
 import { useConfirm } from '../../contexts/ConfirmContext';
+import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 
 export default function TeacherGrades() {
@@ -18,43 +19,39 @@ export default function TeacherGrades() {
   
   const [students, setStudents] = useState([]);
   const [marks, setMarks] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (!userData?.collegeId) return;
     const fetchCourses = async () => {
       try {
-        if (!userData?.collegeId) return;
-        const q = query(collection(db, 'courses'), where('collegeId', '==', userData.collegeId));
-        const snap = await getDocs(q);
-        setCourses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        setLoading(false);
-      } catch (err) {
-        console.error(err);
-        setLoading(false);
+        const response = await api.get('/mock/courses');
+        setCourses(response.data || []);
+      } catch (error) {
+        console.error("Error fetching courses:", error);
       }
     };
     fetchCourses();
   }, [userData]);
 
   useEffect(() => {
+    if (!selectedCourse || !userData?.collegeId) {
+      setStudents([]);
+      return;
+    }
     const fetchStudents = async () => {
-      if (!selectedCourse || !userData?.collegeId) return;
       setLoading(true);
       try {
-        const q = query(
-          collection(db, 'students'), 
-          where('collegeId', '==', userData.collegeId),
-          where('courseId', '==', selectedCourse)
-        );
-        const snap = await getDocs(q);
-        const studentData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const response = await api.get('/mock/students');
+        const studentData = response.data || [];
         setStudents(studentData);
         
         const initialMarks = {};
         studentData.forEach(s => initialMarks[s.id] = '');
         setMarks(initialMarks);
-      } catch (err) {
+      } catch (error) {
+        console.error("Error fetching students:", error);
         toast.error('Failed to load students');
       } finally {
         setLoading(false);
@@ -79,40 +76,33 @@ export default function TeacherGrades() {
     // Check if any mark is empty
     const unentered = students.filter(s => marks[s.id] === '');
     if (unentered.length > 0) {
-      return toast.error(`Please enter marks for all ${students.length} students. ${unentered.length} remaining.`);
+    if (!selectedCourse || !examType) {
+      toast.error("Please select a course and an exam");
+      return;
     }
-
-    const isConfirmed = await confirm({
-      title: 'Submit Grades',
-      message: `Are you sure you want to submit ${examType} grades for ${students.length} students? This action cannot be easily undone.`,
-      type: 'warning',
-      confirmText: 'Submit Grades'
-    });
-
-    if (!isConfirmed) return;
 
     setSaving(true);
     try {
-      const gradesRef = collection(db, 'grades');
-      
-      const promises = students.map(student => {
-        return addDoc(gradesRef, {
-          collegeId: userData.collegeId,
-          courseId: selectedCourse,
-          studentId: student.id,
-          examType,
-          maxMarks,
-          obtainedMarks: Number(marks[student.id]),
-          gradedBy: userData.uid,
-          createdAt: serverTimestamp()
-        });
+      const promises = Object.entries(marks).map(([studentId, obtainedMarks]) => {
+        if (obtainedMarks !== '') {
+          return api.post('/exams/marks', {
+            studentId,
+            examId: examType,
+            obtainedMarks: Number(obtainedMarks)
+          });
+        }
+        return Promise.resolve();
       });
 
       await Promise.all(promises);
-      toast.success('Grades submitted successfully!');
-    } catch (error) {
-      console.error(error);
-      toast.error('Failed to submit grades');
+      toast.success("Marks saved successfully");
+    } catch (err) {
+      console.error(err);
+      if (err.message?.includes('422')) {
+        toast.error("Marks exceed the maximum allowed for this exam");
+      } else {
+        toast.error("Failed to save marks");
+      }
     } finally {
       setSaving(false);
     }

@@ -1,31 +1,31 @@
 import { 
   collection, 
   doc, 
-  getDocs, 
-  getDoc, 
-  updateDoc, 
+// TODO: Migrate to REST API ->   getDocs, 
+// TODO: Migrate to REST API ->   getDoc, 
+// TODO: Migrate to REST API ->   updateDoc, 
   deleteDoc,
   query,
   where,
   serverTimestamp,
   runTransaction
 } from 'firebase/firestore';
-import { db } from '../firebase/config';
+
 
 const COLLECTION_NAME = 'students';
 
 export const getStudents = async (collegeId) => {
   if (!collegeId) return [];
-  const studentsRef = collection(db, COLLECTION_NAME);
-  const q = query(studentsRef, where("collegeId", "==", collegeId));
+// TODO: Migrate to REST API ->   const studentsRef = collection(db, COLLECTION_NAME);
+// TODO: Migrate to REST API ->   const q = query(studentsRef, where("collegeId", "==", collegeId));
   
-  const snapshot = await getDocs(q);
+// TODO: Migrate to REST API ->   const snapshot = await getDocs(q);
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 };
 
 export const getStudentById = async (id) => {
-  const docRef = doc(db, COLLECTION_NAME, id);
-  const docSnap = await getDoc(docRef);
+// TODO: Migrate to REST API ->   const docRef = doc(db, COLLECTION_NAME, id);
+// TODO: Migrate to REST API ->   const docSnap = await getDoc(docRef);
   if (docSnap.exists()) {
     return { id: docSnap.id, ...docSnap.data() };
   }
@@ -33,7 +33,7 @@ export const getStudentById = async (id) => {
 };
 
 export const addStudent = async (studentData) => {
-  const counterRef = doc(db, 'counters', `students_${studentData.collegeId || 'default'}`);
+// TODO: Migrate to REST API ->   const counterRef = doc(db, 'counters', `students_${studentData.collegeId || 'default'}`);
   let newStudentId;
   
   await runTransaction(db, async (transaction) => {
@@ -48,7 +48,7 @@ export const addStudent = async (studentData) => {
     
     transaction.set(counterRef, { count }, { merge: true });
     
-    const newStudentRef = doc(collection(db, COLLECTION_NAME));
+// TODO: Migrate to REST API ->     const newStudentRef = doc(collection(db, COLLECTION_NAME));
     newStudentId = newStudentRef.id;
     
     transaction.set(newStudentRef, {
@@ -66,8 +66,8 @@ export const addStudent = async (studentData) => {
 };
 
 export const updateStudent = async (id, data) => {
-  const docRef = doc(db, COLLECTION_NAME, id);
-  await updateDoc(docRef, {
+// TODO: Migrate to REST API ->   const docRef = doc(db, COLLECTION_NAME, id);
+// TODO: Migrate to REST API ->   await updateDoc(docRef, {
     ...data,
     updatedAt: serverTimestamp()
   });
@@ -75,7 +75,7 @@ export const updateStudent = async (id, data) => {
 };
 
 export const deleteStudent = async (id) => {
-  const docRef = doc(db, COLLECTION_NAME, id);
+// TODO: Migrate to REST API ->   const docRef = doc(db, COLLECTION_NAME, id);
   await deleteDoc(docRef);
   return true;
 };

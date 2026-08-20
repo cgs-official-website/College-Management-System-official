@@ -1,7 +1,7 @@
-import { initializeApp, deleteApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser, signOut } from 'firebase/auth';
-import { doc, setDoc, deleteDoc, collection, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { firebaseConfig, db, auth as primaryAuth } from '../firebase/config';
+
+
+
+
 
 export const seedDemoData = async (onProgress) => {
   const secondaryApp = initializeApp(firebaseConfig, 'DemoSeeder');
@@ -25,7 +25,7 @@ export const seedDemoData = async (onProgress) => {
     const tempCred = await createUserWithEmailAndPassword(primaryAuth, tempEmail, tempPass);
     tempSuperAdminUser = tempCred.user;
     
-    await setDoc(doc(db, 'users', tempSuperAdminUser.uid), {
+// TODO: Migrate to REST API ->     await setDoc(doc(db, 'users', tempSuperAdminUser.uid), {
       uid: tempSuperAdminUser.uid,
       email: tempEmail,
       role: 'superadmin',
@@ -35,7 +35,7 @@ export const seedDemoData = async (onProgress) => {
     onProgress('Generating comprehensive academic data...');
 
     // 1. College
-    const collegeRef = doc(db, 'colleges', collegeCode);
+// TODO: Migrate to REST API ->     const collegeRef = doc(db, 'colleges', collegeCode);
     batch.set(collegeRef, {
       id: collegeCode,
       name: collegeName,
@@ -59,7 +59,7 @@ export const seedDemoData = async (onProgress) => {
       adminUid = signInCred.user.uid;
     }
     
-    batch.set(doc(db, 'users', adminUid), {
+// TODO: Migrate to REST API ->     batch.set(doc(db, 'users', adminUid), {
       uid: adminUid, email: adminEmail, firstName: 'College', lastName: 'Admin',
       role: 'admin', collegeId: collegeCode, collegeName: collegeName, accountStatus: 'active', createdAt: timestamp
     });
@@ -74,7 +74,7 @@ export const seedDemoData = async (onProgress) => {
     
     const courseRefs = {};
     for (const dept of departments) {
-      const cRef = doc(collection(db, 'courses'));
+// TODO: Migrate to REST API ->       const cRef = doc(collection(db, 'courses'));
       batch.set(cRef, {
         id: cRef.id, collegeId: collegeCode, code: dept.id, name: dept.name,
         department: dept.name, duration: '4 Years', totalSemesters: 8, createdAt: timestamp, status: 'active'
@@ -107,9 +107,9 @@ export const seedDemoData = async (onProgress) => {
         role: 'teacher', collegeId: collegeCode, teacherId: t.id, department: t.dept,
         accountStatus: 'active', createdAt: timestamp
       };
-      batch.set(doc(db, 'users', tUid), tDoc);
-      batch.set(doc(db, 'teachers', tUid), tDoc);
-      batch.set(doc(db, 'staff', tUid), tDoc); // Also seed to staff for HR dashboard stats
+// TODO: Migrate to REST API ->       batch.set(doc(db, 'users', tUid), tDoc);
+// TODO: Migrate to REST API ->       batch.set(doc(db, 'teachers', tUid), tDoc);
+// TODO: Migrate to REST API ->       batch.set(doc(db, 'staff', tUid), tDoc); // Also seed to staff for HR dashboard stats
     }
 
     // Support Staff (HR)
@@ -117,8 +117,8 @@ export const seedDemoData = async (onProgress) => {
       firstName: 'Ravi', lastName: 'Kumar', email: 'hr@gcee.edu.in', phone: '9876543210',
       role: 'hr', department: 'Administration', joinDate: '2023-01-15', status: 'active', collegeId: collegeCode
     };
-    batch.set(doc(collection(db, 'staff')), staffDoc);
-    batch.set(doc(collection(db, 'teachers')), staffDoc);
+// TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'staff')), staffDoc);
+// TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'teachers')), staffDoc);
 
     // 5. Students
     const studentsData = [
@@ -146,8 +146,8 @@ export const seedDemoData = async (onProgress) => {
         role: 'student', collegeId: collegeCode, studentId: s.id, courseId: courseRefs[s.dept],
         department: s.dept, semester: s.sem, section: 'A', accountStatus: 'active', createdAt: timestamp
       };
-      batch.set(doc(db, 'users', sUid), sDoc);
-      batch.set(doc(db, 'students', sUid), sDoc);
+// TODO: Migrate to REST API ->       batch.set(doc(db, 'users', sUid), sDoc);
+// TODO: Migrate to REST API ->       batch.set(doc(db, 'students', sUid), sDoc);
     }
 
     // 6. Parents
@@ -165,8 +165,8 @@ export const seedDemoData = async (onProgress) => {
       uid: pUid, email: parentEmail, firstName: 'Ramesh', lastName: 'Kumar',
       role: 'parent', collegeId: collegeCode, studentId: studentsData[0].id, accountStatus: 'active', createdAt: timestamp
     };
-    batch.set(doc(db, 'users', pUid), pDoc);
-    batch.set(doc(db, 'parents', pUid), pDoc);
+// TODO: Migrate to REST API ->     batch.set(doc(db, 'users', pUid), pDoc);
+// TODO: Migrate to REST API ->     batch.set(doc(db, 'parents', pUid), pDoc);
 
     // 7. Notices & Notifications
     onProgress('Creating notices and notifications...');
@@ -177,7 +177,7 @@ export const seedDemoData = async (onProgress) => {
     ];
     
     for (const notice of notices) {
-      batch.set(doc(collection(db, 'notices')), {
+// TODO: Migrate to REST API ->       batch.set(doc(collection(db, 'notices')), {
         collegeId: collegeCode, title: notice.title, content: notice.content, type: notice.type,
         targetAudience: notice.target, priority: 'high', status: 'active', createdAt: timestamp, createdBy: adminUid
       });
@@ -189,10 +189,10 @@ export const seedDemoData = async (onProgress) => {
       { title: 'Fee Due Reminder', message: 'Tuition fee for current semester is due next week.', type: 'alert' }
     ];
     for (const notif of notifs) {
-      batch.set(doc(collection(db, 'notifications')), {
+// TODO: Migrate to REST API ->       batch.set(doc(collection(db, 'notifications')), {
         collegeId: collegeCode, userId: studentUids[0], title: notif.title, message: notif.message, type: notif.type, isRead: false, createdAt: timestamp
       });
-      batch.set(doc(collection(db, 'notifications')), {
+// TODO: Migrate to REST API ->       batch.set(doc(collection(db, 'notifications')), {
         collegeId: collegeCode, userId: teacherUids[0], title: notif.title, message: notif.message, type: notif.type, isRead: false, createdAt: timestamp
       });
     }
@@ -212,70 +212,70 @@ export const seedDemoData = async (onProgress) => {
         time: tt.time, startTime: tt.startTime, endTime: tt.endTime, room: tt.room, teacherId: tt.teacherId, createdAt: timestamp
       };
       // Seed into both collections to ensure compatibility with all dashboards
-      batch.set(doc(collection(db, 'timetables')), ttDoc);
-      batch.set(doc(collection(db, 'timetable')), ttDoc);
+// TODO: Migrate to REST API ->       batch.set(doc(collection(db, 'timetables')), ttDoc);
+// TODO: Migrate to REST API ->       batch.set(doc(collection(db, 'timetable')), ttDoc);
     }
 
     // 9. Attendance
     onProgress('Creating academic records (Attendance, Grades, Assignments)...');
     const todayStr = new Date().toISOString().split('T')[0];
     for (const sUid of studentUids) {
-      batch.set(doc(collection(db, 'attendance')), {
+// TODO: Migrate to REST API ->       batch.set(doc(collection(db, 'attendance')), {
         collegeId: collegeCode, studentId: sUid, date: todayStr, status: 'present', courseId: courseRefs['CSE'], createdAt: timestamp
       });
     }
 
     // 10. Assignments
-    batch.set(doc(collection(db, 'assignments')), {
+// TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'assignments')), {
       collegeId: collegeCode, courseId: courseRefs['CSE'], title: 'Data Structures Lab 1',
       description: 'Implement a binary search tree in C++.', dueDate: '2026-07-15', teacherId: teacherUids[0], status: 'active', createdAt: timestamp
     });
 
     // 11. Exams & Grades
-    const examRef = doc(collection(db, 'exams'));
+// TODO: Migrate to REST API ->     const examRef = doc(collection(db, 'exams'));
     batch.set(examRef, {
       collegeId: collegeCode, title: 'Mid Term Examination', courseId: courseRefs['CSE'],
       examDate: '2026-07-20', duration: '3 Hours', status: 'upcoming', createdAt: timestamp
     });
 
-    batch.set(doc(collection(db, 'grades')), {
+// TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'grades')), {
       collegeId: collegeCode, studentId: studentUids[0], courseId: courseRefs['CSE'], examId: examRef.id,
       subject: 'Data Structures', marks: 85, totalMarks: 100, grade: 'A', remarks: 'Excellent', createdAt: timestamp
     });
 
     // 12. Fees
     onProgress('Creating financial and facilities records...');
-    batch.set(doc(collection(db, 'fees')), {
+// TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'fees')), {
       collegeId: collegeCode, studentId: studentUids[0], feeType: 'Tuition Fee', amount: 45000,
       dueDate: '2026-08-01', status: 'pending', createdAt: timestamp
     });
-    batch.set(doc(collection(db, 'fees')), {
+// TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'fees')), {
       collegeId: collegeCode, studentId: studentUids[1], feeType: 'Hostel Fee', amount: 20000,
       dueDate: '2026-07-01', status: 'paid', createdAt: timestamp
     });
 
     // 13. Library
-    batch.set(doc(collection(db, 'library')), {
+// TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'library')), {
       collegeId: collegeCode, title: 'Introduction to Algorithms', author: 'Thomas H. Cormen',
       isbn: '9780262033848', category: 'Computer Science', totalCopies: 15, availableCopies: 12, location: 'Rack A1', createdAt: timestamp
     });
-    batch.set(doc(collection(db, 'library')), {
+// TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'library')), {
       collegeId: collegeCode, title: 'Engineering Mathematics', author: 'B.S. Grewal',
       isbn: '9788174091956', category: 'Mathematics', totalCopies: 30, availableCopies: 5, location: 'Rack B2', createdAt: timestamp
     });
 
     // 14. Infrastructure
-    batch.set(doc(collection(db, 'infrastructure')), {
+// TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'infrastructure')), {
       collegeId: collegeCode, name: 'Main Auditorium', type: 'auditorium', capacity: 1000,
       building: 'Main Block', status: 'active', features: 'Projector, AC, Sound System', createdAt: timestamp
     });
-    batch.set(doc(collection(db, 'infrastructure')), {
+// TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'infrastructure')), {
       collegeId: collegeCode, name: 'Computer Lab 1', type: 'laboratory', capacity: 60,
       building: 'CSE Block', status: 'maintenance', features: '60 PCs, AC', createdAt: timestamp
     });
 
     // 15. Admissions
-    batch.set(doc(collection(db, 'admissions')), {
+// TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'admissions')), {
       collegeId: collegeCode, firstName: 'New', lastName: 'Applicant', email: 'applicant@test.com', phone: '1234567890',
       courseName: 'B.Tech Computer Science', previousSchool: 'Delhi Public School',
       courseId: courseRefs['CSE'], status: 'Pending', appliedDate: todayStr, createdAt: timestamp
@@ -293,7 +293,7 @@ export const seedDemoData = async (onProgress) => {
     if (tempSuperAdminUser) {
       onProgress('Cleaning up temporary privileges...');
       try {
-        await deleteDoc(doc(db, 'users', tempSuperAdminUser.uid));
+// TODO: Migrate to REST API ->         await deleteDoc(doc(db, 'users', tempSuperAdminUser.uid));
         await deleteUser(tempSuperAdminUser);
         await signOut(primaryAuth);
       } catch (cleanupError) {

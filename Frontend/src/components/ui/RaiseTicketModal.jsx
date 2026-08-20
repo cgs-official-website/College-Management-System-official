@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { LuX, LuLifeBuoy, LuSend, LuCircleAlert, LuCircleCheck, LuMessageSquare, LuClock, LuPlus, LuChevronRight, LuArrowLeft } from "react-icons/lu";
-import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+
+
 
 const zunaConfig = {
   apiKey: "AIzaSyAzEP2LTXsGvCsFyxITkgoon_2AL4yGKyo",
@@ -65,7 +65,7 @@ export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'Colle
       }
     };
 
-    const unsub1 = onSnapshot(collection(zunaDb, 'tickets'), (snapshot) => {
+// TODO: Migrate to REST API ->     const unsub1 = onSnapshot(collection(zunaDb, 'tickets'), (snapshot) => {
       mainList = snapshot.docs.map(d => ({
         firestoreDocId: d.id,
         id: d.data().id || d.id,
@@ -75,7 +75,7 @@ export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'Colle
       mergeAndEmit();
     }, (err) => console.warn('Tickets snapshot warn:', err));
 
-    const unsub2 = onSnapshot(collection(zunaDb, 'support_tickets'), (snapshot) => {
+// TODO: Migrate to REST API ->     const unsub2 = onSnapshot(collection(zunaDb, 'support_tickets'), (snapshot) => {
       supportList = snapshot.docs.map(d => ({
         firestoreDocId: d.id,
         id: d.data().id || d.id,
@@ -124,14 +124,14 @@ export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'Colle
       };
 
       try {
-        await addDoc(collection(zunaDb, 'tickets'), {
+// TODO: Migrate to REST API ->         await addDoc(collection(zunaDb, 'tickets'), {
           ...ticketPayload,
           createdAt: serverTimestamp()
         });
       } catch (e1) {}
 
       try {
-        await addDoc(collection(zunaDb, 'support_tickets'), {
+// TODO: Migrate to REST API ->         await addDoc(collection(zunaDb, 'support_tickets'), {
           ...ticketPayload,
           createdAt: serverTimestamp()
         });
@@ -177,12 +177,12 @@ export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'Colle
       timestamp: new Date().toISOString()
     };
 
-    const targetDocId = selectedTicket.firestoreDocId || selectedTicket.id;
+// TODO: Migrate to REST API ->     const targetDocId = selectedTicket.firestoreDocId || selectedTicket.id;
     const colName = selectedTicket.sourceCollection === 'support_tickets' ? 'support_tickets' : 'tickets';
     const updatedMessages = [...(selectedTicket.messages || []), newReply];
 
     try {
-      await updateDoc(doc(zunaDb, colName, targetDocId), {
+// TODO: Migrate to REST API ->       await updateDoc(doc(zunaDb, colName, targetDocId), {
         messages: updatedMessages,
         updatedAt: serverTimestamp()
       });

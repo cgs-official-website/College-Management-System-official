@@ -23,8 +23,8 @@ import {
   Upload
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+
+
 
 const Register = () => {
   const [searchParams] = useSearchParams();
@@ -76,12 +76,12 @@ const Register = () => {
       
       setFetchingCollege(true);
       try {
-        const q = query(collection(db, 'colleges'), where('slug', '==', collegeSlug));
-        const querySnapshot = await getDocs(q);
+        const response = await fetch(`http://localhost:5000/api/v1/colleges/slug/${collegeSlug}`);
+        const data = await response.json();
         
-        if (!querySnapshot.empty) {
-          const collegeDoc = querySnapshot.docs[0];
-          setFetchedCollegeName(collegeDoc.data().name);
+        if (response.ok && data.data) {
+          const collegeDoc = data.data;
+          setFetchedCollegeName(collegeDoc.name);
           setFetchedCollegeId(collegeDoc.id);
           setValue('collegeCode', collegeDoc.id);
         } else {

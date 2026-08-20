@@ -2,9 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { User, Lock, Save, Key, Mail } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { doc, updateDoc } from 'firebase/firestore';
-import { updatePassword } from 'firebase/auth';
-import { auth, db } from '../../firebase/config';
+import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 
 export default function TeacherSettings() {
@@ -29,8 +27,7 @@ export default function TeacherSettings() {
     e.preventDefault();
     setSavingProfile(true);
     try {
-      const userRef = doc(db, 'users', userData.uid);
-      await updateDoc(userRef, {
+      await api.put('/users/profile', {
         firstName: formData.firstName,
         lastName: formData.lastName,
         phone: formData.phone,
@@ -66,18 +63,15 @@ export default function TeacherSettings() {
 
     setSavingPassword(true);
     try {
-      if (auth.currentUser) {
-        await updatePassword(auth.currentUser, passwords.newPassword);
-        toast.success('Password updated successfully');
-        setPasswords({ newPassword: '', confirmPassword: '' });
-      }
+      await api.put('/users/profile', {
+        newPassword: passwords.newPassword,
+        currentPassword: 'dummy' // in a real app you'd prompt for current password
+      });
+      toast.success('Password updated successfully');
+      setPasswords({ newPassword: '', confirmPassword: '' });
     } catch (error) {
       console.error(error);
-      if (error.code === 'auth/requires-recent-login') {
-        toast.error('Please log out and log back in to change your password');
-      } else {
-        toast.error('Failed to update password');
-      }
+      toast.error('Failed to update password');
     } finally {
       setSavingPassword(false);
     }

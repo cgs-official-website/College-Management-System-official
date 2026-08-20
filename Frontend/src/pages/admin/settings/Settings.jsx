@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../../../firebase/config';
+
+
 import { useAuth } from '../../../contexts/AuthContext';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Building, Shield, User, Camera, Eye, EyeOff } from 'lucide-react';
-import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
-import { auth } from '../../../firebase/config';
+
+
 import toast from 'react-hot-toast';
 
 export default function Settings() {
@@ -36,13 +36,16 @@ export default function Settings() {
 
   useEffect(() => {
     const fetchCollegeData = async () => {
+      if (collegeId === 'default_college_id') {
+        setIsLoading(false);
+        return;
+      }
       try {
-        const docRef = doc(db, 'colleges', collegeId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+        const response = await api.get(`/colleges/${collegeId}`);
+        const data = response.data;
+        if (data) {
           reset({
-            collegeName: data.collegeName || data.name || '',
+            collegeName: data.name || '',
             contactEmail: data.contactEmail || '',
             contactPhone: data.contactPhone || '',
             address: data.address || '',
@@ -58,19 +61,21 @@ export default function Settings() {
         setIsLoading(false);
       }
     };
-    if (collegeId !== 'default_college_id') {
-      fetchCollegeData();
-    } else {
-      setIsLoading(false);
-    }
+    fetchCollegeData();
   }, [collegeId, reset]);
 
   const onProfileSubmit = async (data) => {
     setIsSaving(true);
     try {
-      const docRef = doc(db, 'colleges', collegeId);
-      const updateData = { ...data, name: data.collegeName, logoBase64 };
-      await updateDoc(docRef, updateData);
+      const updateData = { 
+        name: data.collegeName, 
+        contactEmail: data.contactEmail,
+        contactPhone: data.contactPhone,
+        address: data.address,
+        website: data.website,
+        logoBase64 
+      };
+      await api.put(`/colleges/${collegeId}`, updateData);
       
       updateUserData({ collegeName: data.collegeName, collegeLogo: logoBase64 });
       toast.success("College profile updated successfully!");
@@ -109,19 +114,15 @@ export default function Settings() {
     }
     setIsChangingPassword(true);
     try {
-      const user = auth.currentUser;
-      if (user && user.email) {
-        const credential = EmailAuthProvider.credential(user.email, passwordData.current);
-        await reauthenticateWithCredential(user, credential);
-        await updatePassword(user, passwordData.new);
-        toast.success("Password updated successfully!");
-        setPasswordData({ current: '', new: '', confirm: '' });
-      } else {
-        toast.error("User not found.");
-      }
+      await api.put('/users/profile', {
+        newPassword: passwordData.new,
+        currentPassword: passwordData.current
+      });
+      toast.success("Password updated successfully!");
+      setPasswordData({ current: '', new: '', confirm: '' });
     } catch (error) {
       console.error("Error updating password:", error);
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+      if (error.response?.status === 401) {
         toast.error("Incorrect current password.");
       } else {
         toast.error("Failed to update password.");

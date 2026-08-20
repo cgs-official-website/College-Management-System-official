@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+import { api } from '../../services/api';
 import { toast } from 'react-hot-toast';
 import { Loader2, Save, User, Mail, Phone, Book } from 'lucide-react';
 
 export const StudentSettings = () => {
-  const { userData, user } = useAuth();
+  const { userData, user, updateUserData } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
@@ -36,20 +35,16 @@ export const StudentSettings = () => {
     
     setIsSaving(true);
     try {
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
+      await api.put('/users/profile', {
         firstName: formData.firstName,
         lastName: formData.lastName,
-        name: `${formData.firstName} ${formData.lastName}`.trim(),
         phone: formData.phone,
         course: formData.course
       });
-      
-      const studentRef = doc(db, 'students', user.uid);
-      await updateDoc(studentRef, {
+
+      updateUserData({
         firstName: formData.firstName,
         lastName: formData.lastName,
-        name: `${formData.firstName} ${formData.lastName}`.trim(),
         phone: formData.phone,
         course: formData.course
       });

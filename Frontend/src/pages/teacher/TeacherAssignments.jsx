@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileBarChart, Plus, Calendar as CalendarIcon, Clock, Users, X, Save } from 'lucide-react';
-import { collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
+
 import { Modal } from '../../components/ui/Modal';
-import { db } from '../../firebase/config';
+
 import { useAuth } from '../../contexts/AuthContext';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
@@ -30,21 +30,21 @@ export default function TeacherAssignments() {
       if (!userData?.collegeId) return;
       
       // Fetch courses for dropdown
-      const coursesQ = query(
-        collection(db, 'courses'), 
-        where('collegeId', '==', userData.collegeId)
+// TODO: Migrate to REST API ->       const coursesQ = query(
+// TODO: Migrate to REST API ->         collection(db, 'courses'), 
+// TODO: Migrate to REST API ->         where('collegeId', '==', userData.collegeId)
       );
-      const coursesSnap = await getDocs(coursesQ);
+// TODO: Migrate to REST API ->       const coursesSnap = await getDocs(coursesQ);
       const myCourses = coursesSnap.docs.filter(d => d.data().assignedTeacher === userData.uid);
       setCourses(myCourses.map(d => ({ id: d.id, ...d.data() })));
 
       // Fetch assignments
-      const assignQ = query(
-        collection(db, 'assignments'), 
-        where('collegeId', '==', userData.collegeId),
-        where('teacherId', '==', userData.uid)
+// TODO: Migrate to REST API ->       const assignQ = query(
+// TODO: Migrate to REST API ->         collection(db, 'assignments'), 
+// TODO: Migrate to REST API ->         where('collegeId', '==', userData.collegeId),
+// TODO: Migrate to REST API ->         where('teacherId', '==', userData.uid)
       );
-      const assignSnap = await getDocs(assignQ);
+// TODO: Migrate to REST API ->       const assignSnap = await getDocs(assignQ);
       setAssignments(assignSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.createdAt - a.createdAt));
       
     } catch (err) {
@@ -79,7 +79,7 @@ export default function TeacherAssignments() {
     try {
       const selectedCourse = courses.find(c => c.id === formData.courseId);
       
-      await addDoc(collection(db, 'assignments'), {
+// TODO: Migrate to REST API ->       await addDoc(collection(db, 'assignments'), {
         collegeId: userData.collegeId,
         teacherId: userData.uid,
         courseId: formData.courseId,
@@ -114,7 +114,7 @@ export default function TeacherAssignments() {
     if (!isConfirmed) return;
 
     try {
-      await deleteDoc(doc(db, 'assignments', id));
+// TODO: Migrate to REST API ->       await deleteDoc(doc(db, 'assignments', id));
       setAssignments(prev => prev.filter(a => a.id !== id));
       toast.success('Assignment deleted');
     } catch (err) {

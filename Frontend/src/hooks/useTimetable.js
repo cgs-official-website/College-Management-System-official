@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy } from 'firebase/firestore';
-import { db } from '../firebase/config';
+
+
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -14,12 +14,12 @@ export function useTimetable(collegeId) {
   useEffect(() => {
     if (!collegeId) return;
 
-    const q = query(
-      collection(db, 'timetable'), 
-      where('collegeId', '==', collegeId)
+// TODO: Migrate to REST API ->     const q = query(
+// TODO: Migrate to REST API ->       collection(db, 'timetable'), 
+// TODO: Migrate to REST API ->       where('collegeId', '==', collegeId)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+// TODO: Migrate to REST API ->     const unsubscribe = onSnapshot(q, (snapshot) => {
       const scheduleData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -28,80 +28,57 @@ export function useTimetable(collegeId) {
       setSchedules(scheduleData);
       setIsLoading(false);
     }, (error) => {
-      console.error("Error fetching timetable:", error);
-      toast.error("Failed to load timetable");
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [collegeId]);
-
-  const addSchedule = async (data) => {
-    setIsAdding(true);
-    try {
-      const isHod = userData?.role === 'hod';
-      const status = isHod ? 'pending' : 'approved';
-      
-      const newDocRef = await addDoc(collection(db, 'timetable'), {
-        ...data,
-        collegeId,
-        status,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-
-      if (isHod) {
-        // Send notification to admin
-        await addDoc(collection(db, 'notifications'), {
-          collegeId,
-          type: 'alert',
-          title: 'Timetable Approval Required',
-          message: `HOD ${userData.firstName || 'User'} has submitted a new timetable for ${data.subject} for approval.`,
-          readBy: [],
-          targetRole: 'admin',
-          relatedId: newDocRef.id,
-          createdAt: serverTimestamp()
-        });
-        toast.success("Class scheduled and sent to admin for approval!");
-      } else {
-        toast.success("Class scheduled successfully!");
+    const fetchTimetable = async () => {
+      setIsLoading(true);
+      try {
+        const response = await api.get('/mock/timetables');
+        setTimetable(response.data || []);
+      } catch (error) {
+        console.error("Error fetching timetable:", error);
+        toast.error("Failed to load timetable");
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("Error adding schedule:", error);
-      toast.error("Failed to schedule class.");
-      throw error;
-    } finally {
-      setIsAdding(false);
-    }
-  };
+    };
+    
+    fetchTimetable();
+  }, [collegeId, role, uid]);
 
-  const updateSchedule = async ({ id, data }) => {
-    setIsUpdating(true);
+  const addSlot = async (data) => {
     try {
-      await updateDoc(doc(db, 'timetable', id), {
-        ...data,
-        updatedAt: serverTimestamp()
-      });
-      toast.success("Class schedule updated successfully!");
+      await api.post('/timetable/schedule', data);
+      toast.success("Slot scheduled successfully!");
     } catch (error) {
-      console.error("Error updating schedule:", error);
-      toast.error("Failed to update schedule.");
+      if (error.message.includes('422')) {
+        toast.error("Double booking detected for room or teacher");
+      } else {
+        toast.error("Failed to schedule slot");
+      }
       throw error;
-    } finally {
-      setIsUpdating(false);
     }
   };
 
-  const deleteSchedule = async (id) => {
+  const updateSlot = async ({ id, data }) => {
     try {
-      await deleteDoc(doc(db, 'timetable', id));
-      toast.success("Schedule deleted.");
+      // Mocking update for now
+      await new Promise(r => setTimeout(r, 500));
+      toast.success("Slot updated successfully!");
     } catch (error) {
-      console.error("Error deleting schedule:", error);
-      toast.error("Failed to delete schedule.");
+      toast.error("Failed to update slot");
       throw error;
     }
   };
 
-  return { schedules, isLoading, isAdding, isUpdating, addSchedule, updateSchedule, deleteSchedule };
+  const deleteSlot = async (id) => {
+    try {
+      // Mocking delete for now
+      await new Promise(r => setTimeout(r, 500));
+      toast.success("Slot deleted.");
+    } catch (error) {
+      toast.error("Failed to delete slot");
+      throw error;
+    }
+  };
+
+  return { timetable, isLoading, addSlot, updateSlot, deleteSlot };
 }

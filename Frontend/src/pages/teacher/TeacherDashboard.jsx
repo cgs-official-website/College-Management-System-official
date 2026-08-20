@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, BookOpen, Calendar, CheckSquare, Bell, Clock, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+
+
 
 export default function TeacherDashboard() {
   const { userData } = useAuth();
@@ -23,11 +23,11 @@ export default function TeacherDashboard() {
         if (!userData?.collegeId) return;
         
         // Fetch recent notices
-        const noticesQuery = query(
-          collection(db, 'notices'),
-          where('collegeId', 'in', [userData.collegeId, 'all'])
+// TODO: Migrate to REST API ->         const noticesQuery = query(
+// TODO: Migrate to REST API ->           collection(db, 'notices'),
+// TODO: Migrate to REST API ->           where('collegeId', 'in', [userData.collegeId, 'all'])
         );
-        const noticesSnap = await getDocs(noticesQuery);
+// TODO: Migrate to REST API ->         const noticesSnap = await getDocs(noticesQuery);
         let noticesList = noticesSnap.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
@@ -49,25 +49,25 @@ export default function TeacherDashboard() {
         
         setNotices(filteredNotices);
         
-        const coursesQ = query(
-          collection(db, 'courses'), 
-          where('collegeId', '==', userData.collegeId)
+// TODO: Migrate to REST API ->         const coursesQ = query(
+// TODO: Migrate to REST API ->           collection(db, 'courses'), 
+// TODO: Migrate to REST API ->           where('collegeId', '==', userData.collegeId)
         );
-        const coursesSnap = await getDocs(coursesQ);
+// TODO: Migrate to REST API ->         const coursesSnap = await getDocs(coursesQ);
         const myCourses = coursesSnap.docs.filter(doc => doc.data().assignedTeacher === userData.uid);
         
         let totalStudentsTaught = 0;
         await Promise.all(myCourses.map(async (docSnap) => {
-          const studentQ = query(collection(db, 'students'), where('courseId', '==', docSnap.id));
-          const studentSnap = await getDocs(studentQ);
+// TODO: Migrate to REST API ->           const studentQ = query(collection(db, 'students'), where('courseId', '==', docSnap.id));
+// TODO: Migrate to REST API ->           const studentSnap = await getDocs(studentQ);
           totalStudentsTaught += studentSnap.size;
         }));
 
-        const assignmentsQ = query(
-          collection(db, 'assignments'), 
-          where('teacherId', '==', userData.uid)
+// TODO: Migrate to REST API ->         const assignmentsQ = query(
+// TODO: Migrate to REST API ->           collection(db, 'assignments'), 
+// TODO: Migrate to REST API ->           where('teacherId', '==', userData.uid)
         );
-        const assignmentsSnap = await getDocs(assignmentsQ);
+// TODO: Migrate to REST API ->         const assignmentsSnap = await getDocs(assignmentsQ);
 
         setStats({
           totalClasses: myCourses.length,
@@ -80,12 +80,12 @@ export default function TeacherDashboard() {
         const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         const todayName = days[new Date().getDay()];
 
-        const scheduleQ = query(
-          collection(db, 'timetables'), 
-          where('teacherId', '==', userData.uid),
-          where('day', '==', todayName)
+// TODO: Migrate to REST API ->         const scheduleQ = query(
+// TODO: Migrate to REST API ->           collection(db, 'timetables'), 
+// TODO: Migrate to REST API ->           where('teacherId', '==', userData.uid),
+// TODO: Migrate to REST API ->           where('day', '==', todayName)
         );
-        const scheduleSnap = await getDocs(scheduleQ);
+// TODO: Migrate to REST API ->         const scheduleSnap = await getDocs(scheduleQ);
         setTodayClasses(scheduleSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         
       } catch (error) {
@@ -259,12 +259,12 @@ const ManageStudentStatus = () => {
     setToastMsg(null);
     try {
       // Find the student
-      const q = query(
-        collection(db, 'users'), 
-        where('collegeId', '==', userData.collegeId),
-        where('studentId', '==', studentId)
+// TODO: Migrate to REST API ->       const q = query(
+// TODO: Migrate to REST API ->         collection(db, 'users'), 
+// TODO: Migrate to REST API ->         where('collegeId', '==', userData.collegeId),
+// TODO: Migrate to REST API ->         where('studentId', '==', studentId)
       );
-      const snap = await getDocs(q);
+// TODO: Migrate to REST API ->       const snap = await getDocs(q);
       
       if (snap.empty) {
         setToastMsg({ type: 'error', text: 'Student not found in your college' });
@@ -276,9 +276,9 @@ const ManageStudentStatus = () => {
       const uid = userDoc.id;
 
       // Update both users and students collection
-      const { doc, updateDoc } = await import('firebase/firestore');
-      await updateDoc(doc(db, 'users', uid), { accountStatus: status });
-      await updateDoc(doc(db, 'students', uid), { accountStatus: status });
+// TODO: Migrate to REST API ->       const { doc, updateDoc } = await import('firebase/firestore');
+// TODO: Migrate to REST API ->       await updateDoc(doc(db, 'users', uid), { accountStatus: status });
+// TODO: Migrate to REST API ->       await updateDoc(doc(db, 'students', uid), { accountStatus: status });
 
       setToastMsg({ type: 'success', text: `Student marked as ${status}` });
       setStudentId('');

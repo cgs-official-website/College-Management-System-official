@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { api } from '../services/api';
 import toast from 'react-hot-toast';
 
 export function useLibrary(collegeId) {
@@ -12,37 +11,26 @@ export function useLibrary(collegeId) {
   useEffect(() => {
     if (!collegeId) return;
 
-    const q = query(
-      collection(db, 'library'), 
-      where('collegeId', '==', collegeId)
-    );
+    const fetchBooks = async () => {
+      setIsLoading(true);
+      try {
+        const response = await api.get('/library');
+        setBooks(response.data || []);
+      } catch (error) {
+        console.error("Error fetching library books:", error);
+        toast.error("Failed to load library inventory");
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const bookData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      bookData.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
-      setBooks(bookData);
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Error fetching library books:", error);
-      toast.error("Failed to load library inventory");
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
+    fetchBooks();
   }, [collegeId]);
 
   const addBook = async (data) => {
     setIsAdding(true);
     try {
-      await addDoc(collection(db, 'library'), {
-        ...data,
-        collegeId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
+      await api.post('/library', data);
       toast.success("Book added to inventory!");
     } catch (error) {
       console.error("Error adding book:", error);
@@ -56,10 +44,7 @@ export function useLibrary(collegeId) {
   const updateBook = async ({ id, data }) => {
     setIsUpdating(true);
     try {
-      await updateDoc(doc(db, 'library', id), {
-        ...data,
-        updatedAt: serverTimestamp()
-      });
+      await api.put(`/library/${id}`, data);
       toast.success("Book details updated!");
     } catch (error) {
       console.error("Error updating book:", error);
@@ -72,7 +57,7 @@ export function useLibrary(collegeId) {
 
   const deleteBook = async (id) => {
     try {
-      await deleteDoc(doc(db, 'library', id));
+      await api.delete(`/library/${id}`);
       toast.success("Book removed from inventory.");
     } catch (error) {
       console.error("Error deleting book:", error);

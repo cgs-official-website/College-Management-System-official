@@ -1,14 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
-  signOut,
-  sendPasswordResetEmail
-} from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp, collection, runTransaction } from 'firebase/firestore';
-import { auth, db } from '../firebase/config';
-
+import { api } from '../services/api';
 import { FullPageSkeleton } from '../components/ui/FullPageSkeleton';
 
 const AuthContext = createContext();
@@ -24,190 +15,78 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   async function login(email, password) {
-    return await signInWithEmailAndPassword(auth, email, password);
+    const response = await api.post('/auth/login', { email, password });
+    localStorage.setItem('zuna_token', response.data.accessToken);
+    
+    await restoreSession();
+    return response.data.user;
   }
 
   async function register(email, password, additionalData) {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-    
-    let collegeIdToUse = additionalData.collegeId;
-    let collegeSlugToUse = null;
-
     if (additionalData.role === 'admin') {
-      const counterRef = doc(db, 'counters', 'collegeCode');
-      
-      collegeIdToUse = await runTransaction(db, async (transaction) => {
-        const counterDoc = await transaction.get(counterRef);
-        let newCount = 1;
-        if (counterDoc.exists()) {
-          newCount = counterDoc.data().lastCode + 1;
-        }
-        transaction.set(counterRef, { lastCode: newCount }, { merge: true });
-        
-        return `ZUNAC${String(newCount).padStart(4, '0')}`;
+      const response = await api.post('/auth/register', {
+        adminEmail: email,
+        password,
+        collegeName: additionalData.collegeName,
+        slug: additionalData.collegeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
       });
-
-      const newCollegeRef = doc(db, 'colleges', collegeIdToUse);
-      
-      collegeSlugToUse = additionalData.collegeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
-
-      await setDoc(newCollegeRef, {
-        id: collegeIdToUse,
-        name: additionalData.collegeName,
-        slug: collegeSlugToUse,
-        aicteNumber: additionalData.aicteNumber || '',
-        ugcRecognition: additionalData.ugcRecognition || '',
-        affiliationCode: additionalData.affiliationCode || '',
-        logoBase64: additionalData.logoBase64 || '',
-        status: 'pending',
-        adminUid: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-
-      // Remove these so they don't pollute the user document
-      delete additionalData.collegeName;
-      delete additionalData.aicteNumber;
-      delete additionalData.ugcRecognition;
-      delete additionalData.affiliationCode;
-      delete additionalData.logoBase64;
+      return response.data;
     }
-    
-    // Create user document in Firestore
-    await setDoc(doc(db, 'users', user.uid), {
-      uid: user.uid,
-      email: user.email,
-      ...additionalData,
-      collegeId: collegeIdToUse,
-      ...(collegeSlugToUse && { collegeSlug: collegeSlugToUse }),
-      accountStatus: additionalData.role === 'admin' ? 'pending' : 'active',
-      createdAt: serverTimestamp()
-    });
-
-    // We might also want to create a specific record in students or teachers collection
-    if (additionalData.role === 'student') {
-      await setDoc(doc(db, 'students', user.uid), {
-        userId: user.uid,
-        collegeId: collegeIdToUse,
-        name: additionalData.name,
-        email: user.email,
-        createdAt: serverTimestamp()
-      });
-    } else if (additionalData.role === 'teacher' || additionalData.role === 'hod') {
-      await setDoc(doc(db, 'teachers', user.uid), {
-        userId: user.uid,
-        collegeId: collegeIdToUse,
-        teacherId: additionalData.teacherId,
-        name: additionalData.name,
-        email: user.email,
-        role: additionalData.role, // Explicitly store role in teacher doc as well
-        createdAt: serverTimestamp()
-      });
-    } else if (additionalData.role === 'parent') {
-      await setDoc(doc(db, 'parents', user.uid), {
-        userId: user.uid,
-        collegeId: collegeIdToUse,
-        studentId: additionalData.studentId,
-        name: additionalData.name,
-        email: user.email,
-        createdAt: serverTimestamp()
-      });
-    }
-
-    return userCredential;
+    throw new Error("Only Admin registration is currently implemented in REST API");
   }
 
   function logout() {
-    return signOut(auth);
+    localStorage.removeItem('zuna_token');
+    setCurrentUser(null);
+    setUserRole(null);
+    setUserData(null);
   }
 
   function resetPassword(email) {
-    return sendPasswordResetEmail(auth, email);
+    throw new Error("Password reset not yet implemented in REST API");
   }
 
   const updateUserData = (newData) => {
     setUserData(prev => ({ ...prev, ...newData }));
   };
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // Fetch user role from Firestore
-        try {
-          console.log("Fetching role for UID:", user.uid);
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          if (userDoc.exists()) {
-            console.log("User doc found! Role is:", userDoc.data().role);
-            let fetchedUserData = userDoc.data();
-            const role = fetchedUserData.role;
-            
-            // Fetch role-specific details to ensure synced data (like name, course, etc.)
-            if (['student', 'teacher', 'parent', 'hod'].includes(role)) {
-              const collectionName = role === 'hod' ? 'teachers' : role + 's';
-              try {
-                const roleDoc = await getDoc(doc(db, collectionName, user.uid));
-                if (roleDoc.exists()) {
-                  console.log(`Role-specific details found in ${collectionName}`);
-                  fetchedUserData = { ...fetchedUserData, ...roleDoc.data() };
-                }
-              } catch (e) {
-                console.error("Error fetching role specific data:", e);
-              }
-            }
-            
-            // If user belongs to a college, fetch the college data
-            if (fetchedUserData.collegeId) {
-              console.log("Fetching college details for collegeId:", fetchedUserData.collegeId);
-              try {
-                // Add safety timeout to prevent hanging
-                const collegeDoc = await Promise.race([
-                  getDoc(doc(db, 'colleges', fetchedUserData.collegeId)),
-                  new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout fetching college')), 5000))
-                ]);
-                
-                if (collegeDoc.exists()) {
-                  console.log("College details found!");
-                  fetchedUserData = {
-                    ...fetchedUserData,
-                    collegeName: collegeDoc.data().name || collegeDoc.data().collegeName,
-                    collegeLogo: collegeDoc.data().logoBase64
-                  };
-                } else {
-                  console.log("College details not found in database.");
-                }
-              } catch (e) {
-                console.error("Error fetching college details:", e);
-              }
-            } else {
-              console.log("No collegeId present in user data.");
-            }
-
-            console.log("Setting user data and role");
-            setUserRole(fetchedUserData.role);
-            setUserData(fetchedUserData);
-          } else {
-            console.warn("User doc NOT found in Firestore for UID:", user.uid);
-            setUserRole(null);
-            setUserData(null);
-          }
-        } catch (error) {
-          console.error("Error fetching user role:", error);
-          setUserRole(null);
-          setUserData(null);
-        }
-      } else {
-        console.log("No authenticated user.");
-        setUserRole(null);
-        setUserData(null);
-      }
-      
-      console.log("Setting loading to false");
-      setCurrentUser(user);
+  const restoreSession = async () => {
+    const token = localStorage.getItem('zuna_token');
+    if (!token) {
       setLoading(false);
-    });
+      return;
+    }
 
-    return unsubscribe;
+    try {
+      const response = await api.get('/auth/me');
+      const data = response.data;
+      
+      setCurrentUser({ uid: data.id, email: data.email });
+      setUserRole(data.role);
+      
+      setUserData({
+        uid: data.id,
+        email: data.email,
+        role: data.role,
+        collegeId: data.collegeId,
+        collegeName: data.college?.name,
+        collegeLogo: data.college?.logoUrl,
+        ...data
+      });
+    } catch (error) {
+      console.error("Session restore failed", error);
+      logout();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    restoreSession();
+
+    const handleAuthExpired = () => logout();
+    window.addEventListener('auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('auth-expired', handleAuthExpired);
   }, []);
 
   useEffect(() => {

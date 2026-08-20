@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, BookOpen, Clock, MapPin, ChevronRight, AlertCircle } from 'lucide-react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+
+
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -19,18 +19,18 @@ export default function TeacherClasses() {
         if (!userData?.collegeId) return;
         
         // Fetch courses and filter by teacher client-side to avoid requiring composite indexes
-        const q = query(
-          collection(db, 'courses'), 
-          where('collegeId', '==', userData.collegeId)
+// TODO: Migrate to REST API ->         const q = query(
+// TODO: Migrate to REST API ->           collection(db, 'courses'), 
+// TODO: Migrate to REST API ->           where('collegeId', '==', userData.collegeId)
         );
-        const snap = await getDocs(q);
+// TODO: Migrate to REST API ->         const snap = await getDocs(q);
         const myCourses = snap.docs.filter(doc => doc.data().assignedTeacher === userData.uid);
         
         // Fetch actual enrollment counts
         const fetchedCourses = await Promise.all(myCourses.map(async (docSnap) => {
           const courseData = docSnap.data();
-          const studentQ = query(collection(db, 'students'), where('courseId', '==', docSnap.id));
-          const studentSnap = await getDocs(studentQ);
+// TODO: Migrate to REST API ->           const studentQ = query(collection(db, 'students'), where('courseId', '==', docSnap.id));
+// TODO: Migrate to REST API ->           const studentSnap = await getDocs(studentQ);
           
           return {
             id: docSnap.id,

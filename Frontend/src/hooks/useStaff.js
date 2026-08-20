@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { api } from '../services/api';
 import toast from 'react-hot-toast';
 
 export function useStaff(collegeId) {
@@ -12,37 +11,26 @@ export function useStaff(collegeId) {
   useEffect(() => {
     if (!collegeId) return;
 
-    const q = query(
-      collection(db, 'teachers'), 
-      where('collegeId', '==', collegeId)
-    );
+    const fetchStaff = async () => {
+      setIsLoading(true);
+      try {
+        const response = await api.get('/staff');
+        setStaff(response.data || []);
+      } catch (error) {
+        console.error("Error fetching staff:", error);
+        toast.error("Failed to load staff directory");
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const staffData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      staffData.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
-      setStaff(staffData);
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Error fetching staff:", error);
-      toast.error("Failed to load staff directory");
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
+    fetchStaff();
   }, [collegeId]);
 
   const addStaff = async (data) => {
     setIsAdding(true);
     try {
-      await addDoc(collection(db, 'teachers'), {
-        ...data,
-        collegeId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
+      await api.post('/staff', data);
       toast.success("Staff member added successfully!");
     } catch (error) {
       console.error("Error adding staff:", error);
@@ -56,10 +44,7 @@ export function useStaff(collegeId) {
   const updateStaff = async ({ id, data }) => {
     setIsUpdating(true);
     try {
-      await updateDoc(doc(db, 'teachers', id), {
-        ...data,
-        updatedAt: serverTimestamp()
-      });
+      await api.put(`/staff/${id}`, data);
       toast.success("Staff member updated successfully!");
     } catch (error) {
       console.error("Error updating staff:", error);
@@ -72,7 +57,7 @@ export function useStaff(collegeId) {
 
   const deleteStaff = async (id) => {
     try {
-      await deleteDoc(doc(db, 'teachers', id));
+      await api.delete(`/staff/${id}`);
       toast.success("Staff member removed.");
     } catch (error) {
       console.error("Error deleting staff:", error);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+
+
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, CreditCard, Edit2, Check, X, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -19,15 +19,15 @@ const SuperSubscriptions = () => {
   const fetchPlans = async () => {
     setIsLoading(true);
     try {
-      const q = query(collection(db, 'subscription_plans'));
-      const snapshot = await getDocs(q);
+// TODO: Migrate to REST API ->       const q = query(collection(db, 'subscription_plans'));
+// TODO: Migrate to REST API ->       const snapshot = await getDocs(q);
       
       let fetchedPlans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
       // Initialize if empty
       if (fetchedPlans.length === 0) {
         for (const plan of DEFAULT_PLANS) {
-          await setDoc(doc(db, 'subscription_plans', plan.id), plan);
+// TODO: Migrate to REST API ->           await setDoc(doc(db, 'subscription_plans', plan.id), plan);
         }
         fetchedPlans = DEFAULT_PLANS;
       }
@@ -48,7 +48,7 @@ const SuperSubscriptions = () => {
   const handleToggleStatus = async (plan) => {
     const newStatus = plan.status === 'active' ? 'inactive' : 'active';
     try {
-      await updateDoc(doc(db, 'subscription_plans', plan.id), { status: newStatus });
+// TODO: Migrate to REST API ->       await updateDoc(doc(db, 'subscription_plans', plan.id), { status: newStatus });
       setPlans(plans.map(p => p.id === plan.id ? { ...p, status: newStatus } : p));
       toast.success(`Plan marked as ${newStatus}`);
     } catch (error) {
@@ -69,7 +69,7 @@ const SuperSubscriptions = () => {
         studentCount: formData.get('studentCount'),
       };
 
-      await updateDoc(doc(db, 'subscription_plans', editingPlan.id), updatedData);
+// TODO: Migrate to REST API ->       await updateDoc(doc(db, 'subscription_plans', editingPlan.id), updatedData);
       
       setPlans(plans.map(p => p.id === editingPlan.id ? { ...p, ...updatedData } : p));
       setEditingPlan(null);

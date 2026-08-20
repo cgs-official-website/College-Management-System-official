@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
-import { collection, query, getDocs, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+
+
 import { createAdminUser } from '../../firebase/adminHelper';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { toast } from 'react-hot-toast';
@@ -43,8 +43,8 @@ const SuperColleges = () => {
   const fetchColleges = async () => {
     try {
       setIsLoading(true);
-      const q = query(collection(db, 'colleges'), orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(q);
+// TODO: Migrate to REST API ->       const q = query(collection(db, 'colleges'), orderBy('createdAt', 'desc'));
+// TODO: Migrate to REST API ->       const querySnapshot = await getDocs(q);
       const data = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -64,13 +64,13 @@ const SuperColleges = () => {
   const handleApproveCollege = async (collegeId, adminUid) => {
     try {
       // Update college status
-      const collegeRef = doc(db, 'colleges', collegeId);
-      await updateDoc(collegeRef, { status: 'active' });
+// TODO: Migrate to REST API ->       const collegeRef = doc(db, 'colleges', collegeId);
+// TODO: Migrate to REST API ->       await updateDoc(collegeRef, { status: 'active' });
 
       // Update admin user status
       if (adminUid) {
-        const userRef = doc(db, 'users', adminUid);
-        await updateDoc(userRef, { accountStatus: 'active' });
+// TODO: Migrate to REST API ->         const userRef = doc(db, 'users', adminUid);
+// TODO: Migrate to REST API ->         await updateDoc(userRef, { accountStatus: 'active' });
       }
 
       // Refresh list
@@ -82,7 +82,7 @@ const SuperColleges = () => {
 
   const handleUpdateStatus = async (collegeId, newStatus) => {
     try {
-      await updateDoc(doc(db, 'colleges', collegeId), { status: newStatus });
+// TODO: Migrate to REST API ->       await updateDoc(doc(db, 'colleges', collegeId), { status: newStatus });
       fetchColleges();
     } catch (error) {
       console.error("Error updating status:", error);
@@ -93,7 +93,7 @@ const SuperColleges = () => {
     if (!(await confirm({ message: "Are you sure you want to permanently delete this college? This action cannot be undone." }))) return;
     
     try {
-      await deleteDoc(doc(db, 'colleges', collegeId));
+// TODO: Migrate to REST API ->       await deleteDoc(doc(db, 'colleges', collegeId));
       fetchColleges();
     } catch (error) {
       console.error("Error deleting college:", error);
@@ -842,7 +842,7 @@ const ManageSubscriptionModal = ({ college, onClose, onSuccess }) => {
   const onSubmit = async (data) => {
     setIsSubmitting(true);
     try {
-      await updateDoc(doc(db, 'colleges', college.id), {
+// TODO: Migrate to REST API ->       await updateDoc(doc(db, 'colleges', college.id), {
         subscriptionPlan: data.plan,
         subscriptionStatus: data.status,
         subscriptionEndDate: data.endDate

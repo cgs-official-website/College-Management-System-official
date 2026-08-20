@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { api } from '../services/api';
 import toast from 'react-hot-toast';
 
 export function useAttendance(collegeId, courseId, date) {
@@ -9,35 +8,25 @@ export function useAttendance(collegeId, courseId, date) {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (!collegeId || !courseId || !date) return;
+    if (!collegeId || !courseId || !date) {
+      setAttendanceRecords({});
+      return;
+    }
 
-    setIsLoading(true);
-    // document ID format: collegeId_courseId_date
-    const recordId = `${collegeId}_${courseId}_${date}`;
-    const docRef = doc(db, 'attendance', recordId);
-
-    const unsubscribe = onSnapshot(docRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setAttendanceRecords(snapshot.data().records || {});
-      } else {
-        setAttendanceRecords({});
-      }
-      setIsLoading(false);
-    }, (error) => {
-      // If the document doesn't exist yet, Firestore rules will block the read due to missing collegeId
-      // We can safely ignore this and assume empty attendance records
-      if (error.code === 'permission-denied') {
-        setAttendanceRecords({});
+    const fetchAttendance = async () => {
+      setIsLoading(true);
+      try {
+        const response = await api.get(`/attendance/class/${courseId}/date/${date}`);
+        setAttendanceRecords(response.data || {});
+      } catch (error) {
+        console.error("Error fetching attendance:", error);
+        toast.error("Failed to load attendance records.");
+      } finally {
         setIsLoading(false);
-        return;
       }
-      
-      console.error("Error fetching attendance:", error);
-      toast.error("Failed to load attendance records.");
-      setIsLoading(false);
-    });
+    };
 
-    return () => unsubscribe();
+    fetchAttendance();
   }, [collegeId, courseId, date]);
 
   const markAttendance = async (studentId, status) => {
@@ -47,25 +36,24 @@ export function useAttendance(collegeId, courseId, date) {
     }
 
     setIsSaving(true);
-    const recordId = `${collegeId}_${courseId}_${date}`;
-    const docRef = doc(db, 'attendance', recordId);
+    
+    // Optimistic UI update
+    setAttendanceRecords(prev => ({
+      ...prev,
+      [studentId]: status
+    }));
 
     try {
-      // We use setDoc with merge: true to update specific student records 
-      // without overwriting the entire document
-      await setDoc(docRef, {
-        collegeId,
+      await api.post('/attendance/mark', {
+        studentId,
         courseId,
         date,
-        updatedAt: serverTimestamp(),
-        records: {
-          [studentId]: status // 'present', 'absent', or 'late'
-        }
-      }, { merge: true });
-      
+        status
+      });
     } catch (error) {
       console.error("Error saving attendance:", error);
       toast.error("Failed to save attendance.");
+      // Rollback logic could be added here
     } finally {
       setIsSaving(false);
     }
