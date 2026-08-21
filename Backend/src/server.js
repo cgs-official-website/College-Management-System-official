@@ -67,6 +67,7 @@ app.get('/health', async (req, res) => {
 });
 
 import authRoutes from './modules/auth/auth.routes.js';
+import collegesRoutes from './modules/colleges/colleges.routes.js';
 import admissionsRoutes from './modules/admissions/admissions.routes.js';
 import attendanceRoutes from './modules/attendance/attendance.routes.js';
 import feesRoutes from './modules/fees/fees.routes.js';
@@ -80,7 +81,8 @@ import libraryRoutes from './modules/library/library.routes.js';
 import infrastructureRoutes from './modules/infrastructure/infrastructure.routes.js';
 import * as stubs from './modules/stubs.js';
 
-// API Routes (Core 5 Modules)
+// API Routes (Core Modules)
+app.use('/api/v1/colleges', collegesRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/admin/admissions', admissionsRoutes);
 app.use('/api/v1/attendance', attendanceRoutes);
