@@ -832,10 +832,10 @@ const ManageSubscriptionModal = ({ college, onClose, onSuccess }) => {
     setIsSubmitting(true);
     try {
 // TODO: Migrate to REST API ->       await updateDoc(doc(db, 'colleges', college.id), {
-        subscriptionPlan: data.plan,
-        subscriptionStatus: data.status,
-        subscriptionEndDate: data.endDate
-      });
+//         subscriptionPlan: data.plan,
+//         subscriptionStatus: data.status,
+//         subscriptionEndDate: data.endDate
+//       });
       toast.success("Subscription updated successfully!");
       onSuccess();
     } catch (error) {

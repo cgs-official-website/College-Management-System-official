@@ -56,12 +56,9 @@ const SuperAdmins = () => {
 // TODO: Migrate to REST API ->         where('role', '==', 'admin')
         // Note: Ordering might require a composite index if combining with where.
         // For now, we'll fetch and sort client-side or assume index exists.
-      );
+//      );
 // TODO: Migrate to REST API ->       const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const data = []; // Mock data or empty array for now
       
       // Sort by creation date descending client-side
       data.sort((a, b) => {

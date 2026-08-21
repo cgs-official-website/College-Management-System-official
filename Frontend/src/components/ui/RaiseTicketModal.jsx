@@ -66,24 +66,24 @@ export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'Colle
     };
 
 // TODO: Migrate to REST API ->     const unsub1 = onSnapshot(collection(zunaDb, 'tickets'), (snapshot) => {
-      mainList = snapshot.docs.map(d => ({
-        firestoreDocId: d.id,
-        id: d.data().id || d.id,
-        sourceCollection: 'tickets',
-        ...d.data()
-      }));
-      mergeAndEmit();
-    }, (err) => console.warn('Tickets snapshot warn:', err));
+//       mainList = snapshot.docs.map(d => ({
+//         firestoreDocId: d.id,
+//         id: d.data().id || d.id,
+//         sourceCollection: 'tickets',
+//         ...d.data()
+//       }));
+//       mergeAndEmit();
+//     }, (err) => console.warn('Tickets snapshot warn:', err));
 
 // TODO: Migrate to REST API ->     const unsub2 = onSnapshot(collection(zunaDb, 'support_tickets'), (snapshot) => {
-      supportList = snapshot.docs.map(d => ({
-        firestoreDocId: d.id,
-        id: d.data().id || d.id,
-        sourceCollection: 'support_tickets',
-        ...d.data()
-      }));
-      mergeAndEmit();
-    }, (err) => console.warn('Support tickets snapshot warn:', err));
+//       supportList = snapshot.docs.map(d => ({
+//         firestoreDocId: d.id,
+//         id: d.data().id || d.id,
+//         sourceCollection: 'support_tickets',
+//         ...d.data()
+//       }));
+//       mergeAndEmit();
+//     }, (err) => console.warn('Support tickets snapshot warn:', err));
 
     return () => {
       unsub1();
@@ -125,16 +125,16 @@ export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'Colle
 
       try {
 // TODO: Migrate to REST API ->         await addDoc(collection(zunaDb, 'tickets'), {
-          ...ticketPayload,
-          createdAt: serverTimestamp()
-        });
+//           ...ticketPayload,
+//           createdAt: serverTimestamp()
+//         });
       } catch (e1) {}
 
       try {
 // TODO: Migrate to REST API ->         await addDoc(collection(zunaDb, 'support_tickets'), {
-          ...ticketPayload,
-          createdAt: serverTimestamp()
-        });
+//           ...ticketPayload,
+//           createdAt: serverTimestamp()
+//         });
       } catch (e2) {}
 
       try {
@@ -183,9 +183,9 @@ export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'Colle
 
     try {
 // TODO: Migrate to REST API ->       await updateDoc(doc(zunaDb, colName, targetDocId), {
-        messages: updatedMessages,
-        updatedAt: serverTimestamp()
-      });
+//         messages: updatedMessages,
+//         updatedAt: serverTimestamp()
+//       });
       setReplyText('');
     } catch (err) {
       console.warn('Reply write error:', err);

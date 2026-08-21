@@ -26,11 +26,11 @@ export const seedDemoData = async (onProgress) => {
     tempSuperAdminUser = tempCred.user;
     
 // TODO: Migrate to REST API ->     await setDoc(doc(db, 'users', tempSuperAdminUser.uid), {
-      uid: tempSuperAdminUser.uid,
-      email: tempEmail,
-      role: 'superadmin',
-      createdAt: timestamp
-    });
+//       uid: tempSuperAdminUser.uid,
+//       email: tempEmail,
+//       role: 'superadmin',
+//       createdAt: timestamp
+//     });
     
     onProgress('Generating comprehensive academic data...');
 
@@ -60,9 +60,9 @@ export const seedDemoData = async (onProgress) => {
     }
     
 // TODO: Migrate to REST API ->     batch.set(doc(db, 'users', adminUid), {
-      uid: adminUid, email: adminEmail, firstName: 'College', lastName: 'Admin',
-      role: 'admin', collegeId: collegeCode, collegeName: collegeName, accountStatus: 'active', createdAt: timestamp
-    });
+//       uid: adminUid, email: adminEmail, firstName: 'College', lastName: 'Admin',
+//       role: 'admin', collegeId: collegeCode, collegeName: collegeName, accountStatus: 'active', createdAt: timestamp
+//     });
 
     // 3. Departments/Courses
     const departments = [
@@ -75,10 +75,10 @@ export const seedDemoData = async (onProgress) => {
     const courseRefs = {};
     for (const dept of departments) {
 // TODO: Migrate to REST API ->       const cRef = doc(collection(db, 'courses'));
-      batch.set(cRef, {
-        id: cRef.id, collegeId: collegeCode, code: dept.id, name: dept.name,
-        department: dept.name, duration: '4 Years', totalSemesters: 8, createdAt: timestamp, status: 'active'
-      });
+//       batch.set(cRef, {
+//         id: cRef.id, collegeId: collegeCode, code: dept.id, name: dept.name,
+//         department: dept.name, duration: '4 Years', totalSemesters: 8, createdAt: timestamp, status: 'active'
+//       });
       courseRefs[dept.id] = cRef.id;
     }
 
@@ -178,9 +178,9 @@ export const seedDemoData = async (onProgress) => {
     
     for (const notice of notices) {
 // TODO: Migrate to REST API ->       batch.set(doc(collection(db, 'notices')), {
-        collegeId: collegeCode, title: notice.title, content: notice.content, type: notice.type,
-        targetAudience: notice.target, priority: 'high', status: 'active', createdAt: timestamp, createdBy: adminUid
-      });
+//         collegeId: collegeCode, title: notice.title, content: notice.content, type: notice.type,
+//         targetAudience: notice.target, priority: 'high', status: 'active', createdAt: timestamp, createdBy: adminUid
+//       });
     }
 
     // Notifications
@@ -190,11 +190,11 @@ export const seedDemoData = async (onProgress) => {
     ];
     for (const notif of notifs) {
 // TODO: Migrate to REST API ->       batch.set(doc(collection(db, 'notifications')), {
-        collegeId: collegeCode, userId: studentUids[0], title: notif.title, message: notif.message, type: notif.type, isRead: false, createdAt: timestamp
-      });
+//         collegeId: collegeCode, userId: studentUids[0], title: notif.title, message: notif.message, type: notif.type, isRead: false, createdAt: timestamp
+//       });
 // TODO: Migrate to REST API ->       batch.set(doc(collection(db, 'notifications')), {
-        collegeId: collegeCode, userId: teacherUids[0], title: notif.title, message: notif.message, type: notif.type, isRead: false, createdAt: timestamp
-      });
+//         collegeId: collegeCode, userId: teacherUids[0], title: notif.title, message: notif.message, type: notif.type, isRead: false, createdAt: timestamp
+//       });
     }
 
     // 8. Timetable
@@ -221,65 +221,65 @@ export const seedDemoData = async (onProgress) => {
     const todayStr = new Date().toISOString().split('T')[0];
     for (const sUid of studentUids) {
 // TODO: Migrate to REST API ->       batch.set(doc(collection(db, 'attendance')), {
-        collegeId: collegeCode, studentId: sUid, date: todayStr, status: 'present', courseId: courseRefs['CSE'], createdAt: timestamp
-      });
+//         collegeId: collegeCode, studentId: sUid, date: todayStr, status: 'present', courseId: courseRefs['CSE'], createdAt: timestamp
+//       });
     }
 
     // 10. Assignments
 // TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'assignments')), {
-      collegeId: collegeCode, courseId: courseRefs['CSE'], title: 'Data Structures Lab 1',
-      description: 'Implement a binary search tree in C++.', dueDate: '2026-07-15', teacherId: teacherUids[0], status: 'active', createdAt: timestamp
-    });
+//       collegeId: collegeCode, courseId: courseRefs['CSE'], title: 'Data Structures Lab 1',
+//       description: 'Implement a binary search tree in C++.', dueDate: '2026-07-15', teacherId: teacherUids[0], status: 'active', createdAt: timestamp
+//     });
 
     // 11. Exams & Grades
 // TODO: Migrate to REST API ->     const examRef = doc(collection(db, 'exams'));
-    batch.set(examRef, {
-      collegeId: collegeCode, title: 'Mid Term Examination', courseId: courseRefs['CSE'],
-      examDate: '2026-07-20', duration: '3 Hours', status: 'upcoming', createdAt: timestamp
-    });
+//     batch.set(examRef, {
+//       collegeId: collegeCode, title: 'Mid Term Examination', courseId: courseRefs['CSE'],
+//       examDate: '2026-07-20', duration: '3 Hours', status: 'upcoming', createdAt: timestamp
+//     });
 
 // TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'grades')), {
-      collegeId: collegeCode, studentId: studentUids[0], courseId: courseRefs['CSE'], examId: examRef.id,
-      subject: 'Data Structures', marks: 85, totalMarks: 100, grade: 'A', remarks: 'Excellent', createdAt: timestamp
-    });
+//       collegeId: collegeCode, studentId: studentUids[0], courseId: courseRefs['CSE'], examId: examRef.id,
+//       subject: 'Data Structures', marks: 85, totalMarks: 100, grade: 'A', remarks: 'Excellent', createdAt: timestamp
+//     });
 
     // 12. Fees
     onProgress('Creating financial and facilities records...');
 // TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'fees')), {
-      collegeId: collegeCode, studentId: studentUids[0], feeType: 'Tuition Fee', amount: 45000,
-      dueDate: '2026-08-01', status: 'pending', createdAt: timestamp
-    });
+//       collegeId: collegeCode, studentId: studentUids[0], feeType: 'Tuition Fee', amount: 45000,
+//       dueDate: '2026-08-01', status: 'pending', createdAt: timestamp
+//     });
 // TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'fees')), {
-      collegeId: collegeCode, studentId: studentUids[1], feeType: 'Hostel Fee', amount: 20000,
-      dueDate: '2026-07-01', status: 'paid', createdAt: timestamp
-    });
+//       collegeId: collegeCode, studentId: studentUids[1], feeType: 'Hostel Fee', amount: 20000,
+//       dueDate: '2026-07-01', status: 'paid', createdAt: timestamp
+//     });
 
     // 13. Library
 // TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'library')), {
-      collegeId: collegeCode, title: 'Introduction to Algorithms', author: 'Thomas H. Cormen',
-      isbn: '9780262033848', category: 'Computer Science', totalCopies: 15, availableCopies: 12, location: 'Rack A1', createdAt: timestamp
-    });
+//       collegeId: collegeCode, title: 'Introduction to Algorithms', author: 'Thomas H. Cormen',
+//       isbn: '9780262033848', category: 'Computer Science', totalCopies: 15, availableCopies: 12, location: 'Rack A1', createdAt: timestamp
+//     });
 // TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'library')), {
-      collegeId: collegeCode, title: 'Engineering Mathematics', author: 'B.S. Grewal',
-      isbn: '9788174091956', category: 'Mathematics', totalCopies: 30, availableCopies: 5, location: 'Rack B2', createdAt: timestamp
-    });
+//       collegeId: collegeCode, title: 'Engineering Mathematics', author: 'B.S. Grewal',
+//       isbn: '9788174091956', category: 'Mathematics', totalCopies: 30, availableCopies: 5, location: 'Rack B2', createdAt: timestamp
+//     });
 
     // 14. Infrastructure
 // TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'infrastructure')), {
-      collegeId: collegeCode, name: 'Main Auditorium', type: 'auditorium', capacity: 1000,
-      building: 'Main Block', status: 'active', features: 'Projector, AC, Sound System', createdAt: timestamp
-    });
+//       collegeId: collegeCode, name: 'Main Auditorium', type: 'auditorium', capacity: 1000,
+//       building: 'Main Block', status: 'active', features: 'Projector, AC, Sound System', createdAt: timestamp
+//     });
 // TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'infrastructure')), {
-      collegeId: collegeCode, name: 'Computer Lab 1', type: 'laboratory', capacity: 60,
-      building: 'CSE Block', status: 'maintenance', features: '60 PCs, AC', createdAt: timestamp
-    });
+//       collegeId: collegeCode, name: 'Computer Lab 1', type: 'laboratory', capacity: 60,
+//       building: 'CSE Block', status: 'maintenance', features: '60 PCs, AC', createdAt: timestamp
+//     });
 
     // 15. Admissions
 // TODO: Migrate to REST API ->     batch.set(doc(collection(db, 'admissions')), {
-      collegeId: collegeCode, firstName: 'New', lastName: 'Applicant', email: 'applicant@test.com', phone: '1234567890',
-      courseName: 'B.Tech Computer Science', previousSchool: 'Delhi Public School',
-      courseId: courseRefs['CSE'], status: 'Pending', appliedDate: todayStr, createdAt: timestamp
-    });
+//       collegeId: collegeCode, firstName: 'New', lastName: 'Applicant', email: 'applicant@test.com', phone: '1234567890',
+//       courseName: 'B.Tech Computer Science', previousSchool: 'Delhi Public School',
+//       courseId: courseRefs['CSE'], status: 'Pending', appliedDate: todayStr, createdAt: timestamp
+//     });
 
     onProgress('Committing all data to Firestore (bypassing rules)...');
     await batch.commit();

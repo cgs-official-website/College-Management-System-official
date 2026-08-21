@@ -36,3 +36,5 @@ export const api = {
   put: (url, body, options) => apiFetch(url, { ...options, method: 'PUT', body: JSON.stringify(body) }),
   delete: (url, options) => apiFetch(url, { ...options, method: 'DELETE' }),
 };
+
+export default api;

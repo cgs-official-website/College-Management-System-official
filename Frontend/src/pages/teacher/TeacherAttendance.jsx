@@ -79,15 +79,15 @@ export default function TeacherAttendance() {
       // Save individually (in production, use a batch)
       const promises = students.map(student => {
 // TODO: Migrate to REST API ->         return addDoc(attendanceRef, {
-          collegeId: userData.collegeId,
-          courseId: selectedCourse,
-          studentId: student.id,
-          studentName: `${student.firstName} ${student.lastName}`,
-          date: date,
-          status: attendanceState[student.id],
-          markedBy: userData.uid,
-          createdAt: serverTimestamp()
-        });
+//           collegeId: userData.collegeId,
+//           courseId: selectedCourse,
+//           studentId: student.id,
+//           studentName: `${student.firstName} ${student.lastName}`,
+//           date: date,
+//           status: attendanceState[student.id],
+//           markedBy: userData.uid,
+//           createdAt: serverTimestamp()
+//         });
       });
 
       await Promise.all(promises);

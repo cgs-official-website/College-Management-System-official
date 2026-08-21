@@ -31,21 +31,21 @@ export function NotificationDropdown() {
     if (userRole === 'superadmin') {
 // TODO: Migrate to REST API ->       const q = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(50));
 // TODO: Migrate to REST API ->       unsubscribes.push(onSnapshot(q, (snapshot) => {
-        const allNotifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setNotifications(allNotifs);
-      }));
+//         const allNotifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+//         setNotifications(allNotifs);
+//       }));
     } else {
       // Query 1: College specific
 // TODO: Migrate to REST API ->       const qCollege = query(
 // TODO: Migrate to REST API ->         collection(db, 'notifications'), 
 // TODO: Migrate to REST API ->         where('collegeId', '==', userData.collegeId)
-      );
+//       );
       
       // Query 2: Global announcements
 // TODO: Migrate to REST API ->       const qAll = query(
 // TODO: Migrate to REST API ->         collection(db, 'notifications'), 
 // TODO: Migrate to REST API ->         where('collegeId', '==', 'all')
-      );
+//       );
 
       let collegeNotifs = [];
       let globalNotifs = [];
@@ -61,14 +61,14 @@ export function NotificationDropdown() {
       };
 
 // TODO: Migrate to REST API ->       unsubscribes.push(onSnapshot(qCollege, (snapshot) => {
-        collegeNotifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        updateMergedNotifications();
-      }));
+//         collegeNotifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+//         updateMergedNotifications();
+//       }));
 
 // TODO: Migrate to REST API ->       unsubscribes.push(onSnapshot(qAll, (snapshot) => {
-        globalNotifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        updateMergedNotifications();
-      }));
+//         globalNotifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+//         updateMergedNotifications();
+//       }));
     }
 
     return () => {

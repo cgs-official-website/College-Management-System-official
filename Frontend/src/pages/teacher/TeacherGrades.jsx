@@ -76,6 +76,11 @@ export default function TeacherGrades() {
     // Check if any mark is empty
     const unentered = students.filter(s => marks[s.id] === '');
     if (unentered.length > 0) {
+      if (!(await confirm({ message: `There are ${unentered.length} students without marks. Submit anyway?` }))) {
+        return;
+      }
+    }
+
     if (!selectedCourse || !examType) {
       toast.error("Please select a course and an exam");
       return;
