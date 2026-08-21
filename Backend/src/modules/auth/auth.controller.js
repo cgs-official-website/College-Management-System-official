@@ -35,9 +35,10 @@ export const login = async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Store hashed refresh token in Redis for quick revocation lookups
+    // Store hashed refresh token for quick revocation lookups
+    const tokenHash = await bcrypt.hash(refreshToken, 10);
+    
     if (redis.status === 'ready') {
-      const tokenHash = await bcrypt.hash(refreshToken, 10);
       try {
         await redis.set(`refresh:${user.id}`, tokenHash, 'EX', 7 * 24 * 60 * 60);
       } catch (cacheErr) {
@@ -69,12 +70,15 @@ export const registerAdmin = async (req, res) => {
   try {
     const data = registerAdminSchema.parse(req.body);
     
+    // Ensure unique slug by appending random string
+    const uniqueSlug = `${data.slug}-${Math.random().toString(36).substring(2, 8)}`;
+    
     // Transaction to atomically create College and Admin
     const result = await prisma.$transaction(async (tx) => {
       const college = await tx.college.create({
         data: {
           name: data.collegeName,
-          slug: data.slug,
+          slug: uniqueSlug,
           status: 'trial'
         }
       });
