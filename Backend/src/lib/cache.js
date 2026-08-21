@@ -27,21 +27,25 @@ redis.on('error', (err) => {
  * Fails open (falls back to fetchFn) if Redis is down.
  */
 export async function getOrSet(key, ttlSeconds, fetchFn) {
-  try {
-    const cached = await redis.get(key);
-    if (cached) return JSON.parse(cached);
-  } catch (err) {
-    console.warn(`Redis get failed for key ${key}, falling back to DB:`, err.message);
+  if (redis.status === 'ready') {
+    try {
+      const cached = await redis.get(key);
+      if (cached) return JSON.parse(cached);
+    } catch (err) {
+      // silent fallback
+    }
   }
 
   const freshData = await fetchFn();
 
-  try {
-    if (freshData) {
-      await redis.set(key, JSON.stringify(freshData), 'EX', ttlSeconds);
+  if (redis.status === 'ready') {
+    try {
+      if (freshData) {
+        await redis.set(key, JSON.stringify(freshData), 'EX', ttlSeconds);
+      }
+    } catch (err) {
+      // silent fallback
     }
-  } catch (err) {
-    console.warn(`Redis set failed for key ${key}:`, err.message);
   }
 
   return freshData;

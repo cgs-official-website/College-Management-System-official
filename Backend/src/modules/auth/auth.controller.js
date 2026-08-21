@@ -36,11 +36,13 @@ export const login = async (req, res) => {
     );
 
     // Store hashed refresh token in Redis for quick revocation lookups
-    const tokenHash = await bcrypt.hash(refreshToken, 10);
-    try {
-      await redis.set(`refresh:${user.id}`, tokenHash, 'EX', 7 * 24 * 60 * 60);
-    } catch (cacheErr) {
-      console.warn('Failed to cache refresh token in Redis, falling back to DB only:', cacheErr.message);
+    if (redis.status === 'ready') {
+      const tokenHash = await bcrypt.hash(refreshToken, 10);
+      try {
+        await redis.set(`refresh:${user.id}`, tokenHash, 'EX', 7 * 24 * 60 * 60);
+      } catch (cacheErr) {
+        // silent fallback
+      }
     }
 
     // Store in DB for long-term audit
