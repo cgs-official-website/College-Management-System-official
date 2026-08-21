@@ -85,14 +85,12 @@ const AdminLayout = () => {
   const navLinks = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { name: 'Admission', path: '/admin/admission', icon: UserPlus },
-    { name: 'Marketing', path: '/admin/marketing', icon: Target },
     { name: 'Students', path: '/admin/students', icon: GraduationCap },
     { name: 'HR & Staff', path: '/admin/hr', icon: Users },
     { name: 'Classes', path: '/admin/courses', icon: BookOpen },
     { name: 'Timetable', path: '/admin/timetable', icon: Calendar },
     { name: 'Attendance', path: '/admin/attendance', icon: Clock },
     { name: 'Exams', path: '/admin/exams', icon: ClipboardList },
-    { name: 'LMS', path: '/admin/lms', icon: MonitorPlay },
     { name: 'Fees & Finance', path: '/admin/fees', icon: Calculator },
     { name: 'Library', path: '/admin/library', icon: LibraryIcon },
     { name: 'Hostel', path: '/admin/hostel', icon: Home },
@@ -100,9 +98,7 @@ const AdminLayout = () => {
     { name: 'Infrastructure', path: '/admin/infrastructure', icon: Building },
     { name: 'Notice Board', path: '/admin/notices', icon: Megaphone },
     { name: 'Placements', path: '/admin/placements', icon: Briefcase },
-    { name: 'Complaints', path: '/admin/complaints', icon: MessageSquareWarning },
     { name: 'Reports', path: '/admin/reports', icon: FileText },
-    { name: 'Mobile Apps', path: '/admin/apps', icon: Smartphone },
     { name: 'Settings', path: '/admin/settings', icon: SettingsIcon },
   ];
 
@@ -288,14 +284,12 @@ const AdminLayout = () => {
             <Routes>
               <Route path="/" element={<AdminDashboardHome />} />
               <Route path="/admission" element={<Admission />} />
-              <Route path="/marketing/*" element={<MarketingDashboard />} />
               <Route path="/students/*" element={<StudentList />} />
               <Route path="/hr/*" element={<HRManagement />} />
               <Route path="/courses/*" element={<CoursesList />} />
               <Route path="/timetable/*" element={<Timetable />} />
               <Route path="/attendance/*" element={<Attendance />} />
               <Route path="/exams/*" element={<Exams />} />
-              <Route path="/lms/*" element={<LMSDashboard />} />
               <Route path="/fees/*" element={<Fees />} />
               <Route path="/library/*" element={<Library />} />
               <Route path="/hostel/*" element={<HostelDashboard />} />
@@ -303,9 +297,7 @@ const AdminLayout = () => {
               <Route path="/infrastructure/*" element={<Infrastructure />} />
               <Route path="/notices/*" element={<NoticeBoard />} />
               <Route path="/placements/*" element={<PlacementsDashboard />} />
-              <Route path="/complaints/*" element={<ComplaintsDashboard />} />
               <Route path="/reports/*" element={<Reports />} />
-              <Route path="/apps/*" element={<MobileAppsDashboard />} />
               <Route path="/settings/*" element={<Settings />} />
             </Routes>
           </div>
