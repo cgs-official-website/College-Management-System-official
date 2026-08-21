@@ -1,20 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { LuX, LuLifeBuoy, LuSend, LuCircleAlert, LuCircleCheck, LuMessageSquare, LuClock, LuPlus, LuChevronRight, LuArrowLeft } from "react-icons/lu";
-
-
-
-const zunaConfig = {
-  apiKey: "AIzaSyAzEP2LTXsGvCsFyxITkgoon_2AL4yGKyo",
-  authDomain: "zuna-landing-page-22564.firebaseapp.com",
-  projectId: "zuna-landing-page-22564",
-  storageBucket: "zuna-landing-page-22564.firebasestorage.app",
-  messagingSenderId: "806137313772",
-  appId: "1:806137313772:web:57cf450537cb9c4fff68c9"
-};
-
-const zunaApp = getApps().find(a => a.name === 'ZunaSharedApp') || initializeApp(zunaConfig, 'ZunaSharedApp');
-const zunaDb = getFirestore(zunaApp);
+// Firebase is no longer used directly in this project
+// const zunaApp = getApps().find(a => a.name === 'ZunaSharedApp') || initializeApp(zunaConfig, 'ZunaSharedApp');
+// const zunaDb = getFirestore(zunaApp);
+const zunaApp = {};
+const zunaDb = {};
 
 export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'College Administrator', collegeEmail = '' }) {
   const [activeTab, setActiveTab] = useState('raise');
