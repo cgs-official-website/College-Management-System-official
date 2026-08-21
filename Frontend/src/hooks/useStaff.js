@@ -1,70 +1,63 @@
-import { useState, useEffect } from 'react';
-import { api } from '../services/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '../services/apiClient';
 import toast from 'react-hot-toast';
 
 export function useStaff(collegeId) {
-  const [staff, setStaff] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAdding, setIsAdding] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!collegeId) return;
+  const { data: response = {}, isLoading, error, refetch } = useQuery({
+    queryKey: ['staff', collegeId],
+    queryFn: () => api.get('/staff'),
+    enabled: !!collegeId,
+  });
 
-    const fetchStaff = async () => {
-      setIsLoading(true);
-      try {
-        const response = await api.get('/staff');
-        setStaff(response.data || []);
-      } catch (error) {
-        console.error("Error fetching staff:", error);
-        toast.error("Failed to load staff directory");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const staff = Array.isArray(response?.data)
+    ? response.data
+    : (Array.isArray(response) ? response : []);
 
-    fetchStaff();
-  }, [collegeId]);
-
-  const addStaff = async (data) => {
-    setIsAdding(true);
-    try {
-      await api.post('/staff', data);
-      toast.success("Staff member added successfully!");
-    } catch (error) {
-      console.error("Error adding staff:", error);
-      toast.error("Failed to add staff member.");
-      throw error;
-    } finally {
-      setIsAdding(false);
+  const addStaff = useMutation({
+    mutationFn: (newStaff) => api.post('/staff', newStaff),
+    onSuccess: () => {
+      toast.success('Staff member added successfully!');
+      queryClient.invalidateQueries({ queryKey: ['staff', collegeId] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to add staff member.');
     }
-  };
+  });
 
-  const updateStaff = async ({ id, data }) => {
-    setIsUpdating(true);
-    try {
-      await api.put(`/staff/${id}`, data);
-      toast.success("Staff member updated successfully!");
-    } catch (error) {
-      console.error("Error updating staff:", error);
-      toast.error("Failed to update staff member.");
-      throw error;
-    } finally {
-      setIsUpdating(false);
+  const updateStaff = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/staff/${id}`, data),
+    onSuccess: () => {
+      toast.success('Staff member updated successfully!');
+      queryClient.invalidateQueries({ queryKey: ['staff', collegeId] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to update staff member.');
     }
-  };
+  });
 
-  const deleteStaff = async (id) => {
-    try {
-      await api.delete(`/staff/${id}`);
-      toast.success("Staff member removed.");
-    } catch (error) {
-      console.error("Error deleting staff:", error);
-      toast.error("Failed to remove staff member.");
-      throw error;
+  const deleteStaff = useMutation({
+    mutationFn: (id) => api.delete(`/staff/${id}`),
+    onSuccess: () => {
+      toast.success('Staff member removed.');
+      queryClient.invalidateQueries({ queryKey: ['staff', collegeId] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to remove staff member.');
     }
-  };
+  });
 
-  return { staff, isLoading, isAdding, isUpdating, addStaff, updateStaff, deleteStaff };
+  return {
+    staff,
+    isLoading,
+    isAdding: addStaff.isPending,
+    isUpdating: updateStaff.isPending,
+    isDeleting: deleteStaff.isPending,
+    error,
+    refetch,
+    addStaff: addStaff.mutateAsync,
+    updateStaff: updateStaff.mutateAsync,
+    deleteStaff: deleteStaff.mutateAsync,
+  };
 }

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-
-
+import api from '../../services/api';
 import { toast } from 'react-hot-toast';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { 
@@ -37,7 +36,7 @@ const SuperAdmins = () => {
   const handleDelete = async (id) => {
     if (await confirm({ message: 'Are you sure you want to delete this admin?' })) {
       try {
-// TODO: Migrate to REST API ->         await deleteDoc(doc(db, 'users', id));
+        await api.delete(`/users/${id}`);
         toast.success('Admin deleted successfully');
         setAdmins(admins.filter(a => a.id !== id));
       } catch (e) {
@@ -51,22 +50,8 @@ const SuperAdmins = () => {
   const fetchAdmins = async () => {
     try {
       setIsLoading(true);
-// TODO: Migrate to REST API ->       const q = query(
-// TODO: Migrate to REST API ->         collection(db, 'users'), 
-// TODO: Migrate to REST API ->         where('role', '==', 'admin')
-        // Note: Ordering might require a composite index if combining with where.
-        // For now, we'll fetch and sort client-side or assume index exists.
-//      );
-// TODO: Migrate to REST API ->       const querySnapshot = await getDocs(q);
-      const data = []; // Mock data or empty array for now
-      
-      // Sort by creation date descending client-side
-      data.sort((a, b) => {
-        const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-        const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-        return timeB - timeA;
-      });
-      
+      const res = await api.get('/users', { params: { role: 'admin' } });
+      const data = res.data?.data || [];
       setAdmins(data);
     } catch (error) {
       console.error("Error fetching admins:", error);
@@ -166,7 +151,7 @@ const SuperAdmins = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">
-                      {admin.createdAt?.toDate ? new Date(admin.createdAt.toDate()).toLocaleDateString() : 'Just now'}
+                      {admin.createdAt ? new Date(admin.createdAt).toLocaleDateString() : 'Just now'}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="relative inline-block text-left action-menu">

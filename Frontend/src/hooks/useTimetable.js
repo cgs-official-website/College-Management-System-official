@@ -1,65 +1,67 @@
-import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '../services/apiClient';
 import toast from 'react-hot-toast';
-import { useAuth } from '../contexts/AuthContext';
-import { api } from '../services/api';
 
 export function useTimetable(collegeId) {
-  const { userData, role, uid } = useAuth();
-  const [timetable, setTimetable] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!collegeId) return;
+  const { data: response = {}, isLoading, error, refetch } = useQuery({
+    queryKey: ['timetable', collegeId],
+    queryFn: () => api.get('/timetable'),
+    enabled: !!collegeId,
+  });
 
-    const fetchTimetable = async () => {
-      setIsLoading(true);
-      try {
-        const response = await api.get('/mock/timetables');
-        setTimetable(response.data || []);
-      } catch (error) {
-        console.error("Error fetching timetable:", error);
-        toast.error("Failed to load timetable");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    fetchTimetable();
-  }, [collegeId, role, uid]);
+  const schedules = Array.isArray(response?.data) 
+    ? response.data 
+    : (Array.isArray(response) ? response : []);
 
-  const addSlot = async (data) => {
-    try {
-      await api.post('/timetable/schedule', data);
-      toast.success("Slot scheduled successfully!");
-    } catch (error) {
-      if (error.message?.includes('422')) {
-        toast.error("Double booking detected for room or teacher");
-      } else {
-        toast.error("Failed to schedule slot");
-      }
-      throw error;
+  const addMutation = useMutation({
+    mutationFn: (newSlot) => api.post('/timetable/schedule', newSlot),
+    onSuccess: () => {
+      toast.success('Class session scheduled successfully!');
+      queryClient.invalidateQueries({ queryKey: ['timetable', collegeId] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to schedule class');
     }
-  };
+  });
 
-  const updateSlot = async ({ id, data }) => {
-    try {
-      await new Promise(r => setTimeout(r, 500));
-      toast.success("Slot updated successfully!");
-    } catch (error) {
-      toast.error("Failed to update slot");
-      throw error;
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/timetable/${id}`, data),
+    onSuccess: () => {
+      toast.success('Class schedule updated!');
+      queryClient.invalidateQueries({ queryKey: ['timetable', collegeId] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to update schedule');
     }
-  };
+  });
 
-  const deleteSlot = async (id) => {
-    try {
-      await new Promise(r => setTimeout(r, 500));
-      toast.success("Slot deleted.");
-    } catch (error) {
-      toast.error("Failed to delete slot");
-      throw error;
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/timetable/${id}`),
+    onSuccess: () => {
+      toast.success('Class schedule removed.');
+      queryClient.invalidateQueries({ queryKey: ['timetable', collegeId] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to delete schedule');
     }
-  };
+  });
 
-  return { timetable, isLoading, addSlot, updateSlot, deleteSlot };
+  return {
+    schedules,
+    timetable: schedules,
+    isLoading,
+    isAdding: addMutation.isPending,
+    isUpdating: updateMutation.isPending,
+    isDeleting: deleteMutation.isPending,
+    error,
+    refetch,
+    addSchedule: addMutation.mutateAsync,
+    addSlot: addMutation.mutateAsync,
+    updateSchedule: updateMutation.mutateAsync,
+    updateSlot: updateMutation.mutateAsync,
+    deleteSchedule: deleteMutation.mutateAsync,
+    deleteSlot: deleteMutation.mutateAsync,
+  };
 }

@@ -19,17 +19,13 @@ const SuperSubscriptions = () => {
   const fetchPlans = async () => {
     setIsLoading(true);
     try {
-// TODO: Migrate to REST API ->       const q = query(collection(db, 'subscription_plans'));
-// TODO: Migrate to REST API ->       const snapshot = await getDocs(q);
+      // Simulate API call using localStorage for now as there's no backend model
+      const stored = localStorage.getItem('zuna_subscription_plans');
+      let fetchedPlans = stored ? JSON.parse(stored) : [];
       
-      let fetchedPlans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      // Initialize if empty
       if (fetchedPlans.length === 0) {
-        for (const plan of DEFAULT_PLANS) {
-// TODO: Migrate to REST API ->           await setDoc(doc(db, 'subscription_plans', plan.id), plan);
-        }
         fetchedPlans = DEFAULT_PLANS;
+        localStorage.setItem('zuna_subscription_plans', JSON.stringify(fetchedPlans));
       }
 
       setPlans(fetchedPlans.sort((a, b) => a.order - b.order));
@@ -48,8 +44,9 @@ const SuperSubscriptions = () => {
   const handleToggleStatus = async (plan) => {
     const newStatus = plan.status === 'active' ? 'inactive' : 'active';
     try {
-// TODO: Migrate to REST API ->       await updateDoc(doc(db, 'subscription_plans', plan.id), { status: newStatus });
-      setPlans(plans.map(p => p.id === plan.id ? { ...p, status: newStatus } : p));
+      const newPlans = plans.map(p => p.id === plan.id ? { ...p, status: newStatus } : p);
+      localStorage.setItem('zuna_subscription_plans', JSON.stringify(newPlans));
+      setPlans(newPlans);
       toast.success(`Plan marked as ${newStatus}`);
     } catch (error) {
       console.error(error);
@@ -69,9 +66,10 @@ const SuperSubscriptions = () => {
         studentCount: formData.get('studentCount'),
       };
 
-// TODO: Migrate to REST API ->       await updateDoc(doc(db, 'subscription_plans', editingPlan.id), updatedData);
+      const newPlans = plans.map(p => p.id === editingPlan.id ? { ...p, ...updatedData } : p);
+      localStorage.setItem('zuna_subscription_plans', JSON.stringify(newPlans));
       
-      setPlans(plans.map(p => p.id === editingPlan.id ? { ...p, ...updatedData } : p));
+      setPlans(newPlans);
       setEditingPlan(null);
       toast.success("Plan updated successfully");
     } catch (error) {

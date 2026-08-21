@@ -35,7 +35,8 @@ import {
   Briefcase,
   Smartphone,
   MessageSquareWarning,
-  LifeBuoy
+  LifeBuoy,
+  ShieldCheck
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import PlaceholderModule from '../../components/ui/PlaceholderModule';
@@ -53,6 +54,7 @@ import NoticeBoard from './notices/NoticeBoard';
 import Timetable from './timetable/Timetable';
 import Reports from './reports/Reports';
 import Settings from './settings/Settings';
+import RolesManagement from './roles/RolesManagement';
 import MarketingDashboard from './marketing/MarketingDashboard';
 import LMSDashboard from './lms/LMSDashboard';
 import HostelDashboard from './hostel/HostelDashboard';
@@ -84,6 +86,7 @@ const AdminLayout = () => {
 
   const navLinks = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
+    { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck },
     { name: 'Admission', path: '/admin/admission', icon: UserPlus },
     { name: 'Students', path: '/admin/students', icon: GraduationCap },
     { name: 'HR & Staff', path: '/admin/hr', icon: Users },
@@ -283,6 +286,7 @@ const AdminLayout = () => {
           <div className="max-w-7xl mx-auto relative">
             <Routes>
               <Route path="/" element={<AdminDashboardHome />} />
+              <Route path="/roles/*" element={<RolesManagement />} />
               <Route path="/admission" element={<Admission />} />
               <Route path="/students/*" element={<StudentList />} />
               <Route path="/hr/*" element={<HRManagement />} />
@@ -427,7 +431,7 @@ const AdminDashboardHome = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.1 }}
-            key={idx} 
+            key={stat.title} 
             className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group"
           >
             <div className="flex justify-between items-start">

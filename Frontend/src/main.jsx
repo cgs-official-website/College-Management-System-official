@@ -6,7 +6,7 @@ import App from './App.jsx'
 
 // Initialize Sentry for React
 Sentry.init({
-  dsn: import.meta.env.VITE_SENTRY_DSN || process.env.VITE_SENTRY_DSN,
+  dsn: import.meta.env.VITE_SENTRY_DSN,
   environment: import.meta.env.MODE || 'development',
   integrations: [
     Sentry.browserTracingIntegration(),

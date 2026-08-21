@@ -6,7 +6,7 @@ import { toast } from 'react-hot-toast';
 const StudentDocumentsDashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSensitiveData, setShowSensitiveData] = useState(false);
-// TODO: Migrate to REST API ->   const [documents, setDocuments] = useState([]); // Firebase-ready empty state
+  const [documents, setDocuments] = useState([]);
 
   const handleDownload = (doc) => {
     if (doc.isProtected && !showSensitiveData) {

@@ -6,8 +6,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Building, Shield, User, Camera, Eye, EyeOff } from 'lucide-react';
-
-
+import { api } from '../../../services/apiClient';
 import toast from 'react-hot-toast';
 
 export default function Settings() {

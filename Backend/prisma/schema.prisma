@@ -42,6 +42,7 @@ model College {
   paymentTransactions PaymentTransaction[]
   payrollRecords      PayrollRecord[]
   placements          Placement[]
+  roles               Role[]
   scholarships        Scholarship[]
   sections            Section[]
   storeItems          StoreItem[]
@@ -100,6 +101,8 @@ model User {
   passwordHash   String
   id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   collegeId      String?          @db.Uuid
+  customRoleId   String?          @db.Uuid
+  customRole     Role?            @relation("UserCustomRole", fields: [customRoleId], references: [id])
   parentProfile  Parent?
   tickets        PlatformTicket[]
   refreshTokens  RefreshToken[]
@@ -108,6 +111,41 @@ model User {
   college        College?         @relation(fields: [collegeId], references: [id])
 
   @@unique([collegeId, email])
+}
+
+model Role {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String
+  collegeId    String           @db.Uuid
+  college      College          @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  isSystemRole Boolean          @default(false)
+  users        User[]           @relation("UserCustomRole")
+  permissions  RolePermission[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([name, collegeId])
+}
+
+model Module {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key         String           @unique
+  label       String
+  permissions RolePermission[]
+}
+
+model RolePermission {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roleId    String  @db.Uuid
+  role      Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  moduleId  String  @db.Uuid
+  module    Module  @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  canCreate Boolean @default(false)
+  canRead   Boolean @default(false)
+  canUpdate Boolean @default(false)
+  canDelete Boolean @default(false)
+
+  @@unique([roleId, moduleId])
 }
 
 model RefreshToken {

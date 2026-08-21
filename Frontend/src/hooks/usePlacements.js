@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '../services/api';
+import { api } from '../services/apiClient';
 import toast from 'react-hot-toast';
 
 export const usePlacements = () => {
@@ -8,22 +8,22 @@ export const usePlacements = () => {
   const query = useQuery({
     queryKey: ['placements'],
     queryFn: async () => {
-      const { data } = await api.get('/placements');
-      return data.data;
+      const response = await api.get('/placements');
+      return response;
     }
   });
 
   const createMutation = useMutation({
     mutationFn: async (newItem) => {
-      const { data } = await api.post('/placements', newItem);
-      return data.data;
+      const response = await api.post('/placements', newItem);
+      return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['placements']);
-      toast.success('Placements item created successfully');
+      queryClient.invalidateQueries({ queryKey: ['placements'] });
+      toast.success('Placement drive added successfully!');
     },
     onError: (err) => {
-      toast.error(err.response?.data?.error?.message || 'Failed to create placements item');
+      toast.error(err.message || 'Failed to add placement drive');
     }
   });
 
@@ -32,19 +32,30 @@ export const usePlacements = () => {
       await api.delete(`/placements/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['placements']);
-      toast.success('Placements item deleted successfully');
+      queryClient.invalidateQueries({ queryKey: ['placements'] });
+      toast.success('Placement drive removed.');
     },
     onError: (err) => {
-      toast.error(err.response?.data?.error?.message || 'Failed to delete placements item');
+      toast.error(err.message || 'Failed to delete placement drive');
     }
   });
 
+  const rawData = query.data?.data || [];
+  const stats = query.data?.stats || {
+    totalDrives: rawData.length,
+    studentsPlaced: 0,
+    topCtc: '0 LPA'
+  };
+
   return {
-    items: query.data || [],
+    items: Array.isArray(rawData) ? rawData : [],
+    stats,
     isLoading: query.isLoading,
     isError: query.isError,
+    isAdding: createMutation.isPending,
+    isDeleting: deleteMutation.isPending,
     createItem: createMutation.mutateAsync,
-    deleteItem: deleteMutation.mutateAsync
+    deleteItem: deleteMutation.mutateAsync,
+    refetch: query.refetch
   };
 };

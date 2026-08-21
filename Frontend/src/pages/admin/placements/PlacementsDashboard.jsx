@@ -1,44 +1,96 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'react-hot-toast';
-import { Briefcase, X } from 'lucide-react';
+import { Briefcase, X, Plus, Trash2, Calendar, Award, TrendingUp, Building } from 'lucide-react';
+import { usePlacements } from '../../../hooks/usePlacements';
+import { Button } from '../../../components/ui/Button';
+import { Input } from '../../../components/ui/Input';
+import { Modal } from '../../../components/ui/Modal';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 
-const PlacementsDashboard = () => {
+export default function PlacementsDashboard() {
+  const confirm = useConfirm();
+  const { items, stats, isLoading, isAdding, createItem, deleteItem } = usePlacements();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    companyName: '',
+    role: '',
+    ctc: '',
+    driveDate: '',
+    eligibilityCriteria: '',
+    studentsPlaced: 0,
+  });
 
-  const handleAddDrive = (e) => {
+  const handleAddDrive = async (e) => {
     e.preventDefault();
-    toast.success('Placement drive added successfully!');
-    setIsModalOpen(false);
+    if (!formData.companyName.trim()) return;
+
+    try {
+      await createItem({
+        companyName: formData.companyName.trim(),
+        role: formData.role.trim() || 'Software Engineer',
+        ctc: formData.ctc.trim() ? `${formData.ctc.trim()}${formData.ctc.includes('LPA') ? '' : ' LPA'}` : '6.5 LPA',
+        driveDate: formData.driveDate || new Date().toISOString(),
+        eligibilityCriteria: formData.eligibilityCriteria.trim() || 'Min 60% aggregate',
+        studentsPlaced: Number(formData.studentsPlaced) || 0,
+      });
+
+      setIsModalOpen(false);
+      setFormData({
+        companyName: '',
+        role: '',
+        ctc: '',
+        driveDate: '',
+        eligibilityCriteria: '',
+        studentsPlaced: 0,
+      });
+    } catch {
+      // Toast handled by mutation
+    }
+  };
+
+  const handleDelete = async (id, companyName) => {
+    const ok = await confirm({
+      title: 'Delete Placement Drive',
+      message: `Are you sure you want to remove the placement drive for "${companyName}"?`,
+      confirmText: 'Delete',
+      variant: 'danger'
+    });
+
+    if (ok) {
+      await deleteItem(id);
+    }
   };
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Placement Cell</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">Manage placement drives, internships, and student recruitment.</p>
         </div>
-        <button 
+        <Button 
           onClick={() => setIsModalOpen(true)}
-          className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-primary-500/30 transition-all flex items-center gap-2"
+          className="flex items-center gap-2 shadow-lg shadow-primary-500/20"
         >
-          <Briefcase className="w-4 h-4" />
+          <Plus className="w-4 h-4" />
           Add Placement Drive
-        </button>
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[
-          { title: 'Students Placed', value: '185', icon: Briefcase, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10' },
-          { title: 'Total Drives', value: '14', icon: Briefcase, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10' },
-          { title: 'Top CTC', value: '24 LPA', icon: Briefcase, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10' },
+          { title: 'Total Drives', value: isLoading ? '...' : stats.totalDrives, icon: Building, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10' },
+          { title: 'Students Placed', value: isLoading ? '...' : stats.studentsPlaced, icon: Award, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
+          { title: 'Top CTC', value: isLoading ? '...' : stats.topCtc, icon: TrendingUp, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
         ].map((stat, idx) => (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.1 }}
-            key={idx} 
+            key={stat.title} 
             className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm relative overflow-hidden group"
           >
             <div className="flex justify-between items-start">
@@ -55,115 +107,161 @@ const PlacementsDashboard = () => {
         ))}
       </div>
 
+      {/* Placement Drives Table */}
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm"
+        transition={{ delay: 0.3 }}
+        className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm space-y-4"
       >
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">Upcoming Placement Drives</h2>
-          <button className="text-primary-600 dark:text-primary-400 text-sm font-bold hover:underline">View All</button>
-        </div>
-          <div className="w-full">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-white/10 text-sm text-slate-500 dark:text-slate-400">
-                    <th className="pb-3 font-medium">Company</th>
-                    <th className="pb-3 font-medium">Role</th>
-                    <th className="pb-3 font-medium">CTC (LPA)</th>
-                    <th className="pb-3 font-medium">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="text-sm">
-                  {[
-                    { company: 'Google', role: 'Software Engineer', ctc: '24.0', date: 'Oct 15, 2026' },
-                    { company: 'TCS Digital', role: 'System Analyst', ctc: '7.5', date: 'Oct 20, 2026' },
-                    { company: 'Amazon', role: 'SDE-1', ctc: '21.0', date: 'Nov 02, 2026' }
-                  ].map((drive, i) => (
-                    <tr key={i} className="border-b border-slate-100 dark:border-white/5 last:border-0">
-                      <td className="py-4 font-bold text-slate-900 dark:text-white">{drive.company}</td>
-                      <td className="py-4 text-slate-600 dark:text-slate-300">{drive.role}</td>
-                      <td className="py-4 font-medium text-primary-600 dark:text-primary-400">{drive.ctc}</td>
-                      <td className="py-4 text-slate-500">{drive.date}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Active & Upcoming Placement Drives</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Institutional recruitment drives stored in database.</p>
           </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200 dark:border-white/10 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                <th className="py-3.5 px-4">Company</th>
+                <th className="py-3.5 px-4">Role</th>
+                <th className="py-3.5 px-4">Package (CTC)</th>
+                <th className="py-3.5 px-4">Drive Date</th>
+                <th className="py-3.5 px-4">Eligibility</th>
+                <th className="py-3.5 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-white/5 text-sm">
+              {isLoading ? (
+                [1, 2, 3].map(n => (
+                  <tr key={n} className="animate-pulse">
+                    <td className="py-4 px-4"><div className="h-6 w-32 bg-slate-100 dark:bg-white/5 rounded-lg" /></td>
+                    <td className="py-4 px-4"><div className="h-6 w-28 bg-slate-100 dark:bg-white/5 rounded-lg" /></td>
+                    <td className="py-4 px-4"><div className="h-6 w-20 bg-slate-100 dark:bg-white/5 rounded-lg" /></td>
+                    <td className="py-4 px-4"><div className="h-6 w-24 bg-slate-100 dark:bg-white/5 rounded-lg" /></td>
+                    <td className="py-4 px-4"><div className="h-6 w-36 bg-slate-100 dark:bg-white/5 rounded-lg" /></td>
+                    <td className="py-4 px-4 text-right"></td>
+                  </tr>
+                ))
+              ) : items.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-slate-400">
+                    <Briefcase className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                    <p className="font-medium text-slate-600 dark:text-slate-400">No placement drives registered yet.</p>
+                    <p className="text-xs text-slate-500 mt-1">Click "Add Placement Drive" to create your first drive.</p>
+                  </td>
+                </tr>
+              ) : (
+                items.map((drive) => (
+                  <tr key={drive.id} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors group">
+                    <td className="py-4 px-4 font-bold text-slate-900 dark:text-white">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-primary-100 dark:bg-primary-500/20 text-primary-600 dark:text-primary-400 flex items-center justify-center font-bold text-xs">
+                          {drive.company?.charAt(0) || 'C'}
+                        </div>
+                        <span>{drive.company || drive.companyName}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4 text-slate-600 dark:text-slate-300 font-medium">
+                      {drive.role}
+                    </td>
+                    <td className="py-4 px-4 font-bold text-emerald-600 dark:text-emerald-400">
+                      {drive.ctc}
+                    </td>
+                    <td className="py-4 px-4 text-slate-500 dark:text-slate-400">
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                        <span>{drive.date}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4 text-xs text-slate-500 dark:text-slate-400">
+                      {drive.eligibilityCriteria}
+                    </td>
+                    <td className="py-4 px-4 text-right">
+                      <button 
+                        onClick={() => handleDelete(drive.id, drive.company || drive.companyName)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                        title="Delete Drive"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </motion.div>
 
-      <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-              onClick={() => setIsModalOpen(false)}
+      {/* Add Placement Drive Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Add Placement Drive"
+        maxWidth="max-w-lg"
+      >
+        <form onSubmit={handleAddDrive} className="space-y-4">
+          <Input
+            label="Company Name"
+            placeholder="e.g. Microsoft, Infosys, Deloitte"
+            value={formData.companyName}
+            onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+            required
+            autoFocus
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Designation / Role"
+              placeholder="e.g. Software Engineer"
+              value={formData.role}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
             />
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className="relative bg-white dark:bg-[#0A0F1C] w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden"
-            >
-              <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Schedule Placement Drive</h3>
-                <button 
-                  onClick={() => setIsModalOpen(false)}
-                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <form onSubmit={handleAddDrive} className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Company Name</label>
-                  <input type="text" placeholder="e.g. Google, Microsoft" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white" required />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Job Roles</label>
-                    <input type="text" placeholder="e.g. SDE, Analyst" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white" required />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Expected CTC</label>
-                    <input type="text" placeholder="e.g. 10-15 LPA" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white" required />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Eligible Courses</label>
-                    <select className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white">
-                      <option>B.Tech CSE & IT</option>
-                      <option>MBA All Branches</option>
-                      <option>All UG Courses</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Drive Date</label>
-                    <input type="date" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white" required />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Additional Requirements</label>
-                  <textarea rows="2" placeholder="e.g. Min 7.0 CGPA, No active backlogs..." className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white resize-none"></textarea>
-                </div>
-                <div className="pt-4 flex justify-end gap-3">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-sm font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Cancel</button>
-                  <button type="submit" className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-primary-500/30 transition-all">Schedule Drive</button>
-                </div>
-              </form>
-            </motion.div>
+            <Input
+              label="Salary Package (CTC)"
+              placeholder="e.g. 14.5 LPA"
+              value={formData.ctc}
+              onChange={(e) => setFormData({ ...formData, ctc: e.target.value })}
+            />
           </div>
-        )}
-      </AnimatePresence>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Drive Date"
+              type="date"
+              value={formData.driveDate}
+              onChange={(e) => setFormData({ ...formData, driveDate: e.target.value })}
+            />
+            <Input
+              label="Students Placed (if completed)"
+              type="number"
+              min="0"
+              placeholder="e.g. 15"
+              value={formData.studentsPlaced}
+              onChange={(e) => setFormData({ ...formData, studentsPlaced: e.target.value })}
+            />
+          </div>
+
+          <Input
+            label="Eligibility Criteria"
+            placeholder="e.g. B.Tech CS/IT with min 65% aggregate"
+            value={formData.eligibilityCriteria}
+            onChange={(e) => setFormData({ ...formData, eligibilityCriteria: e.target.value })}
+          />
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-white/5">
+            <Button variant="secondary" type="button" onClick={() => setIsModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" isLoading={isAdding}>
+              Save Placement Drive
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
-};
-
-export default PlacementsDashboard;
+}

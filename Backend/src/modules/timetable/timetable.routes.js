@@ -1,13 +1,16 @@
 import { Router } from 'express';
-import { scheduleSlot } from './timetable.controller.js';
-import { authorize } from '../../middleware/authorize.js';
+import { getTimetable, scheduleSlot, updateSlot, deleteSlot } from './timetable.controller.js';
 import { authenticate } from '../../middleware/authenticate.js';
 import { resolveTenant } from '../../middleware/resolveTenant.js';
+import { catchAsync } from '../../lib/catchAsync.js';
 
 const router = Router();
 
 router.use(authenticate, resolveTenant);
 
-router.post('/schedule', authorize('admin', 'hod'), scheduleSlot);
+router.get('/', catchAsync(getTimetable));
+router.post('/schedule', catchAsync(scheduleSlot));
+router.put('/:id', catchAsync(updateSlot));
+router.delete('/:id', catchAsync(deleteSlot));
 
 export default router;

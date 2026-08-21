@@ -1,25 +1,44 @@
 import Redis from 'ioredis';
+import pino from 'pino';
+
+// Dedicated logger instance for cache module if server.js logger isn't initialized yet
+const logger = pino({
+  transport: process.env.NODE_ENV === 'production' ? undefined : {
+    target: 'pino-pretty',
+    options: { colorize: true }
+  }
+});
 
 // Railway injects REDIS_URL
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 export const redis = new Redis(redisUrl, {
   maxRetriesPerRequest: 1,
+  lazyConnect: true,
   retryStrategy: (times) => {
     if (times > 3) {
-      console.warn('Redis unreachable after 3 attempts. Disabling cache.');
+      logger.warn('[warn] Redis unreachable after 3 attempts. Disabling cache and failing open.');
       return null; // Stop retrying
     }
     return Math.min(times * 50, 2000); // fail fast
   },
 });
 
-// Suppress repetitive error logging by only logging once or keeping it silent
+// Connect lazily with non-blocking error handling
+redis.connect().catch((err) => {
+  logger.warn(`[warn] Redis initial connection failed: ${err.message}. Cache failing open.`);
+});
+
 let errorLogged = false;
 redis.on('error', (err) => {
   if (!errorLogged) {
-    console.warn('Redis connection error:', err.message);
+    logger.warn(`[warn] Redis connection error: ${err.message}. Operating in fail-open mode.`);
     errorLogged = true;
   }
+});
+
+redis.on('ready', () => {
+  logger.info('[info] Redis connection established and ready.');
+  errorLogged = false;
 });
 
 /**
@@ -32,19 +51,17 @@ export async function getOrSet(key, ttlSeconds, fetchFn) {
       const cached = await redis.get(key);
       if (cached) return JSON.parse(cached);
     } catch (err) {
-      // silent fallback
+      logger.warn(`[warn] Redis cache read failed for key ${key}: ${err.message}. Falling open.`);
     }
   }
 
   const freshData = await fetchFn();
 
-  if (redis.status === 'ready') {
+  if (redis.status === 'ready' && freshData !== undefined && freshData !== null) {
     try {
-      if (freshData) {
-        await redis.set(key, JSON.stringify(freshData), 'EX', ttlSeconds);
-      }
+      await redis.set(key, JSON.stringify(freshData), 'EX', ttlSeconds);
     } catch (err) {
-      // silent fallback
+      logger.warn(`[warn] Redis cache write failed for key ${key}: ${err.message}.`);
     }
   }
 

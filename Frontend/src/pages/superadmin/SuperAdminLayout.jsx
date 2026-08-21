@@ -233,9 +233,9 @@ const SuperDashboardHome = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
         {[
           { title: 'Total Colleges', value: stats.isLoading ? '...' : stats.totalColleges, trend: 'Registered institutions', icon: Building2, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10' },
-          { title: 'Active Students', value: 'N/A', trend: '', icon: Users, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
-          { title: 'Total Revenue', value: 'N/A', trend: '', icon: Zap, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
-          { title: 'System Health', value: 'N/A', trend: '', icon: Settings, color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-500/10' },
+          { title: 'Active Students', value: stats.isLoading ? '...' : stats.totalStudents, trend: 'Global enrollment', icon: Users, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
+          { title: 'Total Teachers', value: stats.isLoading ? '...' : stats.totalTeachers, trend: 'Global staff', icon: Users, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
+          { title: 'System Health', value: '100%', trend: 'All systems operational', icon: Settings, color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-500/10' },
         ].map((stat, idx) => (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}

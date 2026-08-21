@@ -1,14 +1,15 @@
-import express from 'express';
-import { resolveTenant } from '../../middleware/resolveTenant.js';
-import { authenticate } from '../../middleware/authenticate.js';
+import { Router } from 'express';
 import { getItems, createItem, deleteItem } from './placements.controller.js';
+import { authenticate } from '../../middleware/authenticate.js';
+import { resolveTenant } from '../../middleware/resolveTenant.js';
+import { catchAsync } from '../../lib/catchAsync.js';
 
-const router = express.Router();
+const router = Router();
 
 router.use(authenticate, resolveTenant);
 
-router.get('/', getItems);
-router.post('/', createItem);
-router.delete('/:id', deleteItem);
+router.get('/', catchAsync(getItems));
+router.post('/', catchAsync(createItem));
+router.delete('/:id', catchAsync(deleteItem));
 
 export default router;

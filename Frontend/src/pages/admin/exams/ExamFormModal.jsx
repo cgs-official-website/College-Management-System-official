@@ -43,8 +43,11 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
     const selectedCourse = courses.find(c => c.id === data.courseId);
     const finalData = {
       ...data,
-      totalMarks: Number(data.totalMarks),
-      courseName: selectedCourse ? selectedCourse.name : 'Unknown Course'
+      name: data.title,
+      date: data.examDate,
+      maxMarks: Number(data.totalMarks) || 100,
+      totalMarks: Number(data.totalMarks) || 100,
+      courseName: selectedCourse ? selectedCourse.name : (data.subject || 'General Program')
     };
     onSubmit(finalData);
   };

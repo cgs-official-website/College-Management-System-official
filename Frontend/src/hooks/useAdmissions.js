@@ -1,65 +1,63 @@
-import { useState, useEffect } from 'react';
-import { api } from '../services/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '../services/apiClient';
 import toast from 'react-hot-toast';
 
 export function useAdmissions(collegeId) {
-  const [applications, setApplications] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!collegeId) return;
+  const { data: response = {}, isLoading, error, refetch } = useQuery({
+    queryKey: ['admissions', collegeId],
+    queryFn: () => api.get('/admin/admissions'),
+    enabled: !!collegeId,
+  });
 
-    const fetchAdmissions = async () => {
-      setIsLoading(true);
-      try {
-        const response = await api.get('/mock/students'); // Mocking with students for now
-        setApplications(response.data || []);
-      } catch (error) {
-        console.error("Error fetching admissions:", error);
-        toast.error("Failed to load applications");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    fetchAdmissions();
-  }, [collegeId]);
+  const admissions = Array.isArray(response?.data)
+    ? response.data
+    : (Array.isArray(response) ? response : []);
 
-  const addApplication = async (data) => {
-    try {
-      await api.post('/admin/admissions/apply', data);
-      toast.success("Application submitted successfully!");
-    } catch (error) {
-      toast.error("Failed to submit application");
-      throw error;
+  const addAdmission = useMutation({
+    mutationFn: (newApplication) => api.post('/admin/admissions/apply', newApplication),
+    onSuccess: () => {
+      toast.success('Application submitted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['admissions', collegeId] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to submit application');
     }
-  };
+  });
 
-  const updateStatus = async (id, status) => {
-    try {
-      if (status === 'seat_allotted') {
-        await api.post('/admin/admissions/allot', { admissionId: id });
-      } else {
-        // Mock standard update
-        await new Promise(r => setTimeout(r, 500));
-      }
-      toast.success(`Status updated to ${status.replace('_', ' ')}`);
-    } catch (error) {
-      toast.error("Failed to update status");
-      throw error;
+  const updateAdmission = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/admin/admissions/${id}`, data),
+    onSuccess: () => {
+      toast.success('Application updated!');
+      queryClient.invalidateQueries({ queryKey: ['admissions', collegeId] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to update application');
     }
-  };
+  });
 
-  const deleteAdmission = async (id) => {
-    try {
-      await api.delete(`/admin/admissions/${id}`);
-      toast.success("Application record removed.");
-    } catch (error) {
-      console.error("Error deleting admission:", error);
-      toast.error("Failed to remove record.");
-      throw error;
+  const deleteAdmission = useMutation({
+    mutationFn: (id) => api.delete(`/admin/admissions/${id}`),
+    onSuccess: () => {
+      toast.success('Application record removed.');
+      queryClient.invalidateQueries({ queryKey: ['admissions', collegeId] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to remove application');
     }
-  };
+  });
 
-  return { admissions, isLoading, isAdding, isUpdating, addAdmission, updateAdmission, deleteAdmission };
+  return {
+    admissions,
+    isLoading,
+    isAdding: addAdmission.isPending,
+    isUpdating: updateAdmission.isPending,
+    isDeleting: deleteAdmission.isPending,
+    error,
+    refetch,
+    addAdmission: addAdmission.mutateAsync,
+    updateAdmission: updateAdmission.mutateAsync,
+    deleteAdmission: deleteAdmission.mutateAsync,
+  };
 }

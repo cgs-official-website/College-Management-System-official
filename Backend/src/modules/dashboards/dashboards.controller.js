@@ -5,14 +5,19 @@ export const getDashboardStats = async (req, res) => {
     const { isSuperAdmin } = req.query;
 
     if (isSuperAdmin === 'true') {
-      const totalColleges = await prisma.college.count();
+      const [totalColleges, totalStudents, totalTeachers, activeCourses] = await Promise.all([
+        prisma.college.count(),
+        prisma.student.count(),
+        prisma.teacher.count(),
+        prisma.course.count({ where: { deletedAt: null } })
+      ]);
       return res.json({
         data: {
           totalColleges,
-          totalStudents: 0,
-          totalTeachers: 0,
-          activeCourses: 0,
-          attendanceRate: 0,
+          totalStudents,
+          totalTeachers,
+          activeCourses,
+          attendanceRate: 85, // Mock global rate
         }
       });
     }

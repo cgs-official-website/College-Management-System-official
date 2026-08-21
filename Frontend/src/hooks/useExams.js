@@ -1,64 +1,75 @@
-import { useState, useEffect } from 'react';
-import { api } from '../services/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '../services/apiClient';
 import toast from 'react-hot-toast';
 
 export function useExams(collegeId) {
-  const [exams, setExams] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAdding, setIsAdding] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!collegeId) return;
+  const { data: response = {}, isLoading, error, refetch } = useQuery({
+    queryKey: ['exams', collegeId],
+    queryFn: () => api.get('/exams'),
+    enabled: !!collegeId,
+  });
 
-    const fetchExams = async () => {
-      setIsLoading(true);
-      try {
-        const response = await api.get('/mock/exams');
-        setExams(response.data || []);
-      } catch (error) {
-        console.error("Error fetching exams:", error);
-        toast.error("Failed to load exams");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchExams();
-  }, [collegeId]);
+  const exams = Array.isArray(response?.data) 
+    ? response.data 
+    : (Array.isArray(response) ? response : []);
 
-  const addExam = async (data) => {
-    setIsAdding(true);
-    try {
-      // Mocking successful add
-      await new Promise(r => setTimeout(r, 500));
-      toast.success("Exam scheduled successfully!");
-    } catch (error) {
-      toast.error("Failed to schedule exam.");
-    } finally {
-      setIsAdding(false);
+  const addMutation = useMutation({
+    mutationFn: (newExam) => api.post('/exams', newExam),
+    onSuccess: () => {
+      toast.success('Exam scheduled successfully!');
+      queryClient.invalidateQueries({ queryKey: ['exams', collegeId] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to schedule exam');
     }
-  };
+  });
 
-  const updateExam = async ({ id, data }) => {
-    setIsUpdating(true);
-    try {
-      await new Promise(r => setTimeout(r, 500));
-      toast.success("Exam updated successfully!");
-    } catch (error) {
-      toast.error("Failed to update exam.");
-    } finally {
-      setIsUpdating(false);
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/exams/${id}`, data),
+    onSuccess: () => {
+      toast.success('Exam record updated!');
+      queryClient.invalidateQueries({ queryKey: ['exams', collegeId] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to update exam');
     }
-  };
+  });
 
-  const deleteExam = async (id) => {
-    try {
-      await new Promise(r => setTimeout(r, 500));
-      toast.success("Exam deleted.");
-    } catch (error) {
-      toast.error("Failed to delete exam.");
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/exams/${id}`),
+    onSuccess: () => {
+      toast.success('Exam deleted successfully.');
+      queryClient.invalidateQueries({ queryKey: ['exams', collegeId] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to delete exam');
     }
-  };
+  });
 
-  return { exams, isLoading, isAdding, isUpdating, addExam, updateExam, deleteExam };
+  const enterMarksMutation = useMutation({
+    mutationFn: (marksData) => api.post('/exams/marks', marksData),
+    onSuccess: () => {
+      toast.success('Marks recorded successfully!');
+      queryClient.invalidateQueries({ queryKey: ['exams', collegeId] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to enter marks');
+    }
+  });
+
+  return {
+    exams,
+    isLoading,
+    isAdding: addMutation.isPending,
+    isUpdating: updateMutation.isPending,
+    isDeleting: deleteMutation.isPending,
+    error,
+    refetch,
+    addExam: addMutation.mutateAsync,
+    updateExam: updateMutation.mutateAsync,
+    deleteExam: deleteMutation.mutateAsync,
+    enterMarks: enterMarksMutation.mutateAsync,
+  };
 }

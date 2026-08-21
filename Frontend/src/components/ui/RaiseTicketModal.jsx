@@ -31,7 +31,9 @@ export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'Colle
       try {
         const saved = localStorage.getItem('zuna_tickets');
         if (saved) return JSON.parse(saved);
-      } catch (e) {}
+      } catch (_e) {
+        return [];
+      }
       return [];
     };
 
@@ -56,30 +58,7 @@ export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'Colle
       }
     };
 
-// TODO: Migrate to REST API ->     const unsub1 = onSnapshot(collection(zunaDb, 'tickets'), (snapshot) => {
-//       mainList = snapshot.docs.map(d => ({
-//         firestoreDocId: d.id,
-//         id: d.data().id || d.id,
-//         sourceCollection: 'tickets',
-//         ...d.data()
-//       }));
-//       mergeAndEmit();
-//     }, (err) => console.warn('Tickets snapshot warn:', err));
-
-// TODO: Migrate to REST API ->     const unsub2 = onSnapshot(collection(zunaDb, 'support_tickets'), (snapshot) => {
-//       supportList = snapshot.docs.map(d => ({
-//         firestoreDocId: d.id,
-//         id: d.data().id || d.id,
-//         sourceCollection: 'support_tickets',
-//         ...d.data()
-//       }));
-//       mergeAndEmit();
-//     }, (err) => console.warn('Support tickets snapshot warn:', err));
-
-    return () => {
-      unsub1();
-      unsub2();
-    };
+    mergeAndEmit();
   }, [isOpen, collegeName, selectedTicket?.id]);
 
   if (!isOpen) return null;
@@ -115,30 +94,20 @@ export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'Colle
       };
 
       try {
-// TODO: Migrate to REST API ->         await addDoc(collection(zunaDb, 'tickets'), {
-//           ...ticketPayload,
-//           createdAt: serverTimestamp()
-//         });
-      } catch (e1) {}
-
-      try {
-// TODO: Migrate to REST API ->         await addDoc(collection(zunaDb, 'support_tickets'), {
-//           ...ticketPayload,
-//           createdAt: serverTimestamp()
-//         });
-      } catch (e2) {}
-
-      try {
         const current = JSON.parse(localStorage.getItem('zuna_tickets') || '[]');
         localStorage.setItem('zuna_tickets', JSON.stringify([ticketPayload, ...current]));
-      } catch (e) {}
+      } catch (_e) {
+        // Fallback silently if localStorage quota is exceeded
+      }
 
       if (typeof window !== 'undefined' && window.BroadcastChannel) {
         try {
           const bc = new BroadcastChannel('zuna_tickets_channel');
           bc.postMessage(ticketPayload);
           bc.close();
-        } catch (bcErr) {}
+        } catch (_bcErr) {
+          // Ignore broadcast channel errors
+        }
       }
 
       setSuccessMsg('✓ Ticket submitted! Zuna SuperAdmin will reply shortly.');
