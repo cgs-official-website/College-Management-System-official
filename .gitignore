@@ -145,3 +145,10 @@ graphify-out/
 .firebase/
 firebase-debug.log
 firebase-debug.*.log
+
+# AI Agent and IDE directories
+.agents/
+.claude/
+.windsurf/
+.qodo/
+.cursor/

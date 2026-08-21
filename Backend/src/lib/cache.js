@@ -4,10 +4,23 @@ import Redis from 'ioredis';
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 export const redis = new Redis(redisUrl, {
   maxRetriesPerRequest: 1,
-  retryStrategy: (times) => Math.min(times * 50, 2000), // fail fast
+  retryStrategy: (times) => {
+    if (times > 3) {
+      console.warn('Redis unreachable after 3 attempts. Disabling cache.');
+      return null; // Stop retrying
+    }
+    return Math.min(times * 50, 2000); // fail fast
+  },
 });
 
-redis.on('error', (err) => console.warn('Redis connection error:', err.message));
+// Suppress repetitive error logging by only logging once or keeping it silent
+let errorLogged = false;
+redis.on('error', (err) => {
+  if (!errorLogged) {
+    console.warn('Redis connection error:', err.message);
+    errorLogged = true;
+  }
+});
 
 /**
  * Cache-aside getOrSet wrapper.

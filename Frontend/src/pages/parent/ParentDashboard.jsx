@@ -4,6 +4,7 @@ import { User, Calendar, BookOpen, Bell, AlertCircle, Activity, Award } from 'lu
 
 
 import { useAuth } from '../../contexts/AuthContext';
+import api from '../../services/api';
 
 export default function ParentDashboard() {
   const { userData } = useAuth();
@@ -12,54 +13,27 @@ export default function ParentDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      console.log('fetchDashboardData started. userData:', userData);
-      try {
-        if (!userData?.collegeId) {
-          console.log('No collegeId, returning early');
-          return;
-        }
+      const fetchDashboardData = async () => {
+        try {
+          if (!userData?.collegeId) return;
 
-        console.log('Fetching notices...');
-        // Fetch notices targeted at parents or all
-// TODO: Migrate to REST API ->         const noticesQ = query(
-// TODO: Migrate to REST API ->           collection(db, 'notices'),
-// TODO: Migrate to REST API ->           where('collegeId', 'in', [userData.collegeId, 'all']),
-// TODO: Migrate to REST API ->           orderBy('createdAt', 'desc'),
-// TODO: Migrate to REST API ->           limit(5)
-        );
-        
-        // Add a safety timeout to prevent hanging forever
-        const noticesSnap = await Promise.race([
-// TODO: Migrate to REST API ->           getDocs(noticesQ),
-// TODO: Migrate to REST API ->           new Promise((_, reject) => setTimeout(() => reject(new Error('getDocs Timeout')), 5000))
-        ]);
-        
-        console.log('Notices fetched:', noticesSnap.size);
-        setNotices(noticesSnap.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          .filter(n => n.targetAudience === 'all' || n.targetAudience === 'parents')
-        );
+          const [noticesRes, childRes] = await Promise.all([
+            api.get('/notices'),
+            userData.studentId ? api.get(`/students/${userData.studentId}`) : Promise.resolve({ data: null })
+          ]);
 
-        console.log('Fetching child data...');
-        // Fetch child data if linked
-        if (userData.studentId) {
-// TODO: Migrate to REST API ->           const studentRef = doc(db, 'students', userData.studentId);
-// TODO: Migrate to REST API ->           const studentSnap = await getDoc(studentRef);
-          if (studentSnap.exists()) {
-            console.log('Child data found');
-            setChildData({ id: studentSnap.id, ...studentSnap.data() });
-          } else {
-            console.log('Child data not found');
+          const noticesData = noticesRes.data?.data || [];
+          setNotices(noticesData.filter(n => n.audience === 'all' || n.audience === 'parents').slice(0, 5));
+
+          if (childRes.data?.data) {
+            setChildData(childRes.data.data);
           }
+        } catch (err) {
+          console.error('Error fetching parent dashboard:', err);
+        } finally {
+          setLoading(false);
         }
-      } catch (err) {
-        console.error('Error fetching parent dashboard:', err);
-      } finally {
-        console.log('Setting loading to false');
-        setLoading(false);
-      }
-    };
+      };
 
     fetchDashboardData();
   }, [userData]);

@@ -1,0 +1,544 @@
+openapi: 3.0.3
+info:
+  title: College Management System API
+  version: 1.0.0
+  description: API for the College Management System backend (Zuna)
+servers:
+  - url: http://localhost:5000
+    description: Local development server
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    HealthResponse:
+      type: object
+      properties: 
+        status:
+          type: string
+          enum: [pass, fail]
+        db:
+          type: string
+        redis:
+          type: string
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+    UserTokens:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+    StaffMember:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        department:
+          type: string
+        designation:
+          type: string
+        joiningDate:
+          type: string
+          format: date-time
+        salaryGrade:
+          type: string
+        userId:
+          type: string
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service Unavailable
+
+  /api/v1/auth/login:
+    post:
+      summary: Login user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                collegeSlug:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTokens'
+        '401':
+          description: Unauthorized
+
+  /api/v1/auth/register:
+    post:
+      summary: Register college admin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [collegeName, slug, adminEmail, password]
+              properties:
+                collegeName:
+                  type: string
+                slug:
+                  type: string
+                adminEmail:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTokens'
+        '400':
+          description: Bad Request
+
+  /api/v1/auth/me:
+    get:
+      summary: Get current user
+      responses:
+        '200':
+          description: OK
+        '401':
+          description: Unauthorized
+
+  /api/v1/users/profile:
+    put:
+      summary: Update profile
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/dashboards/stats:
+    get:
+      summary: Get dashboard statistics
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/admin/admissions/apply:
+    post:
+      summary: Submit admission application
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [applicantName, departmentId, marksheetDetails]
+              properties:
+                applicantName:
+                  type: string
+                departmentId:
+                  type: string
+                  format: uuid
+                marksheetDetails:
+                  type: object
+                  additionalProperties:
+                    type: number
+                createdFromLeadId:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Bad Request
+
+  /api/v1/admin/admissions/allot:
+    post:
+      summary: Allot seat for admission
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [admissionId]
+              properties:
+                admissionId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Bad Request
+
+  /api/v1/attendance/class/{courseId}/date/{date}:
+    get:
+      summary: Get class attendance for a specific date
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: date
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/attendance/mark:
+    post:
+      summary: Mark student attendance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [studentId, courseId, date, status]
+              properties:
+                studentId:
+                  type: string
+                  format: uuid
+                courseId:
+                  type: string
+                  format: uuid
+                date:
+                  type: string
+                status:
+                  type: string
+                  enum: [present, absent, late]
+                classEndTime:
+                  type: string
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Bad Request
+
+  /api/v1/fees/:
+    get:
+      summary: Get fees
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create fee record
+      responses:
+        '201':
+          description: Created
+
+  /api/v1/fees/{id}:
+    put:
+      summary: Update fee
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+    delete:
+      summary: Delete fee
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/exams/marks:
+    post:
+      summary: Enter exam marks for a student
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [studentId, examId, obtainedMarks]
+              properties:
+                studentId:
+                  type: string
+                  format: uuid
+                examId:
+                  type: string
+                  format: uuid
+                obtainedMarks:
+                  type: number
+                remarks:
+                  type: string
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Bad Request
+
+  /api/v1/timetable/schedule:
+    post:
+      summary: Schedule a timetable slot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [departmentId, sectionId, courseId, teacherId, dayOfWeek, startTime, endTime, room]
+              properties:
+                departmentId:
+                  type: string
+                  format: uuid
+                sectionId:
+                  type: string
+                  format: uuid
+                courseId:
+                  type: string
+                  format: uuid
+                teacherId:
+                  type: string
+                  format: uuid
+                dayOfWeek:
+                  type: integer
+                  minimum: 0
+                  maximum: 6
+                startTime:
+                  type: string
+                endTime:
+                  type: string
+                room:
+                  type: string
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Bad Request
+
+  /api/v1/staff/:
+    get:
+      summary: Get all staff members
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StaffMember'
+    post:
+      summary: Create new staff member
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Bad Request
+
+  /api/v1/staff/{id}:
+    put:
+      summary: Update staff member
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Bad Request
+    delete:
+      summary: Delete staff member
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Bad Request
+
+  /api/v1/notices/:
+    get:
+      summary: Get all notices
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create notice
+      responses:
+        '201':
+          description: Created
+
+  /api/v1/notices/{id}:
+    delete:
+      summary: Delete notice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/library/:
+    get:
+      summary: Get library items
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create library item
+      responses:
+        '201':
+          description: Created
+
+  /api/v1/library/{id}:
+    delete:
+      summary: Delete library item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/infrastructure/:
+    get:
+      summary: Get infrastructure assets
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create infrastructure asset
+      responses:
+        '201':
+          description: Created
+
+  /api/v1/infrastructure/{id}:
+    delete:
+      summary: Delete infrastructure asset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/public/plans:
+    get:
+      summary: Get public subscription plans
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /api/v1/mock/courses:
+    get:
+      summary: Get mock courses
+      security: []
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/mock/students:
+    get:
+      summary: Get mock students
+      security: []
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/mock/exams:
+    get:
+      summary: Get mock exams
+      security: []
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/mock/timetables:
+    get:
+      summary: Get mock timetables
+      security: []
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/mock/assignments:
+    get:
+      summary: Get mock assignments
+      security: []
+      responses:
+        '200':
+          description: OK

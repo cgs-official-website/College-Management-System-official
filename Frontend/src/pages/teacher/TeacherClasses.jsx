@@ -6,6 +6,7 @@ import { Users, BookOpen, Clock, MapPin, ChevronRight, AlertCircle } from 'lucid
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import api from '../../services/api';
 
 export default function TeacherClasses() {
   const { userData } = useAuth();
@@ -18,26 +19,10 @@ export default function TeacherClasses() {
       try {
         if (!userData?.collegeId) return;
         
-        // Fetch courses and filter by teacher client-side to avoid requiring composite indexes
-// TODO: Migrate to REST API ->         const q = query(
-// TODO: Migrate to REST API ->           collection(db, 'courses'), 
-// TODO: Migrate to REST API ->           where('collegeId', '==', userData.collegeId)
-        );
-// TODO: Migrate to REST API ->         const snap = await getDocs(q);
-        const myCourses = snap.docs.filter(doc => doc.data().assignedTeacher === userData.uid);
-        
-        // Fetch actual enrollment counts
-        const fetchedCourses = await Promise.all(myCourses.map(async (docSnap) => {
-          const courseData = docSnap.data();
-// TODO: Migrate to REST API ->           const studentQ = query(collection(db, 'students'), where('courseId', '==', docSnap.id));
-// TODO: Migrate to REST API ->           const studentSnap = await getDocs(studentQ);
-          
-          return {
-            id: docSnap.id,
-            enrolledCount: studentSnap.size,
-            ...courseData
-          };
-        }));
+        // Fetch courses from backend using REST API
+        const response = await api.get('/courses/my-classes');
+        const fetchedCourses = response.data?.data || [];
+
         
         setCourses(fetchedCourses);
       } catch (err) {

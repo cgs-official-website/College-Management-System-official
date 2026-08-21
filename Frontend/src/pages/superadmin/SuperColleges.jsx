@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 
 
-import { createAdminUser } from '../../firebase/adminHelper';
+import api from '../../services/api';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { toast } from 'react-hot-toast';
 import { 
@@ -43,13 +43,8 @@ const SuperColleges = () => {
   const fetchColleges = async () => {
     try {
       setIsLoading(true);
-// TODO: Migrate to REST API ->       const q = query(collection(db, 'colleges'), orderBy('createdAt', 'desc'));
-// TODO: Migrate to REST API ->       const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setColleges(data);
+      const res = await api.get('/colleges');
+      setColleges(res.data?.data || []);
     } catch (error) {
       console.error("Error fetching colleges:", error);
     } finally {
@@ -64,14 +59,7 @@ const SuperColleges = () => {
   const handleApproveCollege = async (collegeId, adminUid) => {
     try {
       // Update college status
-// TODO: Migrate to REST API ->       const collegeRef = doc(db, 'colleges', collegeId);
-// TODO: Migrate to REST API ->       await updateDoc(collegeRef, { status: 'active' });
-
-      // Update admin user status
-      if (adminUid) {
-// TODO: Migrate to REST API ->         const userRef = doc(db, 'users', adminUid);
-// TODO: Migrate to REST API ->         await updateDoc(userRef, { accountStatus: 'active' });
-      }
+      await api.put(`/colleges/${collegeId}/status`, { status: 'active' });
 
       // Refresh list
       fetchColleges();
@@ -82,7 +70,7 @@ const SuperColleges = () => {
 
   const handleUpdateStatus = async (collegeId, newStatus) => {
     try {
-// TODO: Migrate to REST API ->       await updateDoc(doc(db, 'colleges', collegeId), { status: newStatus });
+      await api.put(`/colleges/${collegeId}/status`, { status: newStatus });
       fetchColleges();
     } catch (error) {
       console.error("Error updating status:", error);
@@ -93,7 +81,7 @@ const SuperColleges = () => {
     if (!(await confirm({ message: "Are you sure you want to permanently delete this college? This action cannot be undone." }))) return;
     
     try {
-// TODO: Migrate to REST API ->       await deleteDoc(doc(db, 'colleges', collegeId));
+      await api.delete(`/colleges/${collegeId}`);
       fetchColleges();
     } catch (error) {
       console.error("Error deleting college:", error);
@@ -344,17 +332,18 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
         pincode: pincode || ''
       };
 
-      const result = await createAdminUser(
-        { name: adminName, email: adminEmail, password: adminPassword },
+      const result = await api.post('/colleges/onboard', {
+        adminUser: { name: adminName, email: adminEmail, password: adminPassword },
         collegeData
-      );
+      });
       
-      setSuccessData(result);
+      setSuccessData(result.data?.data);
     } catch (error) {
       console.error(error);
-      if (error.code === 'auth/email-already-in-use') {
+      const errMsg = error.response?.data?.error || error.message;
+      if (errMsg.includes('already in use')) {
         setApiError('The admin email address is already in use by another account.');
-      } else if (error.code === 'auth/weak-password') {
+      } else if (errMsg.includes('weak-password')) {
         setApiError('The password is too weak. Please use at least 6 characters.');
       } else {
         setApiError('Failed to onboard college. Please try again later.');

@@ -40,8 +40,12 @@ export const markAttendance = async (req, res) => {
     const presentClasses = allRecords.filter(r => r.status === 'present' || r.status === 'late').length;
     const percentage = (presentClasses / totalClasses) * 100;
 
-    // Cache invalidation
-    await redis.del(`attendance_percent:${collegeId}:${studentId}:${courseId}`);
+    // Cache invalidation (fail-open)
+    try {
+      await redis.del(`attendance_percent:${collegeId}:${studentId}:${courseId}`);
+    } catch (cacheErr) {
+      logger.warn(`Failed to invalidate attendance cache for student ${studentId}: ${cacheErr.message}`);
+    }
 
     // If drops below 75%, trigger alert (pseudo-code enqueue)
     if (percentage < 75) {

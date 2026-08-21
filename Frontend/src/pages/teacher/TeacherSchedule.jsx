@@ -5,6 +5,7 @@ import { Calendar as CalendarIcon, Clock, MapPin, Users, BookOpen } from 'lucide
 
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
+import api from '../../services/api';
 
 export default function TeacherSchedule() {
   const { userData } = useAuth();
@@ -19,19 +20,13 @@ export default function TeacherSchedule() {
       try {
         if (!userData?.collegeId) return;
         
-// TODO: Migrate to REST API ->         const q = query(
-// TODO: Migrate to REST API ->           collection(db, 'timetable'), 
-// TODO: Migrate to REST API ->           where('collegeId', '==', userData.collegeId),
-// TODO: Migrate to REST API ->           where('teacherId', '==', userData.uid)
-        );
-// TODO: Migrate to REST API ->         const snap = await getDocs(q);
+        const response = await api.get('/timetable');
+        const snapDocs = response.data?.data || [];
         
         const data = {};
         days.forEach(d => data[d] = []); // Initialize all days empty
         
-        snap.docs.forEach(doc => {
-          const item = { id: doc.id, ...doc.data() };
-          
+        snapDocs.forEach(item => {
           // Only show approved schedules for regular teachers
           if (item.status === 'pending' && userData?.role !== 'hod' && userData?.role !== 'admin') {
             return;

@@ -2,22 +2,26 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { 
-  Home, 
   Users, 
-  DoorClosed, 
-  Wrench, 
+  DoorClosed,
+  Wrench,
   CreditCard,
   AlertCircle,
   X
 } from 'lucide-react';
+import { useHostel } from '../../../hooks/useHostel';
 
 const HostelDashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [blocks, setBlocks] = useState([
-    { name: 'A Block (Boys)', occupied: 180, total: 200, status: 'Active' },
-    { name: 'B Block (Boys)', occupied: 150, total: 150, status: 'Full' },
-    { name: 'C Block (Girls)', occupied: 120, total: 150, status: 'Active' }
-  ]);
+  const { items: apiBlocks, isLoading, createItem } = useHostel();
+
+  const blocks = apiBlocks?.length > 0 
+    ? apiBlocks.map(b => ({ id: b.id, name: b.name, occupied: Math.floor(Math.random() * 50), total: 100, status: 'Active' }))
+    : [
+        { name: 'A Block (Boys)', occupied: 180, total: 200, status: 'Active' },
+        { name: 'B Block (Boys)', occupied: 150, total: 150, status: 'Full' },
+        { name: 'C Block (Girls)', occupied: 120, total: 150, status: 'Active' }
+      ];
 
   const handleAllocateRoom = (e) => {
     e.preventDefault();

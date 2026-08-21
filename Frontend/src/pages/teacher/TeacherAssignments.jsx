@@ -7,6 +7,7 @@ import { Modal } from '../../components/ui/Modal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
+import api from '../../services/api';
 
 export default function TeacherAssignments() {
   const { userData } = useAuth();
@@ -30,22 +31,14 @@ export default function TeacherAssignments() {
       if (!userData?.collegeId) return;
       
       // Fetch courses for dropdown
-// TODO: Migrate to REST API ->       const coursesQ = query(
-// TODO: Migrate to REST API ->         collection(db, 'courses'), 
-// TODO: Migrate to REST API ->         where('collegeId', '==', userData.collegeId)
-      );
-// TODO: Migrate to REST API ->       const coursesSnap = await getDocs(coursesQ);
-      const myCourses = coursesSnap.docs.filter(d => d.data().assignedTeacher === userData.uid);
-      setCourses(myCourses.map(d => ({ id: d.id, ...d.data() })));
+      const coursesRes = await api.get('/courses/my-classes');
+      const myCourses = coursesRes.data?.data || [];
+      setCourses(myCourses);
 
       // Fetch assignments
-// TODO: Migrate to REST API ->       const assignQ = query(
-// TODO: Migrate to REST API ->         collection(db, 'assignments'), 
-// TODO: Migrate to REST API ->         where('collegeId', '==', userData.collegeId),
-// TODO: Migrate to REST API ->         where('teacherId', '==', userData.uid)
-      );
-// TODO: Migrate to REST API ->       const assignSnap = await getDocs(assignQ);
-      setAssignments(assignSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.createdAt - a.createdAt));
+      const assignRes = await api.get('/assignments');
+      const myAssignments = assignRes.data?.data || [];
+      setAssignments(myAssignments.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)));
       
     } catch (err) {
       console.error(err);
@@ -79,16 +72,12 @@ export default function TeacherAssignments() {
     try {
       const selectedCourse = courses.find(c => c.id === formData.courseId);
       
-// TODO: Migrate to REST API ->       await addDoc(collection(db, 'assignments'), {
-        collegeId: userData.collegeId,
-        teacherId: userData.uid,
+      await api.post('/assignments', {
         courseId: formData.courseId,
-        courseName: selectedCourse?.name || 'Unknown',
         title: formData.title,
         description: formData.description,
         dueDate: formData.dueDate,
-        maxScore: Number(formData.maxScore),
-        createdAt: serverTimestamp()
+        maxScore: Number(formData.maxScore)
       });
       
       toast.success('Assignment published successfully!');
@@ -114,7 +103,7 @@ export default function TeacherAssignments() {
     if (!isConfirmed) return;
 
     try {
-// TODO: Migrate to REST API ->       await deleteDoc(doc(db, 'assignments', id));
+      await api.delete(`/assignments/${id}`);
       setAssignments(prev => prev.filter(a => a.id !== id));
       toast.success('Assignment deleted');
     } catch (err) {

@@ -96,11 +96,18 @@ app.use('/api/v1/library', libraryRoutes);
 app.use('/api/v1/infrastructure', infrastructureRoutes);
 
 // Mount Stubs
-app.use('/api/v1/hostel', stubs.hostelRoutes);
-app.use('/api/v1/transport', stubs.transportRoutes);
-app.use('/api/v1/complaints', stubs.complaintsRoutes);
-app.use('/api/v1/placements', stubs.placementsRoutes);
-app.use('/api/v1/store', stubs.storeRoutes);
+import hostelRoutes from './modules/hostel/hostel.routes.js';
+import transportRoutes from './modules/transport/transport.routes.js';
+import complaintsRoutes from './modules/complaints/complaints.routes.js';
+import placementsRoutes from './modules/placements/placements.routes.js';
+import storeRoutes from './modules/store/store.routes.js';
+
+// API Routes (Milestone 5)
+app.use('/api/v1/hostel', hostelRoutes);
+app.use('/api/v1/transport', transportRoutes);
+app.use('/api/v1/complaints', complaintsRoutes);
+app.use('/api/v1/placements', placementsRoutes);
+app.use('/api/v1/store', storeRoutes);
 app.use('/api/v1/public', stubs.publicRoutes);
 app.use('/api/v1/mock', stubs.mockDataRoutes);
 
