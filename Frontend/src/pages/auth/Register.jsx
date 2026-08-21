@@ -133,8 +133,9 @@ const Register = () => {
       } else if (err.code === 'auth/weak-password') {
         setError('Password is too weak. Please use at least 6 characters.');
       } else {
-        setError('Failed to create account. Please check your network and try again.');
+        setError(err.response?.data?.error?.message || 'Failed to create account. Please check your network and try again.');
       }
+      setIsLoading(false); // Reset loading state on error
     }
     // We intentionally don't set isLoading(false) on success to keep the loading state until redirect
   };

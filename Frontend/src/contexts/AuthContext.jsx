@@ -24,13 +24,14 @@ export function AuthProvider({ children }) {
 
   async function register(email, password, additionalData) {
     if (additionalData.role === 'admin') {
-      const response = await api.post('/auth/register', {
+      await api.post('/auth/register', {
         adminEmail: email,
         password,
         collegeName: additionalData.collegeName,
         slug: additionalData.collegeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
       });
-      return response.data;
+      // Automatically log the user in after registration
+      return await login(email, password);
     }
     throw new Error("Only Admin registration is currently implemented in REST API");
   }
