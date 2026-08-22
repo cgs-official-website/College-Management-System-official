@@ -50,9 +50,12 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
   const { sections } = useSections(selectedCourseId);
 
   const onFormSubmit = (data) => {
-    // Inject collegeId
+    // Strip null/undefined values to avoid Zod validation errors
+    const sanitized = Object.fromEntries(
+      Object.entries(data).filter(([_, v]) => v !== null && v !== undefined && v !== '')
+    );
     const finalData = {
-      ...data,
+      ...sanitized,
       collegeId: userData?.collegeId || 'default_college_id'
     };
     onSubmit(finalData);

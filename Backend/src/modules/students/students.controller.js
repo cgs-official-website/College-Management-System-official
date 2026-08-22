@@ -264,11 +264,11 @@ export const updateStudent = async (req, res) => {
       data: {
         ...(payload.admissionNo || payload.admissionNumber ? { admissionNumber: payload.admissionNo || payload.admissionNumber } : {}),
         ...(payload.rollNo || payload.rollNumber ? { rollNumber: payload.rollNo || payload.rollNumber } : {}),
-        ...(payload.batchYear ? { batchYear: payload.batchYear } : {}),
-        ...(payload.bloodGroup ? { bloodGroup: payload.bloodGroup } : {}),
+        ...(payload.batchYear !== undefined ? { batchYear: payload.batchYear } : {}),
+        ...(payload.bloodGroup !== undefined ? { bloodGroup: payload.bloodGroup || null } : {}),
         ...(payload.emergencyContact || payload.phone ? { emergencyContact: payload.emergencyContact || payload.phone } : {}),
         ...(deptId ? { departmentId: deptId } : {}),
-        ...(payload.sectionId ? { sectionId: payload.sectionId } : {})
+        ...(payload.sectionId !== undefined ? { sectionId: payload.sectionId || null } : {})
       },
       include: {
         user: true,

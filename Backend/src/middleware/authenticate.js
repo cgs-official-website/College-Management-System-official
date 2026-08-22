@@ -33,18 +33,16 @@ export const authenticate = async (req, res, next) => {
       return res.status(403).json({ error: 'Account disabled or deleted' });
     }
 
-    // If not superadmin, ensure college is active
+    // If not superadmin, ensure college is active or trial
     if (user.role !== 'superadmin' && user.college) {
-      if (user.college.status === 'pending') {
-        return res.status(403).json({ error: 'College is pending approval' });
-      }
-      if (user.college.status === 'rejected') {
-        return res.status(403).json({ error: 'College was rejected' });
+      const blockedStatuses = ['rejected'];
+      if (blockedStatuses.includes(user.college.status)) {
+        return res.status(403).json({ error: { code: 'COLLEGE_REJECTED', message: 'College was rejected' } });
       }
     }
 
-    req.user = decoded;
-    req.tenant = user.college ? { collegeId: user.collegeId } : null;
+    req.user = { ...decoded, userId: decoded.userId || decoded.id };
+    req.tenant = user.collegeId ? { collegeId: user.collegeId } : null;
     next();
   } catch (error) {
     console.error('Authentication Error:', error);
