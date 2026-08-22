@@ -68,13 +68,23 @@ export const getTeacherStats = async (req, res) => {
 
     const teacherId = user.teacherProfile.id;
 
-    // For now, mock the stats until we have full assignments & grades modules ready
+    // Fetch dynamic stats from database
+    const [totalClasses, studentsTaught] = await Promise.all([
+      prisma.section.count({
+        where: { collegeId, teachers: { some: { id: teacherId } } }
+      }),
+      prisma.student.count({
+        where: { collegeId, section: { teachers: { some: { id: teacherId } } } }
+      })
+    ]);
+
+    // Assignments and attendance are still mocked as they might require complex aggregation
     res.json({
       data: {
-        totalClasses: 4,
-        studentsTaught: 120,
-        attendanceRate: 92,
-        pendingGrades: 5
+        totalClasses,
+        studentsTaught,
+        attendanceRate: 92, // To be implemented with attendance module
+        pendingGrades: 5 // To be implemented with grades module
       }
     });
 

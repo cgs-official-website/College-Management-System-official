@@ -45,7 +45,7 @@ router.get('/my-classes', async (req, res) => {
         }
       },
       include: {
-        course: true,
+        course: { include: { department: true } },
         students: { select: { id: true } }
       }
     });
@@ -54,6 +54,10 @@ router.get('/my-classes', async (req, res) => {
       id: sec.id,
       name: `${sec.course?.name || 'Subject'} - ${sec.name || 'Section'}`,
       subject: sec.course?.name || 'Subject',
+      code: sec.course?.code || 'CODE',
+      department: sec.course?.department?.name || 'General',
+      credits: sec.course?.credits || 0,
+      semester: sec.course?.semester || 1,
       students: sec.students.length || 0,
       timing: 'TBA', // Or fetch from timetable
       room: 'TBA',

@@ -148,11 +148,11 @@ const TeacherLayout = () => {
            <div className="flex items-center justify-between group cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 p-2 rounded-xl transition-colors" onClick={handleLogout}>
              <div className="flex items-center gap-3 overflow-hidden">
                <div className="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-500/20 text-teal-700 dark:text-teal-400 flex items-center justify-center font-bold text-sm shrink-0">
-                 {userData?.firstName ? userData.firstName.charAt(0) : 'F'}
+                 {userData?.name ? userData.name.charAt(0).toUpperCase() : 'F'}
                </div>
                <div className="truncate">
-                 <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate">{userData?.firstName || 'Faculty'} {userData?.lastName || 'Member'}</p>
-                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">{userData?.designation || 'TEACHER'}</p>
+                 <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate">{userData?.name || 'Faculty Member'}</p>
+                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">{userData?.designation || userData?.role || 'TEACHER'}</p>
                </div>
              </div>
              <LogOut className="w-5 h-5 text-slate-400 group-hover:text-red-600 transition-colors shrink-0 ml-2" />

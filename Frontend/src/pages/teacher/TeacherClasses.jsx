@@ -89,7 +89,7 @@ export default function TeacherClasses() {
                 </div>
                 <div className="flex items-center text-sm text-slate-600 dark:text-slate-400">
                   <Clock className="w-4 h-4 mr-2 opacity-70" />
-                  3 Credits / 45 Hrs
+                  {course.credits} Credits / {course.semester} Semesters
                 </div>
               </div>
 

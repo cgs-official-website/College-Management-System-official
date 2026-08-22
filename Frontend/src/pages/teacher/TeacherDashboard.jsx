@@ -65,7 +65,7 @@ export default function TeacherDashboard() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Welcome back, {userData?.name || userData?.firstName || 'Teacher'}!
+            Welcome back, {userData?.name || 'Teacher'}!
           </h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">Here is your academic overview for today.</p>
         </div>
@@ -117,8 +117,8 @@ export default function TeacherDashboard() {
                     <div className="absolute left-6 top-10 bottom-[-24px] w-0.5 bg-slate-100 dark:bg-white/5" />
                   )}
                   <div className="w-12 pt-1 text-right">
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{cls.time.split(' ')[0]}</p>
-                    <p className="text-[10px] text-slate-400 uppercase">{cls.time.split(' ')[1]}</p>
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{cls.time ? cls.time.split(' - ')[0] : 'TBA'}</p>
+                    <p className="text-[10px] text-slate-400 uppercase">{cls.time ? cls.time.split(' - ')[1] : ''}</p>
                   </div>
                   <div className="flex-1 bg-slate-50 dark:bg-white/5 rounded-2xl p-4 border border-slate-100 dark:border-white/5 hover:border-primary-500/30 transition-colors group cursor-pointer">
                     <div className="flex justify-between items-start">
