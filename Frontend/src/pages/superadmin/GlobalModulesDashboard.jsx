@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Package, ToggleLeft, ToggleRight, Building, CheckCircle2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useDashboardStats } from '../../hooks/useDashboardStats';
 
 const GlobalModulesDashboard = () => {
+  const stats = useDashboardStats(null, true);
   const [modules, setModules] = useState([]); // Firebase-ready state
 
   const toggleModule = (id) => {
@@ -30,7 +32,7 @@ const GlobalModulesDashboard = () => {
         {[
           { title: 'Total Modules', value: '0', icon: Package, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10' },
           { title: 'Active Pro Modules', value: '0', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
-          { title: 'Registered Colleges', value: '0', icon: Building, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
+          { title: 'Registered Colleges', value: stats.isLoading ? '...' : stats.totalColleges, icon: Building, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
         ].map((stat, idx) => (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}

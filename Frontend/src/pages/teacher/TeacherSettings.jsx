@@ -16,6 +16,7 @@ export default function TeacherSettings() {
   });
 
   const [passwords, setPasswords] = useState({
+    currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
@@ -65,10 +66,10 @@ export default function TeacherSettings() {
     try {
       await api.put('/users/profile', {
         newPassword: passwords.newPassword,
-        currentPassword: 'dummy' // in a real app you'd prompt for current password
+        currentPassword: passwords.currentPassword
       });
       toast.success('Password updated successfully');
-      setPasswords({ newPassword: '', confirmPassword: '' });
+      setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error) {
       console.error(error);
       toast.error('Failed to update password');
@@ -181,6 +182,21 @@ export default function TeacherSettings() {
             </div>
 
             <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Current Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    type="password"
+                    value={passwords.currentPassword}
+                    onChange={(e) => setPasswords({...passwords, currentPassword: e.target.value})}
+                    placeholder="••••••••"
+                    className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl pl-11 pr-4 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    required
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">New Password</label>
                 <div className="relative">

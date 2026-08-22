@@ -26,7 +26,7 @@ export default function TeacherGrades() {
     if (!userData?.collegeId) return;
     const fetchCourses = async () => {
       try {
-        const response = await api.get('/mock/courses');
+        const response = await api.get('/courses/my-classes');
         setCourses(response.data || []);
       } catch (error) {
         console.error("Error fetching courses:", error);
@@ -43,7 +43,7 @@ export default function TeacherGrades() {
     const fetchStudents = async () => {
       setLoading(true);
       try {
-        const response = await api.get('/mock/students');
+        const response = await api.get(`/students?sectionId=${selectedCourse}`);
         const studentData = response.data || [];
         setStudents(studentData);
         
@@ -88,18 +88,28 @@ export default function TeacherGrades() {
 
     setSaving(true);
     try {
-      const promises = Object.entries(marks).map(([studentId, obtainedMarks]) => {
+      const records = [];
+      Object.entries(marks).forEach(([studentId, obtainedMarks]) => {
         if (obtainedMarks !== '') {
-          return api.post('/exams/marks', {
+          records.push({
             studentId,
-            examId: examType,
             obtainedMarks: Number(obtainedMarks)
           });
         }
-        return Promise.resolve();
       });
 
-      await Promise.all(promises);
+      if (records.length === 0) {
+        setSaving(false);
+        return toast.error("No marks entered to save");
+      }
+
+      await api.post('/exams/batch-marks', {
+        courseId: selectedCourse,
+        examType: examType,
+        maxMarks: Number(maxMarks),
+        records
+      });
+
       toast.success("Marks saved successfully");
     } catch (err) {
       console.error(err);

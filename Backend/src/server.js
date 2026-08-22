@@ -100,6 +100,9 @@ import transportRoutes from './modules/transport/transport.routes.js';
 import complaintsRoutes from './modules/complaints/complaints.routes.js';
 import placementsRoutes from './modules/placements/placements.routes.js';
 import storeRoutes from './modules/store/store.routes.js';
+import departmentsRoutes from './modules/departments/departments.routes.js';
+import coursesRoutes from './modules/courses/courses.routes.js';
+import sectionsRoutes from './modules/sections/sections.routes.js';
 import * as stubs from './modules/stubs.js';
 import { getModules } from './modules/roles/roles.controller.js';
 import { authenticate } from './middleware/authenticate.js';
@@ -127,8 +130,18 @@ app.use('/api/v1/transport', transportRoutes);
 app.use('/api/v1/complaints', complaintsRoutes);
 app.use('/api/v1/placements', placementsRoutes);
 app.use('/api/v1/store', storeRoutes);
+app.use('/api/v1/departments', departmentsRoutes);
+app.use('/api/v1/courses', coursesRoutes);
+app.use('/api/v1/sections', sectionsRoutes);
+import assignmentsRoutes from './modules/assignments/assignments.routes.js';
+import payrollRoutes from './modules/payroll/payroll.routes.js';
+import projectsRoutes from './modules/projects/projects.routes.js';
+
 app.use('/api/v1/public', stubs.publicRoutes);
 app.use('/api/v1/mock', stubs.mockDataRoutes);
+app.use('/api/v1/assignments', assignmentsRoutes);
+app.use('/api/v1/payroll', payrollRoutes);
+app.use('/api/v1/projects', projectsRoutes);
 
 // Sentry error handler if initialized
 Sentry.setupExpressErrorHandler(app);

@@ -51,6 +51,7 @@ model College {
   timetableSlots      TimetableSlot[]
   transportRoutes     TransportRoute[]
   users               User[]
+  projects            Project[]
 }
 
 model BillingSubscription {
@@ -93,6 +94,7 @@ model PlatformTicket {
 
 model User {
   email          String
+  name           String?
   role           String
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
@@ -109,8 +111,12 @@ model User {
   studentProfile Student?
   teacherProfile Teacher?
   college        College?         @relation(fields: [collegeId], references: [id])
+  complaints     Complaint[]
+  payrollRecords PayrollRecord[]
+  timesheets     Timesheet[]
 
   @@unique([collegeId, email])
+  @@index([collegeId])
 }
 
 model Role {
@@ -210,6 +216,7 @@ model Section {
   course    Course          @relation(fields: [courseId], references: [id])
   students  Student[]
   timetable TimetableSlot[]
+  teachers  Teacher[]       @relation("TeacherSections")
 
   @@index([collegeId])
 }
@@ -231,6 +238,7 @@ model Teacher {
   department   Department      @relation(fields: [departmentId], references: [id])
   user         User            @relation(fields: [userId], references: [id])
   timetable    TimetableSlot[]
+  sections     Section[]       @relation("TeacherSections")
 
   @@index([collegeId])
 }
@@ -550,13 +558,75 @@ model Notice {
 }
 
 model Complaint {
-  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId String  @db.Uuid
-  subject   String
-  status    String  @default("open")
-  college   College @relation(fields: [collegeId], references: [id])
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId   String   @db.Uuid
+  userId      String   @db.Uuid
+  subject     String
+  description String
+  category    String
+  priority    String   @default("medium")
+  status      String   @default("open")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  resolvedAt  DateTime?
+
+  college     College  @relation(fields: [collegeId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
 
   @@index([collegeId, status])
+  @@index([userId])
+}
+
+model PayrollRecord {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId   String   @db.Uuid
+  userId      String   @db.Uuid
+  month       String
+  basicSalary Float
+  allowances  Float    @default(0)
+  deductions  Float    @default(0)
+  netSalary   Float
+  status      String   @default("pending") // pending, paid
+  paidAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  college     College  @relation(fields: [collegeId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([collegeId, userId])
+}
+
+model Project {
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId   String      @db.Uuid
+  name        String
+  description String?
+  status      String      @default("active") // active, completed
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  college     College     @relation(fields: [collegeId], references: [id])
+  timesheets  Timesheet[]
+
+  @@index([collegeId])
+}
+
+model Timesheet {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId           String   @db.Uuid
+  userId              String   @db.Uuid
+  date                DateTime
+  hoursSpent          Float
+  activityDescription String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user                User     @relation(fields: [userId], references: [id])
+
+  @@index([projectId])
+  @@index([userId])
 }
 
 model Placement {
@@ -571,13 +641,6 @@ model StoreItem {
   id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   collegeId String  @db.Uuid
   name      String
-  college   College @relation(fields: [collegeId], references: [id])
-}
-
-model PayrollRecord {
-  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId String  @db.Uuid
-  month     String
   college   College @relation(fields: [collegeId], references: [id])
 }
 

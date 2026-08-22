@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+// Trigger backend restart for Prisma Client update - Part 2
 import jwt from 'jsonwebtoken';
 import { prisma } from '../../server.js';
 import { redis } from '../../lib/cache.js';
@@ -12,7 +13,10 @@ export const login = async (req, res) => {
     const { email, password } = loginSchema.parse(req.body);
 
     const user = await prisma.user.findFirst({
-      where: { email }
+      where: { email },
+      include: {
+        college: true
+      }
     });
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
@@ -21,6 +25,15 @@ export const login = async (req, res) => {
 
     if (user.accountStatus !== 'active') {
       return res.status(403).json({ error: 'Account is not active' });
+    }
+
+    if (user.role !== 'superadmin' && user.college) {
+      if (user.college.status === 'pending') {
+        return res.status(403).json({ error: { code: 'COLLEGE_PENDING_APPROVAL', message: 'Your college is pending Superadmin approval.' } });
+      }
+      if (user.college.status === 'rejected') {
+        return res.status(403).json({ error: { code: 'COLLEGE_REJECTED', message: 'Your college registration was rejected.' } });
+      }
     }
 
     const accessToken = jwt.sign(
@@ -79,7 +92,7 @@ export const registerAdmin = async (req, res) => {
         data: {
           name: data.collegeName,
           slug: uniqueSlug,
-          status: 'trial'
+          status: 'pending'
         }
       });
 
@@ -119,5 +132,78 @@ export const getMe = async (req, res) => {
     res.json({ data: safeUser });
   } catch (error) {
     res.status(400).json({ error: { message: error.message } });
+  }
+};
+
+export const verifyStaffSetup = async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ success: false, error: { message: 'Token is required' } });
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.type !== 'staff-setup') return res.status(400).json({ success: false, error: { message: 'Invalid token type' } });
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      include: {
+        teacherProfile: { include: { department: true } }
+      }
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, error: { message: 'User does not exist' } });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        department: user.teacherProfile?.department?.name,
+        employeeId: user.teacherProfile?.id
+      }
+    });
+  } catch (error) {
+    res.status(400).json({ success: false, error: { message: 'Invalid or expired token' } });
+  }
+};
+
+export const completeStaffSetup = async (req, res) => {
+  try {
+    const { token, password, firstName, lastName } = req.body;
+    if (!token || !password) return res.status(400).json({ success: false, error: { message: 'Token and password are required' } });
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.type !== 'staff-setup') return res.status(400).json({ success: false, error: { message: 'Invalid token type' } });
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      include: { teacherProfile: true }
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, error: { message: 'User does not exist or invalid token' } });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const fullName = `${firstName || ''} ${lastName || ''}`.trim() || user.name;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash,
+          accountStatus: 'active',
+          name: fullName
+        }
+      });
+      // Optionally update teacherProfile if it had name fields
+    });
+
+    res.json({ success: true, message: 'Setup completed successfully' });
+  } catch (error) {
+    console.error('completeStaffSetup Error:', error);
+    res.status(400).json({ success: false, error: { message: error.message || 'Invalid or expired token' } });
   }
 };

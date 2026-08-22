@@ -16,12 +16,12 @@ export default function TeacherAttendance() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Fetch courses assigned to teacher (Mocking all courses for now)
+  // Fetch courses assigned to teacher
   useEffect(() => {
     if (!userData?.collegeId) return;
     const fetchCourses = async () => {
       try {
-        const response = await api.get('/mock/courses');
+        const response = await api.get('/courses/my-classes');
         setCourses(response.data || []);
         setLoading(false);
       } catch (err) {
@@ -38,14 +38,14 @@ export default function TeacherAttendance() {
       if (!selectedCourse || !userData?.collegeId) return;
       setLoading(true);
       try {
-        const response = await api.get('/mock/students');
+        const response = await api.get(`/students?sectionId=${selectedCourse}`);
         const studentData = response.data || [];
         setStudents(studentData);
         
         // Initialize attendance state (default Present)
         const initialState = {};
         studentData.forEach(student => {
-          initialState[student.id] = 'Present';
+          initialState[student.id] = 'present';
         });
         setAttendanceState(initialState);
       } catch (err) {
@@ -59,7 +59,7 @@ export default function TeacherAttendance() {
   }, [selectedCourse, userData]);
 
   const handleMark = (studentId, status) => {
-    setAttendanceState(prev => ({ ...prev, [studentId]: status }));
+    setAttendanceState(prev => ({ ...prev, [studentId]: status.toLowerCase() }));
   };
 
   const handleSaveAttendance = async () => {
@@ -74,23 +74,17 @@ export default function TeacherAttendance() {
 
     setSaving(true);
     try {
-// TODO: Migrate to REST API ->       const attendanceRef = collection(db, 'attendance');
-      
-      // Save individually (in production, use a batch)
-      const promises = students.map(student => {
-// TODO: Migrate to REST API ->         return addDoc(attendanceRef, {
-//           collegeId: userData.collegeId,
-//           courseId: selectedCourse,
-//           studentId: student.id,
-//           studentName: `${student.firstName} ${student.lastName}`,
-//           date: date,
-//           status: attendanceState[student.id],
-//           markedBy: userData.uid,
-//           createdAt: serverTimestamp()
-//         });
+      const records = students.map(student => ({
+        studentId: student.id,
+        status: attendanceState[student.id].toLowerCase()
+      }));
+
+      await api.post('/attendance/batch-mark', {
+        courseId: selectedCourse, // Using selectedCourse (which is sectionId) as courseId for attendance
+        date: date,
+        records
       });
 
-      await Promise.all(promises);
       toast.success('Attendance saved successfully!');
     } catch (error) {
       console.error(error);
@@ -212,9 +206,9 @@ export default function TeacherAttendance() {
                       <td className="p-4">
                         <div className="flex items-center justify-center gap-2">
                           <button 
-                            onClick={() => handleMark(student.id, 'Present')}
+                            onClick={() => handleMark(student.id, 'present')}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${
-                              attendanceState[student.id] === 'Present' 
+                              attendanceState[student.id] === 'present' 
                                 ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 ring-2 ring-emerald-500/50' 
                                 : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-600'
                             }`}
@@ -222,9 +216,9 @@ export default function TeacherAttendance() {
                             <CheckCircle2 className="w-4 h-4" /> Present
                           </button>
                           <button 
-                            onClick={() => handleMark(student.id, 'Late')}
+                            onClick={() => handleMark(student.id, 'late')}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${
-                              attendanceState[student.id] === 'Late' 
+                              attendanceState[student.id] === 'late' 
                                 ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 ring-2 ring-amber-500/50' 
                                 : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:bg-amber-50 dark:hover:bg-amber-500/10 hover:text-amber-600'
                             }`}
@@ -232,9 +226,9 @@ export default function TeacherAttendance() {
                             <Clock className="w-4 h-4" /> Late
                           </button>
                           <button 
-                            onClick={() => handleMark(student.id, 'Absent')}
+                            onClick={() => handleMark(student.id, 'absent')}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${
-                              attendanceState[student.id] === 'Absent' 
+                              attendanceState[student.id] === 'absent' 
                                 ? 'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400 ring-2 ring-rose-500/50' 
                                 : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-600'
                             }`}

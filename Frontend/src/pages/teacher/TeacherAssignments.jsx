@@ -32,12 +32,12 @@ export default function TeacherAssignments() {
       
       // Fetch courses for dropdown
       const coursesRes = await api.get('/courses/my-classes');
-      const myCourses = coursesRes.data?.data || [];
+      const myCourses = coursesRes.data || [];
       setCourses(myCourses);
 
       // Fetch assignments
       const assignRes = await api.get('/assignments');
-      const myAssignments = assignRes.data?.data || [];
+      const myAssignments = assignRes.data || [];
       setAssignments(myAssignments.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)));
       
     } catch (err) {

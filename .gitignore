@@ -146,9 +146,26 @@ graphify-out/
 firebase-debug.log
 firebase-debug.*.log
 
-# AI Agent and IDE directories
 .agents/
 .claude/
 .windsurf/
 .qodo/
 .cursor/
+
+# Prisma generated client (regenerated on install)
+Backend/node_modules/
+Frontend/node_modules/
+
+# Build artifacts
+Frontend/dist/
+Backend/dist/
+
+# Environment files (never commit secrets)
+Backend/.env
+Frontend/.env
+Frontend/.env.*
+Backend/.env.*
+
+# OS
+Thumbs.db
+Desktop.ini

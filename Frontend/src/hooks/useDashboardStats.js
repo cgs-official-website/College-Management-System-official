@@ -1,37 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 
 export function useDashboardStats(collegeId, isSuperAdmin = false) {
-  const [stats, setStats] = useState({
+  const { data = {
     totalStudents: 0,
     totalTeachers: 0,
     activeCourses: 0,
     attendanceRate: 0,
     totalColleges: 0,
-    isLoading: true
+  }, isLoading, error } = useQuery({
+    queryKey: ['dashboardStats', collegeId, isSuperAdmin],
+    queryFn: async () => {
+      const response = await api.get('/dashboards/stats', {
+        params: { isSuperAdmin }
+      });
+      return response.data?.data || response.data;
+    },
+    enabled: !!(collegeId || isSuperAdmin),
+    staleTime: 5 * 60 * 1000,
   });
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        if (!collegeId && !isSuperAdmin) return;
-
-        const response = await api.get('/dashboards/stats', {
-          params: { isSuperAdmin }
-        });
-
-        setStats({
-          ...response.data,
-          isLoading: false
-        });
-      } catch (error) {
-        console.error("Error fetching dashboard stats:", error);
-        setStats(s => ({ ...s, isLoading: false }));
-      }
-    };
-
-    fetchStats();
-  }, [collegeId, isSuperAdmin]);
-
-  return stats;
+  return {
+    ...data,
+    isLoading,
+    error
+  };
 }

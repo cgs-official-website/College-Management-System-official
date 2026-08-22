@@ -82,12 +82,12 @@ const LandingPage = () => {
     };
     window.addEventListener('scroll', handleScroll);
 
-    if (localStorage.theme === 'light') {
-      setIsDarkMode(false);
-      document.documentElement.classList.remove('dark');
-    } else {
+    if (localStorage.theme === 'dark') {
       setIsDarkMode(true);
       document.documentElement.classList.add('dark');
+    } else {
+      setIsDarkMode(false);
+      document.documentElement.classList.remove('dark');
     }
 
     return () => window.removeEventListener('scroll', handleScroll);

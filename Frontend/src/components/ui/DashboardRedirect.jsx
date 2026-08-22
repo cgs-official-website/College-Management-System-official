@@ -19,7 +19,7 @@ const DashboardRedirect = () => {
 
   if (userRole === 'superadmin') return <Navigate to="/super" replace />;
   if (userRole === 'admin') return <Navigate to="/admin" replace />;
-  if (userRole === 'teacher') return <Navigate to="/teacher" replace />;
+  if (userRole === 'teacher' || userRole === 'hod' || userRole === 'support') return <Navigate to="/teacher" replace />;
   if (userRole === 'student') return <Navigate to="/student" replace />;
   if (userRole === 'parent') return <Navigate to="/parent" replace />;
 

@@ -51,7 +51,8 @@ const SuperAdmins = () => {
     try {
       setIsLoading(true);
       const res = await api.get('/users', { params: { role: 'admin' } });
-      const data = res.data?.data || [];
+      // res is { success: true, data: [...] } because of apiClient interceptor
+      const data = res.data || [];
       setAdmins(data);
     } catch (error) {
       console.error("Error fetching admins:", error);
@@ -118,10 +119,12 @@ const SuperAdmins = () => {
                 </tr>
               ) : filteredAdmins.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
-                    <Users className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4" />
-                    <p className="text-lg font-medium text-slate-900 dark:text-white">No admins found</p>
-                    <p className="text-sm mt-1">Admins are created when onboarding a new college.</p>
+                  <td colSpan="5" className="px-6 py-12 text-center text-slate-500 dark:text-slate-400 h-[400px]">
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <Users className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4" />
+                      <p className="text-lg font-medium text-slate-900 dark:text-white">No admins found</p>
+                      <p className="text-sm mt-1">Admins are created when onboarding a new college.</p>
+                    </div>
                   </td>
                 </tr>
               ) : (

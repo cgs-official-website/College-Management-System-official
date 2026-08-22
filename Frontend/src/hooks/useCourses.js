@@ -1,36 +1,54 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../services/api';
+import { api } from '../services/apiClient';
 
-export function useCourses(collegeId) {
+export const useCourses = (departmentId = null) => {
   const queryClient = useQueryClient();
 
-  const { data: courses = [], isLoading, error } = useQuery({
-    queryKey: ['courses', collegeId],
-    queryFn: () => api.get(`/courses?collegeId=${collegeId}`),
-    enabled: !!collegeId,
+  const getCourses = useQuery({
+    queryKey: ['courses', departmentId],
+    queryFn: async () => {
+      const url = departmentId ? `/courses?departmentId=${departmentId}` : '/courses';
+      const response = await api.get(url);
+      return response.data || [];
+    }
   });
 
-  const addCourse = useMutation({
-    mutationFn: (newCourse) => api.post('/courses', newCourse),
-    onSuccess: () => queryClient.invalidateQueries(['courses', collegeId]),
+  const createCourse = useMutation({
+    mutationFn: async (data) => {
+      const response = await api.post('/courses', data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['courses'] });
+    }
   });
 
   const updateCourse = useMutation({
-    mutationFn: ({ id, data }) => api.put(`/courses/${id}`, data),
-    onSuccess: () => queryClient.invalidateQueries(['courses', collegeId]),
+    mutationFn: async ({ id, data }) => {
+      const response = await api.put(`/courses/${id}`, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['courses'] });
+    }
   });
 
   const deleteCourse = useMutation({
-    mutationFn: (id) => api.delete(`/courses/${id}`),
-    onSuccess: () => queryClient.invalidateQueries(['courses', collegeId]),
+    mutationFn: async (id) => {
+      const response = await api.delete(`/courses/${id}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['courses'] });
+    }
   });
 
   return {
-    courses,
-    loading: isLoading,
-    error,
-    addCourse: addCourse.mutateAsync,
-    updateCourse: updateCourse.mutateAsync,
-    deleteCourse: deleteCourse.mutateAsync,
+    courses: getCourses.data || [],
+    isLoading: getCourses.isLoading,
+    error: getCourses.error,
+    createCourse,
+    updateCourse,
+    deleteCourse
   };
-}
+};

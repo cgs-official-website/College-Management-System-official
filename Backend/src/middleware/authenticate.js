@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { redis } from '../lib/cache.js';
+import { prisma } from '../server.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 
@@ -15,7 +16,6 @@ export const authenticate = async (req, res, next) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     
     // Check if token/session is revoked in Redis
-    // Key pattern: session:{userId}:{tokenId}
     if (decoded.jti) {
       const isRevoked = await redis.get(`revoked:${decoded.jti}`).catch(() => null);
       if (isRevoked) {
@@ -23,9 +23,31 @@ export const authenticate = async (req, res, next) => {
       }
     }
 
+    // Verify User and College Status from DB
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      include: { college: true }
+    });
+
+    if (!user || user.accountStatus !== 'active') {
+      return res.status(403).json({ error: 'Account disabled or deleted' });
+    }
+
+    // If not superadmin, ensure college is active
+    if (user.role !== 'superadmin' && user.college) {
+      if (user.college.status === 'pending') {
+        return res.status(403).json({ error: 'College is pending approval' });
+      }
+      if (user.college.status === 'rejected') {
+        return res.status(403).json({ error: 'College was rejected' });
+      }
+    }
+
     req.user = decoded;
+    req.tenant = user.college ? { collegeId: user.collegeId } : null;
     next();
   } catch (error) {
+    console.error('Authentication Error:', error);
     return res.status(403).json({ error: 'Token expired or invalid' });
   }
 };

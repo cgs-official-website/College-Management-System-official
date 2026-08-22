@@ -46,8 +46,8 @@ export const getAdmissions = async (req, res) => {
       lastName,
       email: details.email || '',
       phone: details.phone || '',
-      courseId: a.departmentId,
-      courseName: a.department?.name || details.courseName || 'General',
+      courseId: details.courseId || a.departmentId,
+      courseName: details.courseName || a.department?.name || 'General',
       previousSchool: details.previousSchool || '',
       status: a.status.charAt(0).toUpperCase() + a.status.slice(1),
       seatHoldExpiresAt: a.seatHoldExpiresAt,
@@ -68,7 +68,16 @@ export const submitApplication = async (req, res) => {
   const fullName = payload.applicantName || `${payload.firstName || ''} ${payload.lastName || ''}`.trim() || 'New Applicant';
 
   // Find or create department
-  let deptId = payload.departmentId || payload.courseId;
+  let deptId = payload.departmentId;
+  if (!deptId && payload.courseId) {
+    const course = await prisma.course.findUnique({
+      where: { id: payload.courseId }
+    });
+    if (course) {
+      deptId = course.departmentId;
+    }
+  }
+
   if (!deptId) {
     let dept = await prisma.department.findFirst({ where: { collegeId } });
     if (!dept) {
@@ -89,6 +98,7 @@ export const submitApplication = async (req, res) => {
     phone: payload.phone,
     previousSchool: payload.previousSchool,
     courseName: payload.courseName,
+    courseId: payload.courseId,
   };
 
   const admission = await prisma.admission.create({

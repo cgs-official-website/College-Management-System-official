@@ -44,7 +44,7 @@ import RaiseTicketModal from '../../components/ui/RaiseTicketModal';
 import StudentList from './students/StudentList';
 import Admission from './admission/Admission';
 import HRManagement from './hr/HRManagement';
-import CoursesList from './courses/CoursesList';
+import AcademicStructure from './academic-structure/AcademicStructure';
 import Attendance from './attendance/Attendance';
 import Exams from './exams/Exams';
 import Fees from './fees/Fees';
@@ -90,7 +90,7 @@ const AdminLayout = () => {
     { name: 'Admission', path: '/admin/admission', icon: UserPlus },
     { name: 'Students', path: '/admin/students', icon: GraduationCap },
     { name: 'HR & Staff', path: '/admin/hr', icon: Users },
-    { name: 'Classes', path: '/admin/courses', icon: BookOpen },
+    { name: 'Academic Structure', path: '/admin/academic-structure', icon: BookOpen },
     { name: 'Timetable', path: '/admin/timetable', icon: Calendar },
     { name: 'Attendance', path: '/admin/attendance', icon: Clock },
     { name: 'Exams', path: '/admin/exams', icon: ClipboardList },
@@ -102,7 +102,7 @@ const AdminLayout = () => {
     { name: 'Notice Board', path: '/admin/notices', icon: Megaphone },
     { name: 'Placements', path: '/admin/placements', icon: Briefcase },
     { name: 'Reports', path: '/admin/reports', icon: FileText },
-    { name: 'Settings', path: '/admin/settings', icon: SettingsIcon },
+    { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon },
   ];
 
   if (userData?.accountStatus === 'pending') {
@@ -290,7 +290,7 @@ const AdminLayout = () => {
               <Route path="/admission" element={<Admission />} />
               <Route path="/students/*" element={<StudentList />} />
               <Route path="/hr/*" element={<HRManagement />} />
-              <Route path="/courses/*" element={<CoursesList />} />
+              <Route path="/academic-structure/*" element={<AcademicStructure />} />
               <Route path="/timetable/*" element={<Timetable />} />
               <Route path="/attendance/*" element={<Attendance />} />
               <Route path="/exams/*" element={<Exams />} />

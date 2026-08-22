@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const createStaffSchema = z.object({
-  name: z.string().min(1, 'Staff name is required'),
+  name: z.string().optional().default(''),
   email: z.string().email('Invalid email address'),
   department: z.string().optional(),
   departmentId: z.string().uuid().optional(),

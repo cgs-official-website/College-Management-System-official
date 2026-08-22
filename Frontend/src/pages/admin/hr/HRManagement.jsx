@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { Plus, Search, Filter, Mail, Phone, MoreVertical, Edit, Trash2, Building, Shield } from 'lucide-react';
+import { Plus, Search, Filter, Mail, Phone, MoreVertical, Edit, Trash2, Building, Shield, Eye, Link } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useStaff } from '../../../hooks/useStaff';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { StaffFormModal } from './StaffFormModal';
+import { StaffDetailsModal } from './StaffDetailsModal';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import apiClient from '../../../services/apiClient';
+import toast from 'react-hot-toast';
 
 export default function HRManagement() {
   const confirm = useConfirm();
@@ -16,6 +19,7 @@ export default function HRManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
+  const [viewingStaff, setViewingStaff] = useState(null);
 
   const filteredStaff = staff.filter(member => {
     const fullName = `${member.firstName || ''} ${member.lastName || ''} ${member.name || ''}`.toLowerCase();
@@ -39,6 +43,21 @@ export default function HRManagement() {
   const handleDelete = async (id) => {
     if (await confirm({ message: "Are you sure you want to completely remove this staff member? This action cannot be undone." })) {
       await deleteStaff(id);
+    }
+  };
+
+  const handleCopyLink = async (memberId) => {
+    try {
+      const response = await apiClient.get(`/staff/${memberId}/setup-link`);
+      const token = response.data?.data?.token || response.data?.token;
+      if (token) {
+        const url = `${window.location.origin}/staff-setup?token=${token}`;
+        await navigator.clipboard.writeText(url);
+        toast.success("Setup link copied to clipboard!");
+      }
+    } catch (error) {
+      console.error('Failed to generate link:', error);
+      toast.error(error.response?.data?.error?.message || "Failed to generate link");
     }
   };
 
@@ -168,11 +187,17 @@ export default function HRManagement() {
                       )}
                     </td>
                     <td className="p-4 pr-6 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleOpenEdit(member)} className="p-2 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm">
+                      <div className="flex items-center justify-end gap-2 transition-opacity">
+                        <button onClick={() => setViewingStaff(member)} className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="View Profile">
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleCopyLink(member.id)} className="p-2 text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="Copy Link">
+                          <Link className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleOpenEdit(member)} className="p-2 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="Edit">
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleDelete(member.id)} className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm">
+                        <button onClick={() => handleDelete(member.id)} className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="Delete">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -191,6 +216,12 @@ export default function HRManagement() {
         onSubmit={handleSubmit}
         initialData={editingStaff}
         isLoading={isAdding || isUpdating}
+      />
+
+      <StaffDetailsModal
+        isOpen={!!viewingStaff}
+        onClose={() => setViewingStaff(null)}
+        staff={viewingStaff}
       />
     </div>
   );

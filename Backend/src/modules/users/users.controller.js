@@ -173,5 +173,27 @@ export const updateProfile = async (req, res) => {
     });
   }
 
+  const { firstName, lastName, phone, designation } = req.body;
+  if (firstName || lastName || phone !== undefined) {
+    const fullName = `${firstName || ''} ${lastName || ''}`.trim() || user.name;
+    await prisma.user.update({
+      where: { id: userId },
+      data: { 
+        name: fullName,
+        phone: phone 
+      }
+    });
+  }
+
+  if (designation && user.role === 'teacher' || user.role === 'hod') {
+    const teacherProfile = await prisma.teacher.findFirst({ where: { userId } });
+    if (teacherProfile) {
+      await prisma.teacher.update({
+        where: { id: teacherProfile.id },
+        data: { designation }
+      });
+    }
+  }
+
   res.json({ success: true, message: 'Profile updated' });
 };

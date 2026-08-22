@@ -43,3 +43,42 @@ export const getDashboardStats = async (req, res) => {
     res.status(500).json({ error: { message: error.message } });
   }
 };
+
+export const getTeacherStats = async (req, res) => {
+  try {
+    const { collegeId } = req.tenant;
+    const { userId } = req.user;
+
+    // Fetch the teacher profile ID for the current user
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { teacherProfile: true }
+    });
+
+    if (!user || !user.teacherProfile) {
+      return res.json({
+        data: {
+          totalClasses: 0,
+          studentsTaught: 0,
+          attendanceRate: 0,
+          pendingGrades: 0
+        }
+      });
+    }
+
+    const teacherId = user.teacherProfile.id;
+
+    // For now, mock the stats until we have full assignments & grades modules ready
+    res.json({
+      data: {
+        totalClasses: 4,
+        studentsTaught: 120,
+        attendanceRate: 92,
+        pendingGrades: 5
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: { message: error.message } });
+  }
+};

@@ -1,16 +1,38 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FolderKanban, Plus, X, CheckCircle2, Clock } from 'lucide-react';
-import { toast } from 'react-hot-toast';
+import { useProjects } from '../../hooks/useProjects';
 
 const ProjectTimesheetDashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { projects, timesheets, isLoading, logHours } = useProjects();
+  
+  const [formData, setFormData] = useState({
+    projectId: '',
+    date: new Date().toISOString().split('T')[0],
+    hoursSpent: '',
+    activityDescription: ''
+  });
 
-  const handleLogHours = (e) => {
+  const handleLogHours = async (e) => {
     e.preventDefault();
-    toast.success('Hours logged successfully!');
-    setIsModalOpen(false);
+    try {
+      await logHours(formData);
+      setIsModalOpen(false);
+      setFormData({
+        projectId: '',
+        date: new Date().toISOString().split('T')[0],
+        hoursSpent: '',
+        activityDescription: ''
+      });
+    } catch (err) {
+      // Handled by hook
+    }
   };
+
+  const totalHours = timesheets?.reduce((acc, curr) => acc + curr.hoursSpent, 0) || 0;
+  const activeProjectsCount = projects?.filter(p => p.status === 'active').length || 0;
+  const completedProjectsCount = projects?.filter(p => p.status === 'completed').length || 0;
 
   return (
     <div className="space-y-6">
@@ -27,9 +49,9 @@ const ProjectTimesheetDashboard = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
         {[
-          { title: 'Active Projects', value: '0', icon: FolderKanban, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10' },
-          { title: 'Total Logged Hours', value: '0', icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
-          { title: 'Completed Projects', value: '0', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
+          { title: 'Active Projects', value: activeProjectsCount, icon: FolderKanban, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10' },
+          { title: 'Total Logged Hours', value: totalHours, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
+          { title: 'Completed Projects', value: completedProjectsCount, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
         ].map((stat, idx) => (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.1 }} key={idx} className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
             <div className="flex justify-between items-start">
@@ -46,15 +68,43 @@ const ProjectTimesheetDashboard = () => {
 
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 dark:border-white/5">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">My Projects</h2>
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white">Recent Timesheets</h2>
         </div>
-        <div className="flex flex-col items-center justify-center py-16 text-center p-6">
-          <div className="w-16 h-16 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center mb-4">
-            <FolderKanban className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+        
+        {isLoading ? (
+          <div className="p-8 text-center text-slate-500">Loading timesheets...</div>
+        ) : timesheets?.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center p-6">
+            <div className="w-16 h-16 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center mb-4">
+              <FolderKanban className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+            </div>
+            <h3 className="text-slate-900 dark:text-white font-bold text-lg mb-1">No Hours Logged</h3>
+            <p className="text-slate-500 dark:text-slate-400 text-sm max-w-sm">Once you log hours to academic projects, they will appear here.</p>
           </div>
-          <h3 className="text-slate-900 dark:text-white font-bold text-lg mb-1">No Projects Assigned</h3>
-          <p className="text-slate-500 dark:text-slate-400 text-sm max-w-sm">Once you are assigned to academic projects or research grants, they will appear here for time logging.</p>
-        </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10">
+                  <th className="py-4 px-6 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Date</th>
+                  <th className="py-4 px-6 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Project</th>
+                  <th className="py-4 px-6 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Hours</th>
+                  <th className="py-4 px-6 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Description</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-white/10">
+                {timesheets.map(t => (
+                  <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                    <td className="py-4 px-6 text-slate-600 dark:text-slate-400">{new Date(t.date).toLocaleDateString()}</td>
+                    <td className="py-4 px-6 font-bold text-slate-900 dark:text-white">{t.project?.name}</td>
+                    <td className="py-4 px-6 font-bold text-primary-600 dark:text-primary-400">{t.hoursSpent}</td>
+                    <td className="py-4 px-6 text-slate-600 dark:text-slate-400 max-w-xs truncate" title={t.activityDescription}>{t.activityDescription}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </motion.div>
 
       <AnimatePresence>
@@ -68,26 +118,57 @@ const ProjectTimesheetDashboard = () => {
               </div>
               <form onSubmit={handleLogHours} className="p-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Project Name</label>
-                  <input type="text" placeholder="e.g. AI Research Grant" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white" required />
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Project</label>
+                  <select 
+                    value={formData.projectId}
+                    onChange={(e) => setFormData({...formData, projectId: e.target.value})}
+                    className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white" 
+                    required 
+                  >
+                    <option value="" disabled>Select a Project</option>
+                    {projects?.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Date</label>
-                    <input type="date" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white" required />
+                    <input 
+                      type="date" 
+                      value={formData.date}
+                      onChange={(e) => setFormData({...formData, date: e.target.value})}
+                      className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white" 
+                      required 
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Hours Spent</label>
-                    <input type="number" step="0.5" min="0.5" max="24" placeholder="e.g. 2.5" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white" required />
+                    <input 
+                      type="number" 
+                      step="0.5" min="0.5" max="24" 
+                      value={formData.hoursSpent}
+                      onChange={(e) => setFormData({...formData, hoursSpent: e.target.value})}
+                      placeholder="e.g. 2.5" 
+                      className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white" 
+                      required 
+                    />
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Activity Description</label>
-                  <textarea rows="3" placeholder="What did you work on?" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white resize-none" required></textarea>
+                  <textarea 
+                    rows="3" 
+                    value={formData.activityDescription}
+                    onChange={(e) => setFormData({...formData, activityDescription: e.target.value})}
+                    placeholder="What did you work on?" 
+                    className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white resize-none" 
+                    required
+                  ></textarea>
                 </div>
                 <div className="pt-4 flex justify-end gap-3">
                   <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-sm font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Cancel</button>
-                  <button type="submit" className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-primary-500/30 transition-all">Submit Hours</button>
+                  <button type="submit" className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-primary-500/30 transition-all" disabled={isLoading}>Submit Hours</button>
                 </div>
               </form>
             </motion.div>

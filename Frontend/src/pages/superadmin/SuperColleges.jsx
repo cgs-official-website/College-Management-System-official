@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 
 
+import { useColleges } from '../../hooks/useColleges';
 import api from '../../services/api';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { toast } from 'react-hot-toast';
@@ -36,33 +37,12 @@ const SuperColleges = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [subscriptionCollege, setSubscriptionCollege] = useState(null);
   const [selectedCollege, setSelectedCollege] = useState(null);
-  const [colleges, setColleges] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { colleges, isLoading, updateCollegeStatus, deleteCollege: deleteCollegeMutation, refetch } = useColleges();
   const [searchTerm, setSearchTerm] = useState('');
-
-  const fetchColleges = async () => {
-    try {
-      setIsLoading(true);
-      const res = await api.get('/colleges');
-      setColleges(res.data?.data || []);
-    } catch (error) {
-      console.error("Error fetching colleges:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchColleges();
-  }, []);
 
   const handleApproveCollege = async (collegeId, adminUid) => {
     try {
-      // Update college status
-      await api.put(`/colleges/${collegeId}/status`, { status: 'active' });
-
-      // Refresh list
-      fetchColleges();
+      await updateCollegeStatus.mutateAsync({ id: collegeId, status: 'active' });
     } catch (error) {
       console.error("Error approving college:", error);
     }
@@ -70,8 +50,7 @@ const SuperColleges = () => {
 
   const handleUpdateStatus = async (collegeId, newStatus) => {
     try {
-      await api.put(`/colleges/${collegeId}/status`, { status: newStatus });
-      fetchColleges();
+      await updateCollegeStatus.mutateAsync({ id: collegeId, status: newStatus });
     } catch (error) {
       console.error("Error updating status:", error);
     }
@@ -81,8 +60,7 @@ const SuperColleges = () => {
     if (!(await confirm({ message: "Are you sure you want to permanently delete this college? This action cannot be undone." }))) return;
     
     try {
-      await api.delete(`/colleges/${collegeId}`);
-      fetchColleges();
+      await deleteCollegeMutation.mutateAsync(collegeId);
     } catch (error) {
       console.error("Error deleting college:", error);
       toast.error("Failed to delete college.");
@@ -149,10 +127,12 @@ const SuperColleges = () => {
                 </tr>
               ) : filteredColleges.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
-                    <Building2 className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4" />
-                    <p className="text-lg font-medium text-slate-900 dark:text-white">No colleges found</p>
-                    <p className="text-sm mt-1">Click "Onboard New College" to add one.</p>
+                  <td colSpan="5" className="px-6 py-12 text-center text-slate-500 dark:text-slate-400 h-[400px]">
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <Building2 className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4" />
+                      <p className="text-lg font-medium text-slate-900 dark:text-white">No colleges found</p>
+                      <p className="text-sm mt-1">Click "Onboard New College" to add one.</p>
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -250,7 +230,7 @@ const SuperColleges = () => {
             onClose={() => setSubscriptionCollege(null)}
             onSuccess={() => {
               setSubscriptionCollege(null);
-              fetchColleges();
+              refetch();
             }}
           />
         )}
@@ -262,7 +242,7 @@ const SuperColleges = () => {
             onClose={() => setIsModalOpen(false)} 
             onSuccess={() => {
               setIsModalOpen(false);
-              fetchColleges();
+              refetch();
             }}
           />
         )}
@@ -280,6 +260,7 @@ const SuperColleges = () => {
 
 const OnboardCollegeModal = ({ onClose, onSuccess }) => {
   const { register, handleSubmit, formState: { errors } } = useForm();
+  const { onboardCollege } = useColleges();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState('');
   const [successData, setSuccessData] = useState(null);
@@ -332,7 +313,7 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
         pincode: pincode || ''
       };
 
-      const result = await api.post('/colleges/onboard', {
+      const result = await onboardCollege.mutateAsync({
         adminUser: { name: adminName, email: adminEmail, password: adminPassword },
         collegeData
       });

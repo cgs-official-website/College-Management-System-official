@@ -17,22 +17,14 @@ import {
   X,
   Briefcase,
   RefreshCw,
-  MonitorPlay,
-  Video,
-  Film,
-  UsersRound,
   MessageSquareWarning,
-  Clock,
   FolderKanban,
   Banknote
 } from 'lucide-react';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
-import PTMDashboard from '../shared/PTMDashboard';
-import TimesheetDashboard from './TimesheetDashboard';
 import ProjectTimesheetDashboard from './ProjectTimesheetDashboard';
 import PayrollDashboard from './PayrollDashboard';
-import TeacherLMS from './TeacherLMS';
 import TeacherComplaints from './TeacherComplaints';
 import TeacherDashboard from './TeacherDashboard';
 import TeacherClasses from './TeacherClasses';
@@ -68,12 +60,7 @@ const TeacherLayout = () => {
     { name: 'Attendance', path: '/teacher/attendance', icon: CheckSquare },
     { name: 'Schedule', path: '/teacher/schedule', icon: Calendar },
     { name: 'Marks & Grading', path: '/teacher/grades', icon: FileBarChart },
-    { name: 'LMS', path: '/teacher/lms', icon: MonitorPlay },
-    { name: 'Live Classes', path: '/teacher/live-classes', icon: Video },
-    { name: 'Video Library', path: '/teacher/video-library', icon: Film },
-    { name: 'PTM', path: '/teacher/ptm', icon: UsersRound },
     { name: 'Complaints', path: '/teacher/complaints', icon: MessageSquareWarning },
-    { name: 'Timesheet', path: '/teacher/timesheet', icon: Clock },
     { name: 'Projects', path: '/teacher/projects', icon: FolderKanban },
     { name: 'Payroll', path: '/teacher/payroll', icon: Banknote },
     { name: 'Settings', path: '/teacher/settings', icon: SettingsIcon },
@@ -207,11 +194,11 @@ const TeacherLayout = () => {
               className="flex items-center gap-3 pl-2 pr-1 py-1 rounded-full hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
             >
               <div className="hidden md:block text-right">
-                <p className="text-sm font-bold text-slate-900 dark:text-white leading-none">{userData?.firstName || 'Teacher'}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{userData?.designation || 'Faculty Member'}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white leading-none capitalize">{userData?.name || userData?.firstName || 'Teacher'}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 capitalize">{userData?.role || userData?.designation || 'Faculty Member'}</p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center text-white font-bold shadow-md">
-                T
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center text-white font-bold shadow-md uppercase">
+                {(userData?.name || userData?.firstName || 'T').charAt(0)}
               </div>
             </button>
           </div>
@@ -228,12 +215,7 @@ const TeacherLayout = () => {
               <Route path="/attendance" element={<TeacherAttendance />} />
               <Route path="/schedule" element={<TeacherSchedule />} />
               <Route path="/grades" element={<TeacherGrades />} />
-              <Route path="/lms" element={<TeacherLMS />} />
-              <Route path="/live-classes" element={<TeacherLMS />} />
-              <Route path="/video-library" element={<TeacherLMS />} />
-              <Route path="/ptm" element={<PTMDashboard />} />
               <Route path="/complaints" element={<TeacherComplaints />} />
-              <Route path="/timesheet" element={<TimesheetDashboard />} />
               <Route path="/projects" element={<ProjectTimesheetDashboard />} />
               <Route path="/payroll" element={<PayrollDashboard />} />
               <Route path="/settings" element={<TeacherSettings />} />

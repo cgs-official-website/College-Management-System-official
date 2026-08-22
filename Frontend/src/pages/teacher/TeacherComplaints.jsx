@@ -2,14 +2,28 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquareWarning, Clock, CheckCircle2, Plus, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useComplaints } from '../../hooks/useComplaints';
 
 const TeacherComplaints = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { items: complaints, isLoading, createItem } = useComplaints();
 
-  const handleSubmitComplaint = (e) => {
+  const [formData, setFormData] = useState({
+    subject: '',
+    category: 'Infrastructure',
+    priority: 'Medium',
+    description: ''
+  });
+
+  const handleSubmitComplaint = async (e) => {
     e.preventDefault();
-    toast.success('Your complaint has been submitted to the administration.');
-    setIsModalOpen(false);
+    try {
+      await createItem(formData);
+      setIsModalOpen(false);
+      setFormData({ subject: '', category: 'Infrastructure', priority: 'Medium', description: '' });
+    } catch (err) {
+      // Error handled by hook
+    }
   };
 
   return (
@@ -31,9 +45,9 @@ const TeacherComplaints = () => {
       {/* Stats - Teacher only sees their own */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
         {[
-          { title: 'My Open Tickets', value: '0', icon: MessageSquareWarning, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10' },
-          { title: 'In Progress', value: '0', icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
-          { title: 'Resolved', value: '0', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
+          { title: 'My Open Tickets', value: complaints?.filter(c => c.status === 'open').length || 0, icon: MessageSquareWarning, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10' },
+          { title: 'In Progress', value: complaints?.filter(c => c.status === 'in_progress').length || 0, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
+          { title: 'Resolved', value: complaints?.filter(c => c.status === 'resolved').length || 0, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
         ].map((stat, idx) => (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -66,13 +80,49 @@ const TeacherComplaints = () => {
         <div className="p-6 border-b border-slate-100 dark:border-white/5">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">My Complaint History</h2>
         </div>
-        <div className="flex flex-col items-center justify-center py-16 text-center p-6">
-          <div className="w-16 h-16 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center mb-4">
-            <MessageSquareWarning className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+        
+        {isLoading ? (
+          <div className="p-8 text-center text-slate-500">Loading complaints...</div>
+        ) : complaints?.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center p-6">
+            <div className="w-16 h-16 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center mb-4">
+              <MessageSquareWarning className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+            </div>
+            <h3 className="text-slate-900 dark:text-white font-bold text-lg mb-1">No Complaints Filed</h3>
+            <p className="text-slate-500 dark:text-slate-400 text-sm max-w-sm">You haven't filed any complaints yet. Use the "Raise Complaint" button to report an issue to administration.</p>
           </div>
-          <h3 className="text-slate-900 dark:text-white font-bold text-lg mb-1">No Complaints Filed</h3>
-          <p className="text-slate-500 dark:text-slate-400 text-sm max-w-sm">You haven't filed any complaints yet. Use the "Raise Complaint" button to report an issue to administration.</p>
-        </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10">
+                  <th className="py-4 px-6 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Date</th>
+                  <th className="py-4 px-6 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Subject</th>
+                  <th className="py-4 px-6 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Category</th>
+                  <th className="py-4 px-6 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-white/10">
+                {complaints.map(c => (
+                  <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                    <td className="py-4 px-6 text-slate-600 dark:text-slate-400">{new Date(c.createdAt).toLocaleDateString()}</td>
+                    <td className="py-4 px-6 font-bold text-slate-900 dark:text-white">{c.subject}</td>
+                    <td className="py-4 px-6 text-slate-600 dark:text-slate-400">{c.category}</td>
+                    <td className="py-4 px-6">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                        c.status === 'open' ? 'bg-primary-50 text-primary-600 dark:bg-primary-500/10' :
+                        c.status === 'resolved' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10' :
+                        'bg-amber-50 text-amber-600 dark:bg-amber-500/10'
+                      }`}>
+                        {c.status.toUpperCase()}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </motion.div>
 
       {/* Modal */}
@@ -104,12 +154,23 @@ const TeacherComplaints = () => {
               <form onSubmit={handleSubmitComplaint} className="p-6 space-y-4">
                 <div>
                   <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Subject</label>
-                  <input type="text" placeholder="Brief title of your issue" className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white" required />
+                  <input 
+                    type="text" 
+                    placeholder="Brief title of your issue" 
+                    value={formData.subject}
+                    onChange={(e) => setFormData({...formData, subject: e.target.value})}
+                    className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white" 
+                    required 
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Category</label>
-                    <select className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white">
+                    <select 
+                      value={formData.category}
+                      onChange={(e) => setFormData({...formData, category: e.target.value})}
+                      className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white"
+                    >
                       <option>Infrastructure</option>
                       <option>IT & Equipment</option>
                       <option>Classroom Issues</option>
@@ -119,7 +180,11 @@ const TeacherComplaints = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Priority</label>
-                    <select className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white">
+                    <select 
+                      value={formData.priority}
+                      onChange={(e) => setFormData({...formData, priority: e.target.value})}
+                      className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white"
+                    >
                       <option>Low</option>
                       <option>Medium</option>
                       <option>High</option>
@@ -128,7 +193,14 @@ const TeacherComplaints = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Description</label>
-                  <textarea rows="4" placeholder="Describe the issue in detail..." className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white resize-none" required></textarea>
+                  <textarea 
+                    rows="4" 
+                    placeholder="Describe the issue in detail..." 
+                    value={formData.description}
+                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                    className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white resize-none" 
+                    required
+                  ></textarea>
                 </div>
                 <div className="pt-4 flex justify-end gap-3">
                   <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-sm font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Cancel</button>

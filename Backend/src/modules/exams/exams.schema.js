@@ -20,3 +20,13 @@ export const enterMarksSchema = z.object({
   obtainedMarks: z.number().min(0),
   remarks: z.string().optional()
 });
+
+export const batchEnterMarksSchema = z.object({
+  courseId: z.string().uuid(),
+  examType: z.string(),
+  maxMarks: z.number().min(1).default(100),
+  records: z.array(z.object({
+    studentId: z.string().uuid(),
+    obtainedMarks: z.number().min(0)
+  }))
+});

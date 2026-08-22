@@ -6,6 +6,8 @@ import LandingPage from './pages/landing/LandingPage';
 import DemoSeeder from './pages/landing/DemoSeeder';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import StaffSetup from './pages/auth/StaffSetup';
+import { PendingApproval, RejectedApproval } from './pages/auth/PendingApproval';
 import ProtectedRoute from './components/ui/ProtectedRoute';
 import DashboardRedirect from './components/ui/DashboardRedirect';
 import SuperAdminLayout from './pages/superadmin/SuperAdminLayout';
@@ -34,6 +36,9 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/register/:roleParam" element={<Register />} />
             <Route path="/register/:roleParam/:collegeSlug" element={<Register />} />
+            <Route path="/staff-setup" element={<StaffSetup />} />
+            <Route path="/pending-approval" element={<PendingApproval />} />
+            <Route path="/rejected" element={<RejectedApproval />} />
             <Route path="/dashboard" element={<ProtectedRoute><DashboardRedirect /></ProtectedRoute>} />
             
             {/* Super Admin Routes */}

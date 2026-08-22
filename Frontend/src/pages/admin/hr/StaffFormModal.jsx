@@ -4,8 +4,10 @@ import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
+import { useDepartments } from '../../../hooks/useDepartments';
 
 export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading }) {
+  const { departments } = useDepartments();
   
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     defaultValues: initialData || {
@@ -36,7 +38,14 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
   }, [isOpen, initialData, reset]);
 
   const onFormSubmit = (data) => {
-    onSubmit(data);
+    const payload = {
+      ...data,
+      name: `${data.firstName} ${data.lastName}`.trim(),
+      designation: data.role === 'hod' ? 'Head of Department' : 
+                   data.role === 'admin' ? 'Administrative Staff' : 
+                   data.role === 'support' ? 'Support Staff' : 'Teacher / Professor',
+    };
+    onSubmit(payload);
   };
 
   return (
@@ -55,15 +64,15 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input 
-              label="First Name" 
+              label="First Name (Optional)" 
               placeholder="e.g. Robert"
-              {...register('firstName', { required: "First name is required" })}
+              {...register('firstName')}
               error={errors.firstName?.message}
             />
             <Input 
-              label="Last Name" 
+              label="Last Name (Optional)" 
               placeholder="e.g. Oppenheimer"
-              {...register('lastName', { required: "Last name is required" })}
+              {...register('lastName')}
               error={errors.lastName?.message}
             />
             <Input 
@@ -97,12 +106,19 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
                 { value: 'support', label: 'Support Staff' }
               ]}
             />
-            <Input 
-              label="Department" 
-              placeholder="e.g. Computer Science"
-              {...register('department', { required: "Department is required" })}
-              error={errors.department?.message}
-            />
+            <div className="space-y-1">
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Department</label>
+              <select 
+                {...register('departmentId', { required: "Department is required" })}
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white"
+              >
+                <option value="">Select a Department</option>
+                {departments?.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+              {errors.departmentId && <p className="text-red-500 text-sm mt-1">{errors.departmentId.message}</p>}
+            </div>
             <Input 
               label="Join Date" 
               type="date"

@@ -90,8 +90,23 @@ async function ensureDefaultAcademicEntities(collegeId) {
 
 export const getTimetable = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const userId = req.user?.id || req.user?.userId;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { teacherProfile: true }
+  });
+
+  const where = { collegeId };
+
+  if (user?.role === 'teacher' || user?.role === 'hod') {
+    if (user.teacherProfile) {
+      where.teacherId = user.teacherProfile.id;
+    }
+  }
+
   const slots = await prisma.timetableSlot.findMany({
-    where: { collegeId },
+    where,
     include: {
       course: true,
       teacher: { include: { user: true } },
@@ -246,4 +261,50 @@ export const deleteSlot = async (req, res) => {
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} slotId=${id} actor=${actorId} Deleted timetable slot`);
   res.json({ success: true, message: 'Class schedule removed successfully' });
+};
+
+export const getTodayTimetable = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const userId = req.user?.id || req.user?.userId;
+  
+  // Find teacher profile for the current user
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { teacherProfile: true }
+  });
+
+  if (!user || !user.teacherProfile) {
+    return res.json({ success: true, data: [] });
+  }
+
+  const todayInt = new Date().getDay();
+  const dayName = DAY_MAP_TO_NAME[todayInt];
+
+  const slots = await prisma.timetableSlot.findMany({
+    where: { 
+      collegeId, 
+      teacherId: user.teacherProfile.id,
+      dayOfWeek: dayName
+    },
+    include: {
+      course: true,
+      section: true
+    },
+    orderBy: {
+      startTime: 'asc'
+    }
+  });
+
+  // Map to frontend expected format
+  const formattedSlots = slots.map(slot => ({
+    id: slot.id,
+    subject: slot.subject || slot.course?.name || 'Subject',
+    class: `${slot.course?.name || ''} - ${slot.section?.name || ''}`,
+    time: `${slot.startTime} - ${slot.endTime}`,
+    room: slot.room || 'TBA',
+    type: slot.type || 'Lecture',
+    status: 'upcoming' // Mock status
+  }));
+
+  res.json({ success: true, data: formattedSlots });
 };

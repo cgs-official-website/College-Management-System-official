@@ -38,13 +38,20 @@ const Login = () => {
       // Redirection is handled by useEffect when AuthContext resolves user role
     } catch (err) {
       console.error("Login Error:", err);
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+      if (err.code === 'COLLEGE_PENDING_APPROVAL') {
+        navigate('/pending-approval');
+        return;
+      } else if (err.code === 'COLLEGE_REJECTED') {
+        navigate('/rejected');
+        return;
+      } else if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential' || err.status === 401) {
         setError('Invalid email or password.');
-      } else if (err.code === 'auth/too-many-requests') {
+      } else if (err.code === 'auth/too-many-requests' || err.status === 429) {
         setError('Too many failed attempts. Please try again later.');
       } else {
-        setError('Failed to sign in. Please check your network and try again.');
+        setError(err.message || 'Failed to sign in. Please check your network and try again.');
       }
+      setIsLoading(false);
     }
     // We intentionally don't set isLoading(false) on success to keep the loading state until redirect
   };

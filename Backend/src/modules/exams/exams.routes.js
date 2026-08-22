@@ -5,7 +5,8 @@ import {
   updateExam, 
   deleteExam, 
   enterMarks, 
-  getExamResults 
+  getExamResults,
+  batchEnterMarks
 } from './exams.controller.js';
 import { authenticate } from '../../middleware/authenticate.js';
 import { resolveTenant } from '../../middleware/resolveTenant.js';
@@ -20,6 +21,7 @@ router.post('/', catchAsync(createExam));
 router.put('/:id', catchAsync(updateExam));
 router.delete('/:id', catchAsync(deleteExam));
 router.post('/marks', catchAsync(enterMarks));
+router.post('/batch-marks', catchAsync(batchEnterMarks));
 router.get('/:id/results', catchAsync(getExamResults));
 
 export default router;

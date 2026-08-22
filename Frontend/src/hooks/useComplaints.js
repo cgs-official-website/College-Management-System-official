@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '../services/api';
+import { api } from '../services/apiClient';
 import toast from 'react-hot-toast';
 
 export const useComplaints = () => {
@@ -8,15 +8,15 @@ export const useComplaints = () => {
   const query = useQuery({
     queryKey: ['complaints'],
     queryFn: async () => {
-      const { data } = await api.get('/complaints');
-      return data.data;
+      const response = await api.get('/complaints');
+      return response.data || [];
     }
   });
 
   const createMutation = useMutation({
     mutationFn: async (newItem) => {
-      const { data } = await api.post('/complaints', newItem);
-      return data.data;
+      const response = await api.post('/complaints', newItem);
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['complaints']);

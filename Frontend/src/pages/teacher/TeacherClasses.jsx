@@ -21,7 +21,7 @@ export default function TeacherClasses() {
         
         // Fetch courses from backend using REST API
         const response = await api.get('/courses/my-classes');
-        const fetchedCourses = response.data?.data || [];
+        const fetchedCourses = response.data || [];
 
         
         setCourses(fetchedCourses);

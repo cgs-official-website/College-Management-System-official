@@ -9,7 +9,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 
 export function AdmissionFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading }) {
   const { userData } = useAuth();
-  const { courses } = useCourses(userData?.collegeId);
+  const { courses } = useCourses();
   
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     defaultValues: initialData || {

@@ -1,5 +1,6 @@
 import { prisma, logger } from '../../server.js';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { createStaffSchema, updateStaffSchema } from './staff.schema.js';
 
 export const getStaff = async (req, res) => {
@@ -94,7 +95,7 @@ export const createStaff = async (req, res) => {
           role: payload.role || 'teacher',
           customRoleId: payload.customRoleId || null,
           passwordHash: defaultPassword,
-          accountStatus: payload.status || 'active'
+          accountStatus: 'pending_setup'
         }
       });
     }
@@ -133,6 +134,28 @@ export const createStaff = async (req, res) => {
   });
 };
 
+export const generateSetupLink = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const { id } = req.params;
+
+  const teacher = await prisma.teacher.findUnique({
+    where: { id, collegeId },
+    include: { user: true }
+  });
+
+  if (!teacher) {
+    return res.status(404).json({ success: false, error: { message: 'Staff member not found' } });
+  }
+
+  const token = jwt.sign(
+    { teacherId: teacher.id, userId: teacher.user.id, email: teacher.user.email, type: 'staff-setup' },
+    process.env.JWT_SECRET || 'fallback_secret',
+    { expiresIn: '7d' }
+  );
+
+  res.json({ success: true, data: { token } });
+};
+
 export const updateStaff = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const actorId = req.user?.id || req.user?.userId;
@@ -166,6 +189,7 @@ export const updateStaff = async (req, res) => {
         ...(payload.designation ? { designation: payload.designation } : {}),
         ...(payload.salaryGrade ? { salaryGrade: payload.salaryGrade } : {}),
         ...(payload.joiningDate ? { joiningDate: new Date(payload.joiningDate) } : {}),
+        ...(payload.departmentId ? { departmentId: payload.departmentId } : {}),
       },
       include: {
         user: true,

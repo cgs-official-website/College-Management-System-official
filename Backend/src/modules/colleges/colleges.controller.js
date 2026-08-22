@@ -98,3 +98,40 @@ export const deleteCollege = async (req, res) => {
     res.status(400).json({ error: { message: error.message } });
   }
 };
+
+export const getCollege = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const college = await prisma.college.findUnique({
+      where: { id }
+    });
+    if (!college) return res.status(404).json({ error: { message: 'College not found' } });
+    res.json({ data: college });
+  } catch (error) {
+    res.status(400).json({ error: { message: error.message } });
+  }
+};
+
+export const updateCollege = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, address, academicYear, affiliationCode, aicteNumber, logoUrl, ugcCode } = req.body;
+    
+    const college = await prisma.college.update({
+      where: { id },
+      data: {
+        name,
+        address,
+        academicYear,
+        affiliationCode,
+        aicteNumber,
+        logoUrl,
+        ugcCode
+      }
+    });
+    
+    res.json({ data: college });
+  } catch (error) {
+    res.status(400).json({ error: { message: error.message } });
+  }
+};

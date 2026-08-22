@@ -6,13 +6,13 @@ import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useCourses } from '../../../hooks/useCourses';
+import { useSections } from '../../../hooks/useSections';
 
 export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading }) {
   const { userData } = useAuth();
-  const collegeId = userData?.collegeId || 'default_college_id';
-  const { courses } = useCourses(collegeId);
+  const { courses } = useCourses();
   
-  const { register, handleSubmit, reset, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm({
     defaultValues: initialData || {
       firstName: '',
       lastName: '',
@@ -45,6 +45,9 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
       });
     }
   }, [isOpen, initialData, reset]);
+
+  const selectedCourseId = watch('courseId');
+  const { sections } = useSections(selectedCourseId);
 
   const onFormSubmit = (data) => {
     // Inject collegeId
@@ -118,19 +121,24 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Select 
               label="Class / Course" 
-              {...register('class', { required: "Class is required" })}
-              error={errors.class?.message}
-              options={courses.map(c => ({ value: c.id, label: c.name }))}
+              {...register('courseId', { required: "Course is required" })}
+              error={errors.courseId?.message}
+              options={[{ value: '', label: 'Select a course' }, ...courses.map(c => ({ value: c.id, label: c.name }))]}
             />
-            <Select 
-              label="Section" 
-              {...register('section')}
-              options={[
-                { value: 'A', label: 'Section A' },
-                { value: 'B', label: 'Section B' },
-                { value: 'C', label: 'Section C' }
-              ]}
-            />
+            <div className="space-y-1">
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Section</label>
+              <select 
+                {...register('sectionId')}
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white"
+                disabled={!selectedCourseId}
+              >
+                <option value="">Select a section</option>
+                {sections?.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              {errors.sectionId && <p className="text-red-500 text-sm mt-1">{errors.sectionId.message}</p>}
+            </div>
           </div>
         </div>
 

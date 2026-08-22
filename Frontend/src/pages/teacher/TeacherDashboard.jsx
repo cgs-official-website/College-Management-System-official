@@ -28,7 +28,7 @@ export default function TeacherDashboard() {
           api.get('/dashboards/teacher-stats')
         ]);
         
-        const noticesList = noticesRes.data?.data || [];
+        const noticesList = noticesRes.data || [];
         const filteredNotices = noticesList.filter(n => 
           n.audience === 'all' || 
           n.audience === 'teachers' || 
@@ -37,7 +37,7 @@ export default function TeacherDashboard() {
         
         setNotices(filteredNotices);
         
-        const teacherStats = statsRes.data?.data || {};
+        const teacherStats = statsRes.data || {};
         
         setStats({
           totalClasses: teacherStats.totalClasses || 0,
@@ -48,7 +48,7 @@ export default function TeacherDashboard() {
 
         // Fetch today's schedule
         const scheduleRes = await api.get('/timetable/today');
-        setTodayClasses(scheduleRes.data?.data || []);
+        setTodayClasses(scheduleRes.data || []);
         
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
@@ -65,7 +65,7 @@ export default function TeacherDashboard() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Welcome back, {userData?.firstName || 'Teacher'}!
+            Welcome back, {userData?.name || userData?.firstName || 'Teacher'}!
           </h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">Here is your academic overview for today.</p>
         </div>

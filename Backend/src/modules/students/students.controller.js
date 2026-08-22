@@ -9,9 +9,12 @@ export const getStudents = async (req, res) => {
     return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Tenant context missing' } });
   }
 
+  const { sectionId } = req.query;
+
   const where = {
     deletedAt: null,
-    ...(collegeId ? { collegeId } : {})
+    ...(collegeId ? { collegeId } : {}),
+    ...(sectionId ? { sectionId } : {})
   };
 
   const students = await prisma.student.findMany({
@@ -135,6 +138,16 @@ export const createStudent = async (req, res) => {
 
   // Ensure department exists or find/create a default department
   let deptId = payload.departmentId;
+  
+  if (!deptId && payload.courseId) {
+    const course = await prisma.course.findUnique({
+      where: { id: payload.courseId }
+    });
+    if (course) {
+      deptId = course.departmentId;
+    }
+  }
+
   if (!deptId) {
     let dept = await prisma.department.findFirst({
       where: { collegeId }
@@ -184,6 +197,7 @@ export const createStudent = async (req, res) => {
         batchYear: payload.batchYear || `${new Date().getFullYear()}`,
         bloodGroup: payload.bloodGroup,
         emergencyContact: payload.emergencyContact || payload.phone || payload.parentPhone,
+        ...(payload.sectionId ? { sectionId: payload.sectionId } : {})
       },
       include: {
         user: true,
@@ -235,6 +249,16 @@ export const updateStudent = async (req, res) => {
       });
     }
 
+    let deptId = payload.departmentId;
+    if (!deptId && payload.courseId) {
+      const course = await tx.course.findUnique({
+        where: { id: payload.courseId }
+      });
+      if (course) {
+        deptId = course.departmentId;
+      }
+    }
+
     const s = await tx.student.update({
       where: { id },
       data: {
@@ -243,6 +267,8 @@ export const updateStudent = async (req, res) => {
         ...(payload.batchYear ? { batchYear: payload.batchYear } : {}),
         ...(payload.bloodGroup ? { bloodGroup: payload.bloodGroup } : {}),
         ...(payload.emergencyContact || payload.phone ? { emergencyContact: payload.emergencyContact || payload.phone } : {}),
+        ...(deptId ? { departmentId: deptId } : {}),
+        ...(payload.sectionId ? { sectionId: payload.sectionId } : {})
       },
       include: {
         user: true,

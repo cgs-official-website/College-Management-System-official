@@ -21,7 +21,7 @@ export default function TeacherSchedule() {
         if (!userData?.collegeId) return;
         
         const response = await api.get('/timetable');
-        const snapDocs = response.data?.data || [];
+        const snapDocs = response.data || [];
         
         const data = {};
         days.forEach(d => data[d] = []); // Initialize all days empty

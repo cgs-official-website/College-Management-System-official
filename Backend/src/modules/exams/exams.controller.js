@@ -1,5 +1,5 @@
 import { prisma, logger } from '../../server.js';
-import { createExamSchema, updateExamSchema, enterMarksSchema } from './exams.schema.js';
+import { createExamSchema, updateExamSchema, enterMarksSchema, batchEnterMarksSchema } from './exams.schema.js';
 
 // Helper to ensure dummy/default course if needed
 async function ensureDefaultCourse(collegeId, courseName) {
@@ -217,6 +217,62 @@ export const enterMarks = async (req, res) => {
   });
 
   res.status(201).json({ success: true, data: markRecord });
+};
+
+export const batchEnterMarks = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const { courseId, examType, maxMarks, records } = batchEnterMarksSchema.parse(req.body);
+
+  // Find or create the exam
+  let exam = await prisma.exam.findFirst({
+    where: {
+      collegeId,
+      courseId,
+      name: examType
+    }
+  });
+
+  if (!exam) {
+    exam = await prisma.exam.create({
+      data: {
+        name: examType,
+        collegeId,
+        courseId,
+        maxMarks,
+        date: new Date()
+      }
+    });
+  } else if (exam.maxMarks !== maxMarks) {
+    exam = await prisma.exam.update({
+      where: { id: exam.id },
+      data: { maxMarks }
+    });
+  }
+
+  const results = [];
+  for (const record of records) {
+    if (record.obtainedMarks > exam.maxMarks) {
+      continue; // Skip invalid marks
+    }
+
+    const markRecord = await prisma.mark.upsert({
+      where: {
+        unique_student_exam: {
+          studentId: record.studentId,
+          examId: exam.id
+        }
+      },
+      update: { obtainedMarks: record.obtainedMarks },
+      create: {
+        studentId: record.studentId,
+        examId: exam.id,
+        obtainedMarks: record.obtainedMarks
+      }
+    });
+    results.push(markRecord);
+  }
+
+  res.json({ success: true, count: results.length });
 };
 
 export const getExamResults = async (req, res) => {

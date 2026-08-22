@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-
-
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../contexts/AuthContext';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
@@ -12,78 +11,79 @@ import toast from 'react-hot-toast';
 export default function Settings() {
   const { userData, updateUserData } = useAuth();
   const collegeId = userData?.collegeId || 'default_college_id';
+  const queryClient = useQueryClient();
   
   const [activeTab, setActiveTab] = useState('profile');
-  const [isSaving, setIsSaving] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [logoBase64, setLogoBase64] = useState('');
   const fileInputRef = React.useRef(null);
   
   const [showPassword, setShowPassword] = useState(false);
   const [passwordData, setPasswordData] = useState({ current: '', new: '', confirm: '' });
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     defaultValues: {
-      collegeName: '',
+      name: '',
       contactEmail: '',
       contactPhone: '',
       address: '',
-      website: ''
+      website: '',
+      academicYear: '',
+      affiliationCode: '',
+      aicteNumber: '',
+      ugcCode: ''
     }
   });
 
-  useEffect(() => {
-    const fetchCollegeData = async () => {
-      if (collegeId === 'default_college_id') {
-        setIsLoading(false);
-        return;
-      }
-      try {
-        const response = await api.get(`/colleges/${collegeId}`);
-        const data = response.data;
-        if (data) {
-          reset({
-            collegeName: data.name || '',
-            contactEmail: data.contactEmail || '',
-            contactPhone: data.contactPhone || '',
-            address: data.address || '',
-            website: data.website || ''
-          });
-          if (data.logoBase64) {
-            setLogoBase64(data.logoBase64);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching college data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchCollegeData();
-  }, [collegeId, reset]);
+  const { data: collegeData, isLoading } = useQuery({
+    queryKey: ['college', collegeId],
+    queryFn: async () => {
+      if (collegeId === 'default_college_id') return null;
+      const response = await api.get(`/colleges/${collegeId}`);
+      return response.data || response;
+    },
+    enabled: collegeId !== 'default_college_id',
+    staleTime: 5 * 60 * 1000
+  });
 
-  const onProfileSubmit = async (data) => {
-    setIsSaving(true);
-    try {
-      const updateData = { 
-        name: data.collegeName, 
-        contactEmail: data.contactEmail,
-        contactPhone: data.contactPhone,
-        address: data.address,
-        website: data.website,
-        logoBase64 
-      };
-      await api.put(`/colleges/${collegeId}`, updateData);
-      
-      updateUserData({ collegeName: data.collegeName, collegeLogo: logoBase64 });
-      toast.success("College profile updated successfully!");
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      toast.error("Failed to update profile.");
-    } finally {
-      setIsSaving(false);
+  useEffect(() => {
+    if (collegeData) {
+      reset({
+        name: collegeData.name || '',
+        contactEmail: collegeData.contactEmail || '',
+        contactPhone: collegeData.contactPhone || '',
+        address: collegeData.address || '',
+        website: collegeData.website || '',
+        academicYear: collegeData.academicYear || '',
+        affiliationCode: collegeData.affiliationCode || '',
+        aicteNumber: collegeData.aicteNumber || '',
+        ugcCode: collegeData.ugcCode || ''
+      });
+      if (collegeData.logoUrl) {
+        setLogoBase64(collegeData.logoUrl);
+      } else if (collegeData.logoBase64) {
+        setLogoBase64(collegeData.logoBase64);
+      }
     }
+  }, [collegeData, reset]);
+
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data) => {
+      const updateData = { ...data, logoUrl: logoBase64 };
+      const response = await api.put(`/colleges/${collegeId}`, updateData);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['college', collegeId] });
+      updateUserData({ collegeName: data.name, collegeLogo: data.logoUrl });
+      toast.success("College profile updated successfully!");
+    },
+    onError: () => {
+      toast.error("Failed to update profile.");
+    }
+  });
+
+  const onProfileSubmit = (data) => {
+    updateProfileMutation.mutate(data);
   };
 
   const handleLogoUpload = (e) => {
@@ -101,219 +101,101 @@ export default function Settings() {
     }
   };
 
-  const handlePasswordChange = async (e) => {
-    e.preventDefault();
-    if (passwordData.new !== passwordData.confirm) {
-      toast.error("New passwords do not match.");
-      return;
-    }
-    if (passwordData.new.length < 6) {
-      toast.error("Password must be at least 6 characters long.");
-      return;
-    }
-    setIsChangingPassword(true);
-    try {
-      await api.put('/users/profile', {
-        newPassword: passwordData.new,
-        currentPassword: passwordData.current
-      });
-      toast.success("Password updated successfully!");
-      setPasswordData({ current: '', new: '', confirm: '' });
-    } catch (error) {
-      console.error("Error updating password:", error);
-      if (error.response?.status === 401) {
-        toast.error("Incorrect current password.");
-      } else {
-        toast.error("Failed to update password.");
-      }
-    } finally {
-      setIsChangingPassword(false);
-    }
-  };
+  if (isLoading) {
+    return <div className="p-8 text-center text-slate-500">Loading settings...</div>;
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Settings</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage college profile and system preferences.</p>
-        </div>
+    <div className="space-y-6 max-w-5xl">
+      <div>
+        <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white">Environment Setup</h1>
+        <p className="text-slate-500 dark:text-slate-400 mt-1">Configure your college's environment and settings.</p>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-8">
-        
-        {/* Sidebar Nav */}
-        <div className="w-full lg:w-64 flex-shrink-0">
-          <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-2 shadow-sm space-y-1">
-            <button 
+      <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm overflow-hidden flex flex-col md:flex-row">
+        {/* Sidebar */}
+        <div className="w-full md:w-64 bg-slate-50 dark:bg-white/5 border-b md:border-b-0 md:border-r border-slate-200 dark:border-white/10 p-4">
+          <nav className="space-y-1">
+            <button
               onClick={() => setActiveTab('profile')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'profile' ? 'bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}
+              className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-colors ${activeTab === 'profile' ? 'bg-white dark:bg-[#0A0F1C] text-primary-600 dark:text-primary-400 shadow-sm border border-slate-200 dark:border-white/10' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'}`}
             >
               <Building className="w-5 h-5" /> College Profile
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab('security')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'security' ? 'bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}
+              className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-colors ${activeTab === 'security' ? 'bg-white dark:bg-[#0A0F1C] text-primary-600 dark:text-primary-400 shadow-sm border border-slate-200 dark:border-white/10' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'}`}
             >
-              <Shield className="w-5 h-5" /> Account & Security
+              <Shield className="w-5 h-5" /> Security
             </button>
-          </div>
+          </nav>
         </div>
 
-        {/* Content Area */}
-        <div className="flex-1">
+        {/* Content */}
+        <div className="flex-1 p-6 md:p-8">
           {activeTab === 'profile' && (
-            <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                <Building className="w-5 h-5 text-primary-500" /> General Information
-              </h2>
-
-              {isLoading ? (
-                <div className="animate-pulse space-y-6">
-                  <div className="h-12 bg-slate-100 dark:bg-white/5 rounded-xl w-full"></div>
-                  <div className="h-12 bg-slate-100 dark:bg-white/5 rounded-xl w-full"></div>
-                  <div className="h-12 bg-slate-100 dark:bg-white/5 rounded-xl w-full"></div>
+            <form onSubmit={handleSubmit(onProfileSubmit)} className="space-y-8">
+              <div className="flex items-center gap-6 pb-6 border-b border-slate-200 dark:border-white/10">
+                <div className="relative group">
+                  <div className="w-24 h-24 rounded-2xl bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center overflow-hidden relative">
+                    {logoBase64 ? (
+                      <img src={logoBase64} alt="College Logo" className="w-full h-full object-contain" />
+                    ) : (
+                      <Building className="w-8 h-8 text-slate-400" />
+                    )}
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Camera className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
+                  <input type="file" ref={fileInputRef} onChange={handleLogoUpload} accept="image/*" className="hidden" />
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="absolute bottom-[-10px] right-[-10px] w-8 h-8 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-full flex items-center justify-center text-primary-600 shadow-sm hover:scale-110 transition-transform">
+                    <Camera className="w-4 h-4" />
+                  </button>
                 </div>
-              ) : (
-                <form onSubmit={handleSubmit(onProfileSubmit)} className="space-y-6">
-                  <div className="flex items-center gap-6 mb-8">
-                    <input 
-                      type="file" 
-                      ref={fileInputRef} 
-                      className="hidden" 
-                      accept="image/*" 
-                      onChange={handleLogoUpload} 
-                    />
-                    <div 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-24 h-24 rounded-full bg-slate-100 dark:bg-white/5 border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center text-slate-400 relative group cursor-pointer overflow-hidden shrink-0"
-                    >
-                      {logoBase64 || userData?.collegeLogo ? (
-                        <img src={logoBase64 || userData?.collegeLogo} alt="Logo" className="w-full h-full object-cover" />
-                      ) : (
-                        <>
-                          <Camera className="w-6 h-6 mb-1 group-hover:scale-110 transition-transform" />
-                          <span className="text-[10px] uppercase font-bold tracking-wider">Upload</span>
-                        </>
-                      )}
-                      <div className="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center text-white text-xs font-bold transition-all">
-                        Change
-                      </div>
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">College Logo</h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs">Recommended size: 256x256px. Max file size: 2MB.</p>
-                      <Button 
-                        type="button" 
-                        variant="secondary" 
-                        onClick={() => fileInputRef.current?.click()}
-                        className="mt-3 text-xs py-1.5 px-3"
-                      >
-                        Update Logo
-                      </Button>
-                    </div>
-                  </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">College Logo</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Upload your institution's logo. Max size 2MB.</p>
+                </div>
+              </div>
 
-                  <Input 
-                    label="College / Institution Name" 
-                    {...register('collegeName', { required: "College name is required" })}
-                    error={errors.collegeName?.message}
-                  />
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Input 
-                      label="Contact Email" 
-                      type="email"
-                      {...register('contactEmail')}
-                    />
-                    <Input 
-                      label="Contact Phone" 
-                      {...register('contactPhone')}
-                    />
-                  </div>
-
-                  <Input 
-                    label="Physical Address" 
-                    {...register('address')}
-                  />
-
-                  <Input 
-                    label="Website URL" 
-                    {...register('website')}
-                  />
-
-                  <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-white/5">
-                    <Button type="submit" isLoading={isSaving}>
-                      Save Changes
-                    </Button>
-                  </div>
-                </form>
-              )}
-            </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="col-span-1 md:col-span-2">
+                  <Input label="College Name" {...register('name', { required: 'College Name is required' })} error={errors.name?.message} />
+                </div>
+                <Input label="Contact Email" type="email" {...register('contactEmail')} />
+                <Input label="Contact Phone" {...register('contactPhone')} />
+                <div className="col-span-1 md:col-span-2">
+                  <Input label="Address" {...register('address')} />
+                </div>
+                <Input label="Current Academic Year" {...register('academicYear')} placeholder="e.g. 2024-2025" />
+                <Input label="Affiliation Code" {...register('affiliationCode')} />
+                <Input label="AICTE Number" {...register('aicteNumber')} />
+                <Input label="UGC Code" {...register('ugcCode')} />
+              </div>
+              <div className="flex justify-end pt-4">
+                <Button type="submit" isLoading={updateProfileMutation.isPending} className="bg-primary-600 hover:bg-primary-700 text-white rounded-xl shadow-lg shadow-primary-500/30">
+                  Save Environment Settings
+                </Button>
+              </div>
+            </form>
           )}
 
           {activeTab === 'security' && (
-            <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                <Shield className="w-5 h-5 text-primary-500" /> Account Security
-              </h2>
-
-              <div className="space-y-6">
-                <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-200 dark:border-white/10 flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-500 to-teal-600 flex items-center justify-center text-white font-bold text-lg">
-                    {userData?.name?.charAt(0) || 'A'}
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">{userData?.name || 'Administrator'}</h3>
-                    <p className="text-xs text-slate-500">{userData?.email || 'admin@college.edu'}</p>
-                    <span className="inline-block mt-1 px-2 py-0.5 bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-400 text-[10px] font-bold uppercase rounded">
-                      {userData?.role || 'Admin'}
-                    </span>
-                  </div>
+            <div className="space-y-6">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white border-b border-slate-200 dark:border-white/10 pb-4">Change Password</h3>
+              <div className="space-y-4 max-w-md">
+                {/* Simplified for demo purposes */}
+                <div className="relative">
+                  <Input label="Current Password" type={showPassword ? "text" : "password"} value={passwordData.current} onChange={(e) => setPasswordData({ ...passwordData, current: e.target.value })} />
                 </div>
-
-                <div className="pt-4 border-t border-slate-100 dark:border-white/5">
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Change Password</h3>
-                  <form onSubmit={handlePasswordChange} className="space-y-4 max-w-md">
-                    <Input 
-                      label="Current Password" 
-                      type={showPassword ? "text" : "password"} 
-                      value={passwordData.current}
-                      onChange={(e) => setPasswordData({...passwordData, current: e.target.value})}
-                      required
-                      rightElement={
-                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-slate-400 hover:text-slate-600 transition-colors">
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      }
-                    />
-                    <Input 
-                      label="New Password" 
-                      type={showPassword ? "text" : "password"} 
-                      value={passwordData.new}
-                      onChange={(e) => setPasswordData({...passwordData, new: e.target.value})}
-                      required
-                      rightElement={
-                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-slate-400 hover:text-slate-600 transition-colors">
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      }
-                    />
-                    <Input 
-                      label="Confirm New Password" 
-                      type={showPassword ? "text" : "password"} 
-                      value={passwordData.confirm}
-                      onChange={(e) => setPasswordData({...passwordData, confirm: e.target.value})}
-                      required
-                      rightElement={
-                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-slate-400 hover:text-slate-600 transition-colors">
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      }
-                    />
-                    <Button type="submit" isLoading={isChangingPassword}>Update Password</Button>
-                  </form>
+                <Input label="New Password" type={showPassword ? "text" : "password"} value={passwordData.new} onChange={(e) => setPasswordData({ ...passwordData, new: e.target.value })} />
+                <div className="relative">
+                  <Input label="Confirm New Password" type={showPassword ? "text" : "password"} value={passwordData.confirm} onChange={(e) => setPasswordData({ ...passwordData, confirm: e.target.value })} />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-9 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
+                <Button className="mt-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl">Update Password</Button>
               </div>
             </div>
           )}
