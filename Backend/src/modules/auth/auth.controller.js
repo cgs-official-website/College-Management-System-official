@@ -28,9 +28,6 @@ export const login = async (req, res) => {
     }
 
     if (user.role !== 'superadmin' && user.college) {
-      if (user.college.status === 'pending') {
-        return res.status(403).json({ error: { code: 'COLLEGE_PENDING_APPROVAL', message: 'Your college is pending Superadmin approval.' } });
-      }
       if (user.college.status === 'rejected') {
         return res.status(403).json({ error: { code: 'COLLEGE_REJECTED', message: 'Your college registration was rejected.' } });
       }
@@ -88,11 +85,17 @@ export const registerAdmin = async (req, res) => {
     
     // Transaction to atomically create College and Admin
     const result = await prisma.$transaction(async (tx) => {
+      // Generate custom ZUNAC ID based on count
+      const count = await tx.college.count();
+      const nextId = count + 1;
+      const registrationNo = `ZUNAC${nextId.toString().padStart(3, '0')}`;
+
       const college = await tx.college.create({
         data: {
           name: data.collegeName,
           slug: uniqueSlug,
-          status: 'pending'
+          status: 'pending',
+          registrationNo
         }
       });
 
@@ -120,7 +123,18 @@ export const getMe = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.userId },
-      include: { college: true }
+      include: { 
+        college: true,
+        customRole: {
+          include: {
+            permissions: {
+              include: {
+                module: true
+              }
+            }
+          }
+        }
+      }
     });
 
     if (!user) {

@@ -191,9 +191,11 @@ export default function HRManagement() {
                         <button onClick={() => setViewingStaff(member)} className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="View Profile">
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleCopyLink(member.id)} className="p-2 text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="Copy Link">
-                          <Link className="w-4 h-4" />
-                        </button>
+                        {(member.status || member.accountStatus) !== 'active' && (
+                          <button onClick={() => handleCopyLink(member.id)} className="p-2 text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="Copy Link">
+                            <Link className="w-4 h-4" />
+                          </button>
+                        )}
                         <button onClick={() => handleOpenEdit(member)} className="p-2 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="Edit">
                           <Edit className="w-4 h-4" />
                         </button>

@@ -15,9 +15,15 @@ export const getNotices = async (req, res) => {
 export const createNotice = async (req, res) => {
   try {
     const { collegeId } = req.tenant;
-    const { title, audience } = req.body;
+    const { title, content, priority, targetAudience } = req.body;
     const notice = await prisma.notice.create({
-      data: { collegeId, title, audience }
+      data: { 
+        collegeId, 
+        title, 
+        content: content || '', 
+        priority: priority || 'normal', 
+        targetAudience: targetAudience || 'all' 
+      }
     });
     res.status(201).json({ data: notice });
   } catch (error) {

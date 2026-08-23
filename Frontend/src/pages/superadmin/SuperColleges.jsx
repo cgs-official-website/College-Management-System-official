@@ -155,7 +155,7 @@ const SuperColleges = () => {
                     </td>
                     <td className="px-6 py-4">
                       <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/10 tracking-wider">
-                        {college.id}
+                        {college.registrationNo || college.id.substring(0, 8).toUpperCase()}
                       </span>
                     </td>
                     <td className="px-6 py-4">

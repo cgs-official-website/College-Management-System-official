@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
@@ -6,30 +6,53 @@ import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { useDepartments } from '../../../hooks/useDepartments';
 
+import { api } from '../../../services/apiClient';
+
 export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading }) {
   const { departments } = useDepartments();
+  const [roles, setRoles] = useState([]);
   
-  const { register, handleSubmit, reset, formState: { errors } } = useForm({
+  useEffect(() => {
+    if (isOpen) {
+      api.get('/roles').then(res => {
+        if (res.data) {
+          setRoles(res.data);
+        }
+      }).catch(err => console.error("Failed to fetch roles", err));
+    }
+  }, [isOpen]);
+
+  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm({
     defaultValues: initialData || {
       firstName: '',
       lastName: '',
       email: '',
       phone: '',
-      role: 'teacher',
+      role: 'staff',
+      customRoleId: '',
+      staffType: 'teaching',
       department: '',
       joinDate: new Date().toISOString().split('T')[0],
       status: 'active'
     }
   });
 
+  const staffType = watch('staffType');
+
   useEffect(() => {
     if (isOpen) {
-      reset(initialData || {
+      reset(initialData ? {
+        ...initialData,
+        customRoleId: initialData.customRoleId || '',
+        staffType: initialData.departmentId ? 'teaching' : 'non-teaching'
+      } : {
         firstName: '',
         lastName: '',
         email: '',
         phone: '',
-        role: 'teacher',
+        role: 'staff',
+        customRoleId: '',
+        staffType: 'teaching',
         department: '',
         joinDate: new Date().toISOString().split('T')[0],
         status: 'active'
@@ -38,13 +61,21 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
   }, [isOpen, initialData, reset]);
 
   const onFormSubmit = (data) => {
+    const selectedRole = roles.find(r => r.id === data.customRoleId);
+    const designation = selectedRole ? selectedRole.name : 'Staff';
+
     const payload = {
       ...data,
+      role: 'staff', // base role is handled by backend or customRole now
       name: `${data.firstName} ${data.lastName}`.trim(),
-      designation: data.role === 'hod' ? 'Head of Department' : 
-                   data.role === 'admin' ? 'Administrative Staff' : 
-                   data.role === 'support' ? 'Support Staff' : 'Teacher / Professor',
+      designation: designation,
+      customRoleId: data.customRoleId || null
     };
+    
+    if (data.staffType === 'non-teaching') {
+      delete payload.departmentId;
+    }
+
     onSubmit(payload);
   };
 
@@ -97,28 +128,40 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Select 
-              label="Role / Designation" 
-              {...register('role')}
+              label="Staff Category" 
+              {...register('staffType')}
               options={[
-                { value: 'teacher', label: 'Teacher / Professor' },
-                { value: 'hod', label: 'Head of Department' },
-                { value: 'admin', label: 'Administrative Staff' },
-                { value: 'support', label: 'Support Staff' }
+                { value: 'teaching', label: 'Teaching Staff' },
+                { value: 'non-teaching', label: 'Non-Teaching Staff' }
               ]}
             />
             <div className="space-y-1">
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Department</label>
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Role / Designation</label>
               <select 
-                {...register('departmentId', { required: "Department is required" })}
+                {...register('customRoleId')}
                 className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white"
               >
-                <option value="">Select a Department</option>
-                {departments?.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
+                <option value="">Standard Staff (No special permissions)</option>
+                {roles.map(r => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
                 ))}
               </select>
-              {errors.departmentId && <p className="text-red-500 text-sm mt-1">{errors.departmentId.message}</p>}
             </div>
+            {staffType === 'teaching' && (
+              <div className="space-y-1">
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Department</label>
+                <select 
+                  {...register('departmentId', { required: "Department is required for teaching staff" })}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white"
+                >
+                  <option value="">Select a Department</option>
+                  {departments?.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+                {errors.departmentId && <p className="text-red-500 text-sm mt-1">{errors.departmentId.message}</p>}
+              </div>
+            )}
             <Input 
               label="Join Date" 
               type="date"

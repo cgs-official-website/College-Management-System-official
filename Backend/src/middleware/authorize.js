@@ -9,6 +9,7 @@ export const authorize = (...allowedRoles) => {
     }
 
     if (!allowedRoles.includes(req.user.role)) {
+      console.log(`[authorize] Forbidden! req.user.role='${req.user.role}', allowedRoles=[${allowedRoles.join(',')}]`);
       return res.status(403).json({ 
         error: 'Forbidden', 
         message: `Requires one of: ${allowedRoles.join(', ')}` 

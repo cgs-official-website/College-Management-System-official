@@ -11,18 +11,58 @@ export const getLibraryItems = async (req, res) => {
 export const createLibraryItem = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const actorId = req.user?.id || req.user?.userId;
-  const { title } = req.body;
+  const { title, author, isbn, category, totalCopies, availableCopies, location } = req.body;
 
   if (!title) {
     return res.status(400).json({ success: false, error: { code: 'TITLE_REQUIRED', message: 'Title is required' } });
   }
 
   const item = await prisma.libraryItem.create({
-    data: { collegeId, title }
+    data: { 
+      collegeId, 
+      title,
+      author,
+      isbn,
+      category,
+      totalCopies: totalCopies ? Number(totalCopies) : 1,
+      availableCopies: availableCopies ? Number(availableCopies) : 1,
+      location
+    }
   });
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} itemId=${item.id} actor=${actorId} Created library item`);
   res.status(201).json({ success: true, data: item });
+};
+
+export const updateLibraryItem = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const actorId = req.user?.id || req.user?.userId;
+  const { id } = req.params;
+  const { title, author, isbn, category, totalCopies, availableCopies, location } = req.body;
+
+  const existing = await prisma.libraryItem.findFirst({
+    where: { id, collegeId }
+  });
+
+  if (!existing) {
+    return res.status(404).json({ success: false, error: { code: 'ITEM_NOT_FOUND', message: 'Library item not found' } });
+  }
+
+  const item = await prisma.libraryItem.update({
+    where: { id },
+    data: { 
+      title,
+      author,
+      isbn,
+      category,
+      totalCopies: totalCopies ? Number(totalCopies) : undefined,
+      availableCopies: availableCopies ? Number(availableCopies) : undefined,
+      location
+    }
+  });
+
+  logger.info(`[info] req=${req.id || ''} college=${collegeId} itemId=${item.id} actor=${actorId} Updated library item`);
+  res.json({ success: true, data: item });
 };
 
 export const deleteLibraryItem = async (req, res) => {

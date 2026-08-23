@@ -12,9 +12,7 @@ import ProtectedRoute from './components/ui/ProtectedRoute';
 import DashboardRedirect from './components/ui/DashboardRedirect';
 import SuperAdminLayout from './pages/superadmin/SuperAdminLayout';
 import AdminLayout from './pages/admin/AdminLayout';
-import TeacherLayout from './pages/teacher/TeacherLayout';
-import StudentLayout from './pages/student/StudentLayout';
-import ParentLayout from './pages/parent/ParentLayout';
+import NotFound from './pages/error/NotFound';
 import { Toaster } from 'react-hot-toast';
 
 // Create a client for React Query
@@ -44,17 +42,11 @@ function App() {
             {/* Super Admin Routes */}
             <Route path="/super/*" element={<ProtectedRoute allowedRoles={['superadmin']}><SuperAdminLayout /></ProtectedRoute>} />
 
-            {/* Admin Routes */}
-            <Route path="/admin/*" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminLayout /></ProtectedRoute>} />
+            {/* Admin/Staff/Student Routes */}
+            <Route path="/admin/*" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>} />
             
-            {/* Teacher / HOD Routes */}
-            <Route path="/teacher/*" element={<ProtectedRoute allowedRoles={['teacher', 'hod']}><TeacherLayout /></ProtectedRoute>} />
-            
-            {/* Student Routes */}
-            <Route path="/student/*" element={<ProtectedRoute allowedRoles={['student']}><StudentLayout /></ProtectedRoute>} />
-
-            {/* Parent Routes */}
-            <Route path="/parent/*" element={<ProtectedRoute allowedRoles={['parent']}><ParentLayout /></ProtectedRoute>} />
+            {/* 404 Route */}
+            <Route path="*" element={<NotFound />} />
           </Routes>
           <Toaster 
             position="top-right" 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
 
@@ -8,30 +8,30 @@ export function useInfrastructure(collegeId) {
   const [isAdding, setIsAdding] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  useEffect(() => {
+  const fetchFacilities = useCallback(async () => {
     if (!collegeId) return;
-
-    const fetchFacilities = async () => {
-      setIsLoading(true);
-      try {
-        const response = await api.get('/infrastructure');
-        setFacilities(response.data || []);
-      } catch (error) {
-        console.error("Error fetching infrastructure:", error);
-        toast.error("Failed to load facilities");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchFacilities();
+    setIsLoading(true);
+    try {
+      const response = await api.get('/infrastructure');
+      setFacilities(response.data || []);
+    } catch (error) {
+      console.error("Error fetching infrastructure:", error);
+      toast.error("Failed to load facilities");
+    } finally {
+      setIsLoading(false);
+    }
   }, [collegeId]);
+
+  useEffect(() => {
+    fetchFacilities();
+  }, [fetchFacilities]);
 
   const addFacility = async (data) => {
     setIsAdding(true);
     try {
       await api.post('/infrastructure', data);
       toast.success("Facility added successfully!");
+      await fetchFacilities();
     } catch (error) {
       console.error("Error adding facility:", error);
       toast.error("Failed to add facility.");
@@ -46,6 +46,7 @@ export function useInfrastructure(collegeId) {
     try {
       await api.put(`/infrastructure/${id}`, data);
       toast.success("Facility updated successfully!");
+      await fetchFacilities();
     } catch (error) {
       console.error("Error updating facility:", error);
       toast.error("Failed to update facility.");
@@ -58,13 +59,13 @@ export function useInfrastructure(collegeId) {
   const deleteFacility = async (id) => {
     try {
       await api.delete(`/infrastructure/${id}`);
-      toast.success("Facility removed.");
+      toast.success("Facility deleted");
+      await fetchFacilities();
     } catch (error) {
       console.error("Error deleting facility:", error);
-      toast.error("Failed to remove facility.");
-      throw error;
+      toast.error("Failed to delete facility");
     }
   };
 
-  return { facilities, isLoading, isAdding, isUpdating, addFacility, updateFacility, deleteFacility };
+  return { facilities, isLoading, addFacility, updateFacility, deleteFacility, isAdding, isUpdating, refresh: fetchFacilities };
 }

@@ -12,6 +12,7 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [userData, setUserData] = useState(null);
+  const [permissions, setPermissions] = useState({});
   const [loading, setLoading] = useState(true);
 
   async function login(email, password) {
@@ -41,6 +42,7 @@ export function AuthProvider({ children }) {
     setCurrentUser(null);
     setUserRole(null);
     setUserData(null);
+    setPermissions({});
   }
 
   function resetPassword(email) {
@@ -64,6 +66,22 @@ export function AuthProvider({ children }) {
       
       setCurrentUser({ uid: data.id, email: data.email });
       setUserRole(data.role);
+      
+      // Process permissions
+      const permsMap = {};
+      if (data.customRole?.permissions) {
+        data.customRole.permissions.forEach(p => {
+          if (p.module?.key) {
+            permsMap[p.module.key] = {
+              canCreate: p.canCreate,
+              canRead: p.canRead,
+              canUpdate: p.canUpdate,
+              canDelete: p.canDelete,
+            };
+          }
+        });
+      }
+      setPermissions(permsMap);
       
       setUserData({
         uid: data.id,
@@ -104,6 +122,7 @@ export function AuthProvider({ children }) {
     currentUser,
     userData,
     userRole,
+    permissions,
     loading,
     login,
     register,

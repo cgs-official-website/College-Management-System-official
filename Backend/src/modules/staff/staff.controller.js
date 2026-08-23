@@ -61,6 +61,16 @@ export const createStaff = async (req, res) => {
     return res.status(400).json({ success: false, error: { code: 'COLLEGE_REQUIRED', message: 'College ID is required' } });
   }
 
+  // Validate customRoleId belongs to this college
+  if (payload.customRoleId) {
+    const role = await prisma.role.findFirst({
+      where: { id: payload.customRoleId, collegeId }
+    });
+    if (!role) {
+      return res.status(400).json({ success: false, error: { message: 'Invalid custom role' } });
+    }
+  }
+
   // Ensure department exists
   let deptId = payload.departmentId;
   if (!deptId) {
@@ -161,6 +171,16 @@ export const updateStaff = async (req, res) => {
   const actorId = req.user?.id || req.user?.userId;
   const { id } = req.params;
   const payload = updateStaffSchema.parse(req.body);
+
+  // Validate customRoleId belongs to this college
+  if (payload.customRoleId) {
+    const role = await prisma.role.findFirst({
+      where: { id: payload.customRoleId, collegeId }
+    });
+    if (!role) {
+      return res.status(400).json({ success: false, error: { message: 'Invalid custom role' } });
+    }
+  }
 
   const teacher = await prisma.teacher.findFirst({
     where: { id, collegeId },

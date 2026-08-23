@@ -79,8 +79,10 @@ export default function StaffSetup() {
         password: formData.password
       });
 
-      toast.success("Account setup successful! Please log in.");
-      navigate('/login');
+      toast.success("Account setup successful! Redirecting to login...");
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
     } catch (error) {
       console.error(error);
       toast.error(error.response?.data?.error?.message || "Failed to setup account.");

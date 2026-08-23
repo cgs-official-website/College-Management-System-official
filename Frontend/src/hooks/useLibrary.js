@@ -8,22 +8,21 @@ export function useLibrary(collegeId) {
   const [isAdding, setIsAdding] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  useEffect(() => {
+  const fetchBooks = async () => {
     if (!collegeId) return;
+    setIsLoading(true);
+    try {
+      const response = await api.get('/library');
+      setBooks(response.data || []);
+    } catch (error) {
+      console.error("Error fetching library books:", error);
+      toast.error("Failed to load library inventory");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    const fetchBooks = async () => {
-      setIsLoading(true);
-      try {
-        const response = await api.get('/library');
-        setBooks(response.data || []);
-      } catch (error) {
-        console.error("Error fetching library books:", error);
-        toast.error("Failed to load library inventory");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
+  useEffect(() => {
     fetchBooks();
   }, [collegeId]);
 
@@ -32,6 +31,7 @@ export function useLibrary(collegeId) {
     try {
       await api.post('/library', data);
       toast.success("Book added to inventory!");
+      await fetchBooks();
     } catch (error) {
       console.error("Error adding book:", error);
       toast.error("Failed to add book.");
@@ -46,6 +46,7 @@ export function useLibrary(collegeId) {
     try {
       await api.put(`/library/${id}`, data);
       toast.success("Book details updated!");
+      await fetchBooks();
     } catch (error) {
       console.error("Error updating book:", error);
       toast.error("Failed to update book.");
@@ -58,6 +59,7 @@ export function useLibrary(collegeId) {
   const deleteBook = async (id) => {
     try {
       await api.delete(`/library/${id}`);
+      await fetchBooks();
       toast.success("Book removed from inventory.");
     } catch (error) {
       console.error("Error deleting book:", error);

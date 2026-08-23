@@ -9,6 +9,7 @@ datasource db {
 model College {
   name                String
   slug                String                 @unique
+  registrationNo      String?
   address             String?
   status              String                 @default("trial")
   createdAt           DateTime               @default(now())
@@ -522,10 +523,16 @@ model AssignmentSubmission {
 }
 
 model LibraryItem {
-  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId String  @db.Uuid
-  title     String
-  college   College @relation(fields: [collegeId], references: [id])
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId       String   @db.Uuid
+  title           String
+  author          String?
+  isbn            String?
+  category        String?
+  totalCopies     Int      @default(1)
+  availableCopies Int      @default(1)
+  location        String?
+  college         College  @relation(fields: [collegeId], references: [id])
 }
 
 model HostelBlock {
@@ -543,18 +550,26 @@ model TransportRoute {
 }
 
 model InfrastructureAsset {
-  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId String  @db.Uuid
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId String   @db.Uuid
   name      String
-  college   College @relation(fields: [collegeId], references: [id])
+  type      String   @default("other")
+  capacity  Int      @default(0)
+  location  String   @default("")
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  college   College  @relation(fields: [collegeId], references: [id])
 }
 
 model Notice {
-  title     String
-  audience  String
-  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId String  @db.Uuid
-  college   College @relation(fields: [collegeId], references: [id])
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId      String   @db.Uuid
+  title          String
+  content        String   @default("")
+  priority       String   @default("normal")
+  targetAudience String   @default("all")
+  createdAt      DateTime @default(now())
+  college        College  @relation(fields: [collegeId], references: [id])
 }
 
 model Complaint {

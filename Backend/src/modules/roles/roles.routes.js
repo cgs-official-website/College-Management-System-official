@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate } from '../../middleware/authenticate.js';
 import { resolveTenant } from '../../middleware/resolveTenant.js';
 import { authorize } from '../../middleware/authorize.js';
+import { requirePermission } from '../../middleware/requirePermission.js';
 import { catchAsync } from '../../lib/catchAsync.js';
 import {
   getModules,
@@ -18,14 +19,14 @@ const router = Router();
 // Module listing endpoint
 router.get('/modules', authenticate, catchAsync(getModules));
 
-// All role endpoints require admin authentication & tenant context
-router.use(authenticate, resolveTenant, authorize('admin', 'superadmin'));
+// All role endpoints require tenant context
+router.use(authenticate, resolveTenant);
 
-router.get('/', catchAsync(getRoles));
-router.post('/', catchAsync(createRole));
-router.get('/:id', catchAsync(getRoleById));
-router.put('/:id', catchAsync(updateRole));
-router.delete('/:id', catchAsync(deleteRole));
-router.put('/:id/permissions', catchAsync(updateRolePermissions));
+router.get('/', requirePermission('roles', 'read'), catchAsync(getRoles));
+router.post('/', requirePermission('roles', 'create'), catchAsync(createRole));
+router.get('/:id', requirePermission('roles', 'read'), catchAsync(getRoleById));
+router.put('/:id', requirePermission('roles', 'update'), catchAsync(updateRole));
+router.delete('/:id', requirePermission('roles', 'delete'), catchAsync(deleteRole));
+router.put('/:id/permissions', requirePermission('roles', 'update'), catchAsync(updateRolePermissions));
 
 export default router;

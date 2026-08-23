@@ -49,15 +49,18 @@ export default function Admission() {
     try {
       if (editingAdmission) {
         if (data.status === 'Approved' && editingAdmission.status !== 'Approved') {
-          const isConfirmed = await confirm({ message: "Are you sure you want to approve this application?" });
+          const isConfirmed = await confirm({ 
+            title: "Approve & Enroll",
+            message: "Are you sure you want to approve this application and automatically enroll them as a student?",
+            confirmText: "Approve & Enroll",
+            isDestructive: false 
+          });
           if (!isConfirmed) return;
         }
         await updateAdmission({ id: editingAdmission.id, data });
-        // If approved, optionally trigger auto-enrollment
+        
         if (data.status === 'Approved' && editingAdmission.status !== 'Approved') {
-          if (await confirm({ message: "This application is Approved. Would you like to automatically enroll them as a Student now?" })) {
-            await enrollStudent(data);
-          }
+          await enrollStudent(data);
         }
       } else {
         await addAdmission(data);

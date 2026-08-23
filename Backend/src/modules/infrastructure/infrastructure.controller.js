@@ -15,9 +15,16 @@ export const getAssets = async (req, res) => {
 export const createAsset = async (req, res) => {
   try {
     const { collegeId } = req.tenant;
-    const { name } = req.body;
+    const { name, type, capacity, location, status } = req.body;
     const asset = await prisma.infrastructureAsset.create({
-      data: { collegeId, name }
+      data: { 
+        collegeId, 
+        name, 
+        type: type || 'other', 
+        capacity: capacity ? parseInt(capacity) : 0, 
+        location: location || '', 
+        status: status || 'active' 
+      }
     });
     res.status(201).json({ data: asset });
   } catch (error) {

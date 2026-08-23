@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDashboardStats } from '../../hooks/useDashboardStats';
@@ -70,7 +70,7 @@ const AdminLayout = () => {
   const [showTicketModal, setShowTicketModal] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout, userData } = useAuth();
+  const { logout, userData, userRole, permissions } = useAuth();
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
 
   useEffect(() => {
@@ -84,37 +84,42 @@ const AdminLayout = () => {
     navigate('/login');
   };
 
-  const navLinks = [
-    { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
-    { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck },
-    { name: 'Admission', path: '/admin/admission', icon: UserPlus },
-    { name: 'Students', path: '/admin/students', icon: GraduationCap },
-    { name: 'HR & Staff', path: '/admin/hr', icon: Users },
-    { name: 'Academic Structure', path: '/admin/academic-structure', icon: BookOpen },
-    { name: 'Timetable', path: '/admin/timetable', icon: Calendar },
-    { name: 'Attendance', path: '/admin/attendance', icon: Clock },
-    { name: 'Exams', path: '/admin/exams', icon: ClipboardList },
-    { name: 'Fees & Finance', path: '/admin/fees', icon: Calculator },
-    { name: 'Library', path: '/admin/library', icon: LibraryIcon },
-    { name: 'Hostel', path: '/admin/hostel', icon: Home },
-    { name: 'Transport', path: '/admin/transport', icon: Bus },
-    { name: 'Infrastructure', path: '/admin/infrastructure', icon: Building },
-    { name: 'Notice Board', path: '/admin/notices', icon: Megaphone },
-    { name: 'Placements', path: '/admin/placements', icon: Briefcase },
-    { name: 'Reports', path: '/admin/reports', icon: FileText },
-    { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon },
-  ];
+  const hasAccess = (moduleKey) => {
+    if (userRole === 'admin' || userRole === 'superadmin') return true;
+    if (!moduleKey) return true; // Everyone can see dashboard
+    return permissions?.[moduleKey]?.canRead === true;
+  };
 
-  if (userData?.accountStatus === 'pending') {
+  const navLinks = [
+    { name: 'Dashboard', path: '/admin', icon: LayoutDashboard, moduleKey: null },
+
+    { name: 'Admission', path: '/admin/admission', icon: UserPlus, moduleKey: 'admission' },
+    { name: 'Students', path: '/admin/students', icon: GraduationCap, moduleKey: 'students' },
+    { name: 'HR & Staff', path: '/admin/hr', icon: Users, moduleKey: 'staff' },
+    { name: 'Academic Structure', path: '/admin/academic-structure', icon: BookOpen, moduleKey: 'academic' },
+    { name: 'Timetable', path: '/admin/timetable', icon: Calendar, moduleKey: 'timetable' },
+    { name: 'Attendance', path: '/admin/attendance', icon: Clock, moduleKey: 'attendance' },
+    { name: 'Exams', path: '/admin/exams', icon: ClipboardList, moduleKey: 'exams' },
+    { name: 'Fees & Finance', path: '/admin/fees', icon: Calculator, moduleKey: 'fees' },
+    { name: 'Library', path: '/admin/library', icon: LibraryIcon, moduleKey: 'library' },
+    { name: 'Hostel', path: '/admin/hostel', icon: Home, moduleKey: 'hostel' },
+    { name: 'Transport', path: '/admin/transport', icon: Bus, moduleKey: 'transport' },
+    { name: 'Infrastructure', path: '/admin/infrastructure', icon: Building, moduleKey: 'infrastructure' },
+    { name: 'Notice Board', path: '/admin/notices', icon: Megaphone, moduleKey: 'notices' },
+    { name: 'Placements', path: '/admin/placements', icon: Briefcase, moduleKey: 'placements' },
+    { name: 'Reports', path: '/admin/reports', icon: FileText, moduleKey: 'reports' },
+    { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon, moduleKey: 'settings' },
+    { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck, moduleKey: 'roles' },
+  ].filter(link => hasAccess(link.moduleKey));
+
+  if (userData?.college?.status === 'pending') {
     return (
-      <div className="flex h-screen bg-slate-50 dark:bg-[#020813] text-slate-900 dark:text-slate-200 overflow-hidden font-sans flex-col items-center justify-center p-6">
-        <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 p-8 rounded-3xl shadow-xl max-w-md w-full text-center">
-          <div className="w-16 h-16 bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Building className="w-8 h-8" />
-          </div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Application Pending</h2>
-          <p className="text-slate-500 dark:text-slate-400 mb-8">
-            Your college registration is currently pending approval by a Superadmin. You will gain access to the dashboard once your application is approved.
+      <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-[#020813]">
+        <div className="text-center p-8 bg-white dark:bg-[#0A0F1C] rounded-2xl shadow-xl max-w-md w-full border border-slate-200 dark:border-white/10">
+          <ShieldCheck className="w-16 h-16 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">College Pending</h2>
+          <p className="text-slate-500 dark:text-slate-400 mb-6">
+            Your college registration is currently pending approval from the Super Admin. You will receive an email once it is approved.
           </p>
           <button 
             onClick={handleLogout}
@@ -286,23 +291,24 @@ const AdminLayout = () => {
           <div className="max-w-7xl mx-auto relative">
             <Routes>
               <Route path="/" element={<AdminDashboardHome />} />
-              <Route path="/roles/*" element={<RolesManagement />} />
-              <Route path="/admission" element={<Admission />} />
-              <Route path="/students/*" element={<StudentList />} />
-              <Route path="/hr/*" element={<HRManagement />} />
-              <Route path="/academic-structure/*" element={<AcademicStructure />} />
-              <Route path="/timetable/*" element={<Timetable />} />
-              <Route path="/attendance/*" element={<Attendance />} />
-              <Route path="/exams/*" element={<Exams />} />
-              <Route path="/fees/*" element={<Fees />} />
-              <Route path="/library/*" element={<Library />} />
-              <Route path="/hostel/*" element={<HostelDashboard />} />
-              <Route path="/transport/*" element={<TransportDashboard />} />
-              <Route path="/infrastructure/*" element={<Infrastructure />} />
-              <Route path="/notices/*" element={<NoticeBoard />} />
-              <Route path="/placements/*" element={<PlacementsDashboard />} />
-              <Route path="/reports/*" element={<Reports />} />
-              <Route path="/settings/*" element={<Settings />} />
+              <Route path="/roles/*" element={hasAccess('roles') ? <RolesManagement /> : <Navigate to="/404" replace />} />
+              <Route path="/admission" element={hasAccess('admission') ? <Admission /> : <Navigate to="/404" replace />} />
+              <Route path="/students/*" element={hasAccess('students') ? <StudentList /> : <Navigate to="/404" replace />} />
+              <Route path="/hr/*" element={hasAccess('staff') ? <HRManagement /> : <Navigate to="/404" replace />} />
+              <Route path="/academic-structure/*" element={hasAccess('academic') ? <AcademicStructure /> : <Navigate to="/404" replace />} />
+              <Route path="/timetable/*" element={hasAccess('timetable') ? <Timetable /> : <Navigate to="/404" replace />} />
+              <Route path="/attendance/*" element={hasAccess('attendance') ? <Attendance /> : <Navigate to="/404" replace />} />
+              <Route path="/exams/*" element={hasAccess('exams') ? <Exams /> : <Navigate to="/404" replace />} />
+              <Route path="/fees/*" element={hasAccess('fees') ? <Fees /> : <Navigate to="/404" replace />} />
+              <Route path="/library/*" element={hasAccess('library') ? <Library /> : <Navigate to="/404" replace />} />
+              <Route path="/hostel/*" element={hasAccess('hostel') ? <HostelDashboard /> : <Navigate to="/404" replace />} />
+              <Route path="/transport/*" element={hasAccess('transport') ? <TransportDashboard /> : <Navigate to="/404" replace />} />
+              <Route path="/infrastructure/*" element={hasAccess('infrastructure') ? <Infrastructure /> : <Navigate to="/404" replace />} />
+              <Route path="/notices/*" element={hasAccess('notices') ? <NoticeBoard /> : <Navigate to="/404" replace />} />
+              <Route path="/placements/*" element={hasAccess('placements') ? <PlacementsDashboard /> : <Navigate to="/404" replace />} />
+              <Route path="/reports/*" element={hasAccess('reports') ? <Reports /> : <Navigate to="/404" replace />} />
+              <Route path="/settings/*" element={hasAccess('settings') ? <Settings /> : <Navigate to="/404" replace />} />
+              <Route path="*" element={<Navigate to="/404" replace />} />
             </Routes>
           </div>
         </main>
