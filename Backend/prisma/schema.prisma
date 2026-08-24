@@ -57,6 +57,10 @@ model College {
   inventoryItems      InventoryItem[]
   hostelRooms         HostelRoom[]
   vehicles            Vehicle[]
+  customEntities      CustomEntity[]
+  customFieldDefs     CustomFieldDef[]
+  customSections      CustomSection[]
+  customRecords       CustomRecord[]
 }
 
 model BillingSubscription {
@@ -182,6 +186,7 @@ model Department {
   college    College     @relation(fields: [collegeId], references: [id])
   students   Student[]
   teachers   Teacher[]
+  customFields Json?
 
   @@index([collegeId])
 }
@@ -207,6 +212,7 @@ model Course {
   sections     Section[]
   timetable    TimetableSlot[]
   students     Student[]
+  customFields Json?
 
   @@index([collegeId])
 }
@@ -263,6 +269,7 @@ model Teacher {
   pincode                 String?
   emergencyContactName    String?
   emergencyContactNumber  String?
+  customFields            Json?
 
   @@index([collegeId])
 }
@@ -319,6 +326,7 @@ model Student {
   transportRequired   String?
   hostelRequired      String?
   semesterFees        Float?
+  customFields        Json?
 
   @@index([collegeId])
 }
@@ -374,6 +382,7 @@ model Admission {
   residenceType     String     @default("Day Scholar")
   college           College    @relation(fields: [collegeId], references: [id])
   department        Department @relation(fields: [departmentId], references: [id])
+  customFields      Json?
 
   @@index([collegeId, status])
 }
@@ -800,4 +809,75 @@ model Vehicle {
   college             College  @relation(fields: [collegeId], references: [id])
   
   @@index([collegeId])
+}
+
+model CustomEntity {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId   String   @db.Uuid
+  name        String
+  slug        String
+  icon        String?  @default("FileText")
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  fields      CustomFieldDef[]
+  sections    CustomSection[]
+  records     CustomRecord[]
+  college     College  @relation(fields: [collegeId], references: [id])
+
+  @@unique([collegeId, slug])
+}
+
+model CustomSection {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId       String   @db.Uuid
+  entityId        String?  @db.Uuid // null if attaching to a hardcoded model
+  hardcodedModel  String?  // e.g., 'Student', 'Teacher'
+  name            String
+  order           Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  entity          CustomEntity? @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  college         College  @relation(fields: [collegeId], references: [id])
+  fields          CustomFieldDef[]
+
+  @@unique([collegeId, entityId, name])
+  @@unique([collegeId, hardcodedModel, name])
+}
+
+model CustomFieldDef {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId       String   @db.Uuid
+  entityId        String?  @db.Uuid // null if attaching to a hardcoded model
+  hardcodedModel  String?  // e.g., 'Student', 'Teacher'. Null if attaching to CustomEntity
+  sectionId       String?  @db.Uuid
+  name            String
+  key             String
+  type            String   // text, number, date, select, boolean
+  options         Json?    // For select fields
+  isRequired      Boolean  @default(false)
+  order           Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  entity          CustomEntity? @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  section         CustomSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  college         College  @relation(fields: [collegeId], references: [id])
+  
+  @@unique([collegeId, entityId, key])
+  @@unique([collegeId, hardcodedModel, key])
+}
+
+model CustomRecord {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId   String   @db.Uuid
+  entityId    String   @db.Uuid
+  data        Json     // Stores field values { "fieldName": "value" }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entity      CustomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  college     College      @relation(fields: [collegeId], references: [id])
 }

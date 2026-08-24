@@ -138,6 +138,9 @@ import payrollRoutes from './modules/payroll/payroll.routes.js';
 import projectsRoutes from './modules/projects/projects.routes.js';
 import apiIntegrationRoutes from './modules/api_integrations/api_integrations.routes.js';
 import inventoryRoutes from './modules/inventory/inventory.routes.js';
+import customRoutes from './modules/custom/custom.routes.js';
+import builderRoutes from './modules/builder/builder.routes.js';
+import dynamicRoutes from './modules/dynamic/dynamic.routes.js';
 
 app.use('/api/v1/public', stubs.publicRoutes);
 app.use('/api/v1/mock', stubs.mockDataRoutes);
@@ -146,6 +149,9 @@ app.use('/api/v1/payroll', payrollRoutes);
 app.use('/api/v1/projects', projectsRoutes);
 app.use('/api/v1/integrations', apiIntegrationRoutes);
 app.use('/api/v1/inventory', inventoryRoutes);
+app.use('/api/v1/custom', customRoutes);
+app.use('/api/v1/builder', builderRoutes);
+app.use('/api/v1/dynamic', dynamicRoutes);
 
 // Sentry error handler if initialized
 Sentry.setupExpressErrorHandler(app);

@@ -7,3 +7,11 @@
 !Backend/
 !Backend/**
 !.gitignore
+
+# Exclude generated and secret files
+Frontend/node_modules/
+Backend/node_modules/
+Frontend/.env
+Backend/.env
+Frontend/dist/
+Backend/graphify-out/

@@ -10,6 +10,7 @@ import {
   BookOpen,
   Calendar,
   FileText,
+  Settings2,
   Settings as SettingsIcon, 
   LogOut,
   Bell,
@@ -65,6 +66,10 @@ import ComplaintsDashboard from './complaints/ComplaintsDashboard';
 import MobileAppsDashboard from './apps/MobileAppsDashboard';
 import ApiIntegrations from './integrations/ApiIntegrations';
 import InventoryDashboard from './inventory/InventoryDashboard';
+import CustomDashboard from '../../modules/custom/CustomDashboard';
+import ModuleBuilder from '../../modules/builder/ModuleBuilder';
+import DynamicDashboard from '../../modules/dynamic/DynamicDashboard';
+import { useGetEntities } from '../../modules/builder/useBuilder';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
 
@@ -75,6 +80,7 @@ const AdminLayout = () => {
   const navigate = useNavigate();
   const { logout, userData, userRole, permissions } = useAuth();
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+  const { data: customEntitiesData } = useGetEntities();
 
   useEffect(() => {
     const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
@@ -113,6 +119,13 @@ const AdminLayout = () => {
     { name: 'Reports', path: '/admin/reports', icon: FileText, moduleKey: 'reports' },
     { name: 'Inventory', path: '/admin/inventory', icon: Package, moduleKey: 'inventory' },
     { name: 'API Integrations', path: '/admin/api-integrations', icon: Zap, moduleKey: 'api_integration' },
+    { name: 'Module Builder', path: '/admin/builder', icon: Settings2, moduleKey: 'custom' },
+    ...(customEntitiesData?.map(ent => ({
+      name: ent.name,
+      path: `/admin/dynamic/${ent.slug}`,
+      icon: FileText,
+      moduleKey: 'custom'
+    })) || []),
     { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon, moduleKey: 'settings' },
     { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck, moduleKey: 'roles' },
   ].filter(link => hasAccess(link.moduleKey));
@@ -314,6 +327,9 @@ const AdminLayout = () => {
               <Route path="/reports/*" element={hasAccess('reports') ? <Reports /> : <Navigate to="/404" replace />} />
               <Route path="/inventory/*" element={hasAccess('inventory') ? <InventoryDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/api-integrations/*" element={hasAccess('api_integration') ? <ApiIntegrations /> : <Navigate to="/404" replace />} />
+              <Route path="/builder/*" element={hasAccess('custom') ? <ModuleBuilder /> : <Navigate to="/404" replace />} />
+              <Route path="/dynamic/:entitySlug/*" element={hasAccess('custom') ? <DynamicDashboard /> : <Navigate to="/404" replace />} />
+              <Route path="/custom/*" element={hasAccess('custom') ? <CustomDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/settings/*" element={hasAccess('settings') ? <Settings /> : <Navigate to="/404" replace />} />
               <Route path="*" element={<Navigate to="/404" replace />} />
             </Routes>
