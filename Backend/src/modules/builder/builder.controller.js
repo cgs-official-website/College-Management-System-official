@@ -17,9 +17,21 @@ export const createEntity = async (req, res) => {
   if (!validated.success) return res.status(400).json({ success: false, errors: validated.error.errors });
 
   try {
-    const entity = await prisma.customEntity.create({
-      data: { collegeId, ...validated.data }
+    const entity = await prisma.$transaction(async (tx) => {
+      const newEntity = await tx.customEntity.create({
+        data: { collegeId, ...validated.data }
+      });
+
+      await tx.module.create({
+        data: {
+          key: `custom_${collegeId}_${newEntity.slug}`,
+          label: newEntity.name
+        }
+      });
+
+      return newEntity;
     });
+
     res.status(201).json({ success: true, data: entity });
   } catch (error) {
     fs.writeFileSync('C:\\College-Management-System-official\\Backend\\debug_error.log', JSON.stringify({
@@ -41,9 +53,22 @@ export const deleteEntity = async (req, res) => {
   const collegeId = req.user.collegeId;
   const { id } = req.params;
 
-  await prisma.customEntity.delete({
+  const entity = await prisma.customEntity.findFirst({
     where: { id, collegeId }
   });
+
+  if (!entity) return res.status(404).json({ success: false, message: 'Module not found' });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.customEntity.delete({
+      where: { id }
+    });
+    
+    await tx.module.deleteMany({
+      where: { key: `custom_${collegeId}_${entity.slug}` }
+    });
+  });
+
   res.json({ success: true, message: 'Module deleted successfully' });
 };
 

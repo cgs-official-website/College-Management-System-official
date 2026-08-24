@@ -2,9 +2,11 @@ import { prisma, logger } from '../../server.js';
 import { createRoleSchema, updateRoleSchema, updateRolePermissionsSchema } from './roles.schema.js';
 
 export const getModules = async (req, res) => {
-  const modules = await prisma.module.findMany({
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const allModules = await prisma.module.findMany({
     orderBy: { key: 'asc' }
   });
+  const modules = allModules.filter(m => !m.key.startsWith('custom_') || m.key.startsWith(`custom_${collegeId}_`));
   res.json({ success: true, data: modules });
 };
 
@@ -55,6 +57,7 @@ export const createRole = async (req, res) => {
 
   // Create role and seed blank permissions for all modules
   const allModules = await prisma.module.findMany();
+  const collegeModules = allModules.filter(m => !m.key.startsWith('custom_') || m.key.startsWith(`custom_${collegeId}_`));
 
   const role = await prisma.$transaction(async (tx) => {
     const newRole = await tx.role.create({
@@ -65,9 +68,9 @@ export const createRole = async (req, res) => {
       }
     });
 
-    if (allModules.length > 0) {
+    if (collegeModules.length > 0) {
       await tx.rolePermission.createMany({
-        data: allModules.map(m => ({
+        data: collegeModules.map(m => ({
           roleId: newRole.id,
           moduleId: m.id,
           canCreate: false,
@@ -109,7 +112,8 @@ export const getRoleById = async (req, res) => {
   }
 
   // Ensure all modules are represented in response
-  const allModules = await prisma.module.findMany({ orderBy: { key: 'asc' } });
+  const rawModules = await prisma.module.findMany({ orderBy: { key: 'asc' } });
+  const allModules = rawModules.filter(m => !m.key.startsWith('custom_') || m.key.startsWith(`custom_${collegeId}_`));
   const permissionsMap = new Map();
   role.permissions.forEach(p => permissionsMap.set(p.moduleId, p));
 

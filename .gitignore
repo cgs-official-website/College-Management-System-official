@@ -63,3 +63,8 @@ Readme.md
 # OS specific files
 .DS_Store
 Thumbs.db
+
+# Documentation & Specifications
+docs/
+CMS File Format/
+.spectral.yaml
