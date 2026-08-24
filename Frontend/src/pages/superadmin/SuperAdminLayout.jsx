@@ -17,8 +17,11 @@ import {
   ShieldAlert,
   RefreshCw,
   Package,
-  CreditCard
+  CreditCard,
+  Sun,
+  Moon
 } from 'lucide-react';
+import { useTheme } from '../../hooks/useTheme';
 import SuperColleges from './SuperColleges';
 import SuperAdmins from './SuperAdmins';
 import SuperSettings from './SuperSettings';
@@ -33,6 +36,7 @@ const SuperAdminLayout = () => {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
@@ -172,6 +176,15 @@ const SuperAdminLayout = () => {
             >
               <RefreshCw className="w-5 h-5" />
             </button>
+
+            <button 
+              onClick={toggleTheme}
+              className="p-2.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+              title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5" />}
+            </button>
+
             <NotificationDropdown />
             
             <div className="h-8 w-px bg-slate-200 dark:bg-white/10 mx-1"></div>

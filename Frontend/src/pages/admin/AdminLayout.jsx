@@ -38,9 +38,12 @@ import {
   MessageSquareWarning,
   LifeBuoy,
   ShieldCheck,
-  Package
+  Package,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useTheme } from '../../hooks/useTheme';
 import PlaceholderModule from '../../components/ui/PlaceholderModule';
 import RaiseTicketModal from '../../components/ui/RaiseTicketModal';
 import StudentList from './students/StudentList';
@@ -81,6 +84,7 @@ const AdminLayout = () => {
   const { logout, userData, userRole, permissions } = useAuth();
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
   const { data: customEntitiesData } = useGetEntities();
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
@@ -267,6 +271,14 @@ const AdminLayout = () => {
               title="Refresh Data"
             >
               <RefreshCw className="w-5 h-5" />
+            </button>
+
+            <button 
+              onClick={toggleTheme}
+              className="p-2.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+              title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5" />}
             </button>
 
             <button 
@@ -476,6 +488,95 @@ const AdminDashboardHome = () => {
             <div className={`absolute -bottom-10 -right-10 w-32 h-32 blur-3xl opacity-0 group-hover:opacity-20 transition-opacity rounded-full ${stat.bg.split(' ')[0].replace('50', '500')}`} />
           </motion.div>
         ))}
+      </div>
+
+      {/* Quick Actions & Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+        
+        {/* Quick Actions */}
+        <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-sm flex flex-col">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Quick Actions</h2>
+            <div className="p-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg text-indigo-500">
+              <Zap className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4 flex-1">
+            {[
+              { label: 'Add Student', icon: UserPlus, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10', path: '/admin/students' },
+              { label: 'Mark Attendance', icon: CheckCircle2, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10', path: '/admin/attendance' },
+              { label: 'Collect Fees', icon: Wallet, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10', path: '/admin/fees' },
+              { label: 'Post Notice', icon: Megaphone, color: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-500/10', path: '/admin/notices' },
+            ].map((action, idx) => (
+              <Link 
+                key={idx}
+                to={action.path}
+                className="flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-100 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-white/5 transition-all group"
+              >
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ${action.bg} group-hover:scale-110 transition-transform`}>
+                  <action.icon className={`w-6 h-6 ${action.color}`} />
+                </div>
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 text-center">{action.label}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {/* Recent Activity Feed */}
+        <div className="lg:col-span-2 bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Recent Activity</h2>
+            <button className="text-sm font-semibold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors">
+              View All
+            </button>
+          </div>
+          
+          <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 dark:before:via-white/10 before:to-transparent">
+            {stats.isLoading ? (
+              <p className="text-sm text-slate-500 text-center py-4">Loading activity...</p>
+            ) : stats.recentActivity && stats.recentActivity.length > 0 ? (
+              stats.recentActivity.map((item, idx) => {
+                const Icon = item.type === 'student' ? UserPlus : Users;
+                const color = item.type === 'student' ? 'text-emerald-500' : 'text-amber-500';
+                const bg = item.type === 'student' ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-amber-50 dark:bg-amber-500/10';
+                
+                // Format relative time like "2 hours ago"
+                const date = new Date(item.time);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMins / 60);
+                const diffDays = Math.floor(diffHours / 24);
+                
+                let timeStr = '';
+                if (diffMins < 60) timeStr = diffMins <= 1 ? 'Just now' : `${diffMins} minutes ago`;
+                else if (diffHours < 24) timeStr = `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+                else if (diffDays === 1) timeStr = 'Yesterday';
+                else timeStr = date.toLocaleDateString();
+
+                return (
+                  <div key={item.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    {/* Icon */}
+                    <div className={`flex items-center justify-center w-10 h-10 rounded-full border-4 border-white dark:border-[#0A0F1C] ${bg} text-slate-500 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10`}>
+                      <Icon className={`w-4 h-4 ${color}`} />
+                    </div>
+                    {/* Card */}
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white-[0.02] hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                      <div className="flex items-center justify-between mb-1">
+                        <h3 className="font-bold text-slate-900 dark:text-white text-sm">{item.title}</h3>
+                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{timeStr}</span>
+                      </div>
+                      <p className="text-sm text-slate-600 dark:text-slate-400">{item.desc}</p>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-sm text-slate-500 text-center py-4">No recent activity found.</p>
+            )}
+          </div>
+        </div>
+
       </div>
     </div>
   );
