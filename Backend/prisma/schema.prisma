@@ -55,6 +55,8 @@ model College {
   projects            Project[]
   apiIntegrations     ApiIntegration[]
   inventoryItems      InventoryItem[]
+  productCategories   ProductCategory[]
+  inventoryAuditLogs  InventoryAuditLog[]
   hostelRooms         HostelRoom[]
   vehicles            Vehicle[]
   customEntities      CustomEntity[]
@@ -120,9 +122,10 @@ model User {
   studentProfile Student?
   teacherProfile Teacher?
   college        College?         @relation(fields: [collegeId], references: [id])
-  complaints     Complaint[]
-  payrollRecords PayrollRecord[]
-  timesheets     Timesheet[]
+  complaints          Complaint[]
+  payrollRecords      PayrollRecord[]
+  timesheets          Timesheet[]
+  inventoryAuditLogs  InventoryAuditLog[]
 
   @@unique([collegeId, email])
   @@index([collegeId])
@@ -773,8 +776,10 @@ model InventoryItem {
   name        String
   sku         String?
   category    String?
+  categoryId  String?  @db.Uuid
   quantity    Int      @default(0)
-  unitPrice   Float    @default(0.0)
+  isArchived  Boolean  @default(false)
+  isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   departmentLocation String?
@@ -786,8 +791,58 @@ model InventoryItem {
   assetTagNo         String?
   remarks            String?
   college     College  @relation(fields: [collegeId], references: [id])
+  productCategory ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  auditLogs   InventoryAuditLog[]
 
   @@index([collegeId])
+  @@index([collegeId, categoryId])
+}
+
+enum InventoryMovementType {
+  INBOUND
+  OUTBOUND
+}
+
+model ProductCategory {
+  id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId   String              @db.Uuid
+  name        String
+  code        String
+  description String?
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  college     College             @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  items       InventoryItem[]
+  auditLogs   InventoryAuditLog[]
+
+  @@unique([collegeId, code])
+  @@index([collegeId])
+}
+
+model InventoryAuditLog {
+  id              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId       String                @db.Uuid
+  inventoryItemId String                @db.Uuid
+  categoryId      String?               @db.Uuid
+  movementType    InventoryMovementType
+  quantity        Decimal               @db.Decimal(12, 2)
+  referenceType   String?
+  referenceId     String?
+  reason          String?
+  notes           String?
+  performedById   String?               @db.Uuid
+  createdAt       DateTime              @default(now())
+
+  college         College               @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem         @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  category        ProductCategory?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  performedBy     User?                 @relation(fields: [performedById], references: [id], onDelete: SetNull)
+
+  @@index([collegeId, movementType])
+  @@index([collegeId, inventoryItemId])
+  @@index([collegeId, createdAt])
+  @@index([collegeId, categoryId])
 }
 
 model Vehicle {

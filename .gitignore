@@ -1,17 +1,65 @@
-# Ignore everything
-*
+# Dependencies
+node_modules/
+**/node_modules/
 
-# But not these directories
-!Frontend/
-!Frontend/**
-!Backend/
-!Backend/**
-!.gitignore
+# Environment variables (ignore all .env files across all folders, but preserve .env.example)
+.env
+.env.*
+*.env
+**/.env
+**/.env.*
+**/*.env
+!**/.env.example
+!.env.example
 
-# Exclude generated and secret files
-Frontend/node_modules/
-Backend/node_modules/
-Frontend/.env
-Backend/.env
-Frontend/dist/
-Backend/graphify-out/
+# Graphify artifacts and sidecars
+graphify-out/
+**/graphify-out/
+.graphify*
+**/.graphify*
+
+# Build outputs
+dist/
+build/
+out/
+.vite/
+
+# Logs and runtime data
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# IDE and AI Tool configs / metadata
+.vscode/
+**/.vscode/
+.idea/
+**/.idea/
+.agents/
+**/.agents/
+.claude/
+**/.claude/
+.windsurf/
+**/.windsurf/
+Backend/.agents/
+Backend/.claude/
+Backend/.windsurf/
+Frontend/.agents/
+Frontend/.claude/
+Frontend/.windsurf/
+
+# Documentation
+README.md
+**/README.md
+readme.md
+**/readme.md
+Readme.md
+**/Readme.md
+
+# OS specific files
+.DS_Store
+Thumbs.db
