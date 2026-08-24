@@ -68,3 +68,6 @@ Thumbs.db
 docs/
 CMS File Format/
 .spectral.yaml
+
+# Root files
+/package-lock.json
