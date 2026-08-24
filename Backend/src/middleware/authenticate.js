@@ -41,7 +41,16 @@ export const authenticate = async (req, res, next) => {
       }
     }
 
-    req.user = { ...decoded, userId: decoded.userId || decoded.id, customRoleId: user.customRoleId };
+    req.user = {
+      ...decoded,
+      userId: user.id,
+      id: user.id,
+      role: user.role,
+      collegeId: user.collegeId,
+      customRoleId: user.customRoleId,
+      email: user.email,
+      name: user.name
+    };
     req.tenant = user.collegeId ? { collegeId: user.collegeId } : null;
     next();
   } catch (error) {

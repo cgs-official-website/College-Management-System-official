@@ -67,3 +67,20 @@ export async function getOrSet(key, ttlSeconds, fetchFn) {
 
   return freshData;
 }
+
+/**
+ * Invalidate cache keys matching a pattern (e.g. "inventory:categories:collegeId:*").
+ * Fails open if Redis is offline.
+ */
+export async function invalidateCachePattern(pattern) {
+  if (redis.status === 'ready') {
+    try {
+      const keys = await redis.keys(pattern);
+      if (keys && keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } catch (err) {
+      logger.warn(`[warn] Redis cache invalidation failed for pattern ${pattern}: ${err.message}.`);
+    }
+  }
+}

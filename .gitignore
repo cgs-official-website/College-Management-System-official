@@ -52,6 +52,14 @@ Frontend/.agents/
 Frontend/.claude/
 Frontend/.windsurf/
 
+# Documentation
+README.md
+**/README.md
+readme.md
+**/readme.md
+Readme.md
+**/Readme.md
+
 # OS specific files
 .DS_Store
 Thumbs.db
