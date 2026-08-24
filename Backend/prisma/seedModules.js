@@ -17,6 +17,8 @@ const DEFAULT_MODULES = [
   { key: 'library', label: 'Library Management' },
   { key: 'hostel', label: 'Hostel Management' },
   { key: 'transport', label: 'Transport & Routes' },
+  { key: 'api_integration', label: 'API Integrations' },
+  { key: 'inventory', label: 'Inventory Management' },
 ];
 
 async function seedModules() {

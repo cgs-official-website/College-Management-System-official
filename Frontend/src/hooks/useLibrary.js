@@ -68,5 +68,21 @@ export function useLibrary(collegeId) {
     }
   };
 
-  return { books, isLoading, isAdding, isUpdating, addBook, updateBook, deleteBook };
+  const bulkImport = async (data) => {
+    try {
+      const response = await api.post('/library/bulk', { data });
+      const stats = response.data?.data || {};
+      toast.success(`Imported ${stats.successful || 0} books successfully!`);
+      if (stats.failed > 0) {
+        toast.error(`${stats.failed} failed.`);
+      }
+      await fetchBooks();
+    } catch (error) {
+      console.error("Error bulk importing books:", error);
+      toast.error(error.message || "Failed to bulk import books.");
+      throw error;
+    }
+  };
+
+  return { books, isLoading, isAdding, isUpdating, addBook, updateBook, deleteBook, bulkImport };
 }

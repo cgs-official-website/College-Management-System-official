@@ -77,6 +77,84 @@ router.post('/', async (req, res) => {
   }
 });
 
+router.post('/bulk', async (req, res) => {
+  try {
+    const { data } = req.body;
+    if (!Array.isArray(data)) {
+      return res.status(400).json({ error: { message: 'Data must be an array' } });
+    }
+
+    const collegeId = req.tenant.collegeId;
+    let successful = 0;
+    let failed = 0;
+
+    for (const row of data) {
+      try {
+        const name = row['Section_Name']?.toString().trim();
+        const capacity = parseInt(row['Capacity']) || 30;
+        const courseCode = row['Course_Code']?.toString().trim();
+
+        if (!name || !courseCode) {
+          failed++;
+          continue;
+        }
+
+        // Find course
+        let course = await prisma.course.findFirst({
+          where: { collegeId, code: courseCode }
+        });
+
+        if (!course) {
+          // If course is missing, we could try to create a generic course and department
+          // But it's better if they exist. We'll stub it out for robustness.
+          let department = await prisma.department.findFirst({
+            where: { collegeId }
+          });
+          
+          if (!department) {
+            department = await prisma.department.create({
+              data: { name: 'General', code: 'GEN', collegeId }
+            });
+          }
+
+          course = await prisma.course.create({
+            data: {
+              name: courseCode,
+              code: courseCode,
+              semester: 1,
+              credits: 0,
+              departmentId: department.id,
+              collegeId
+            }
+          });
+        }
+
+        const existing = await prisma.section.findFirst({
+          where: { collegeId, courseId: course.id, name }
+        });
+
+        if (existing) {
+          await prisma.section.update({
+            where: { id: existing.id },
+            data: { capacity }
+          });
+        } else {
+          await prisma.section.create({
+            data: { name, capacity, courseId: course.id, collegeId }
+          });
+        }
+        successful++;
+      } catch (err) {
+        failed++;
+      }
+    }
+    
+    return res.json({ data: { successful, failed } });
+  } catch (error) {
+    res.status(500).json({ error: { message: error.message } });
+  }
+});
+
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;

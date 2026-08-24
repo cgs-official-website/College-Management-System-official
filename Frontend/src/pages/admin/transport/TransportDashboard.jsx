@@ -17,10 +17,11 @@ import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Modal } from '../../../components/ui/Modal';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
 
 export default function TransportDashboard() {
   const confirm = useConfirm();
-  const { items: routes, stats, isLoading, isAdding, createItem, deleteItem } = useTransport();
+  const { items: routes, stats, isLoading, isAdding, createItem, deleteItem, bulkImport, isImporting } = useTransport();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -113,13 +114,19 @@ export default function TransportDashboard() {
           <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Transport Tracking</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">Manage school buses, routes, and daily transport operations.</p>
         </div>
-        <Button 
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 shadow-lg shadow-primary-500/20"
-        >
-          <Plus className="w-4 h-4" />
-          Add Bus Route
-        </Button>
+        <div className="flex gap-2">
+          <ExcelUploadButton 
+            onUpload={bulkImport} 
+            isLoading={isImporting} 
+          />
+          <Button 
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 shadow-lg shadow-primary-500/20"
+          >
+            <Plus className="w-4 h-4" />
+            Add Bus Route
+          </Button>
+        </div>
       </div>
 
       {/* Stats Grid */}

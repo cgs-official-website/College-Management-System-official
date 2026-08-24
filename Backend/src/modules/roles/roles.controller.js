@@ -119,10 +119,10 @@ export const getRoleById = async (req, res) => {
       moduleId: m.id,
       moduleKey: m.key,
       moduleLabel: m.label,
-      canCreate: existing ? existing.canCreate : false,
-      canRead: existing ? existing.canRead : false,
-      canUpdate: existing ? existing.canUpdate : false,
-      canDelete: existing ? existing.canDelete : false,
+      canCreate: role.isSystemRole ? true : (existing ? existing.canCreate : false),
+      canRead: role.isSystemRole ? true : (existing ? existing.canRead : false),
+      canUpdate: role.isSystemRole ? true : (existing ? existing.canUpdate : false),
+      canDelete: role.isSystemRole ? true : (existing ? existing.canDelete : false),
     };
   });
 

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/apiClient';
+import toast from 'react-hot-toast';
 
 export const useDepartments = () => {
   const queryClient = useQueryClient();
@@ -42,12 +43,31 @@ export const useDepartments = () => {
     }
   });
 
+  const bulkImport = useMutation({
+    mutationFn: async (data) => {
+      const response = await api.post('/departments/bulk', { data });
+      return response.data;
+    },
+    onSuccess: (res) => {
+      const stats = res?.data || {};
+      toast.success(`Imported ${stats.successful || 0} departments successfully!`);
+      if (stats.failed > 0) {
+        toast.error(`${stats.failed} failed.`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to bulk import departments');
+    }
+  });
+
   return {
     departments: getDepartments.data || [],
     isLoading: getDepartments.isLoading,
     error: getDepartments.error,
     createDepartment,
     updateDepartment,
-    deleteDepartment
+    deleteDepartment,
+    bulkImport
   };
 };

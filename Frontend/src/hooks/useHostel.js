@@ -40,6 +40,46 @@ export const useHostel = () => {
     }
   });
 
+  const studentsQuery = useQuery({
+    queryKey: ['hostel-students'],
+    queryFn: async () => {
+      const response = await api.get('/hostel/students');
+      return response.data;
+    }
+  });
+
+  const assignRoomMutation = useMutation({
+    mutationFn: async ({ id, hostelBlockId, hostelRoom }) => {
+      const response = await api.put(`/hostel/students/${id}/room`, { hostelBlockId, hostelRoom });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hostel-students'] });
+      toast.success('Room assigned successfully!');
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to assign room');
+    }
+  });
+
+  const bulkImportMutation = useMutation({
+    mutationFn: async (data) => {
+      const response = await api.post('/hostel/bulk', { data });
+      return response.data;
+    },
+    onSuccess: (res) => {
+      const stats = res?.data || {};
+      toast.success(`Imported ${stats.successful || 0} rooms successfully!`);
+      if (stats.failed > 0) {
+        toast.error(`${stats.failed} failed.`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['hostel'] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to bulk import hostel rooms');
+    }
+  });
+
   const rawData = query.data?.data || [];
   const stats = query.data?.stats || {
     totalBlocks: rawData.length,
@@ -55,8 +95,14 @@ export const useHostel = () => {
     isError: query.isError,
     isAdding: createMutation.isPending,
     isDeleting: deleteMutation.isPending,
+    isImporting: bulkImportMutation.isPending,
     createItem: createMutation.mutateAsync,
     deleteItem: deleteMutation.mutateAsync,
-    refetch: query.refetch
+    bulkImport: bulkImportMutation.mutateAsync,
+    refetch: query.refetch,
+    students: studentsQuery.data || [],
+    isLoadingStudents: studentsQuery.isLoading,
+    assignRoom: assignRoomMutation.mutateAsync,
+    isAssigningRoom: assignRoomMutation.isPending,
   };
 };

@@ -67,6 +67,57 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Bulk import departments
+router.post('/bulk', async (req, res) => {
+  try {
+    const { data } = req.body;
+    if (!Array.isArray(data)) {
+      return res.status(400).json({ error: { message: 'Data must be an array' } });
+    }
+
+    const collegeId = req.tenant.collegeId;
+    let successful = 0;
+    let failed = 0;
+
+    for (const row of data) {
+      try {
+        const name = row['Department_Name']?.toString().trim();
+        const code = row['Department_Code']?.toString().trim();
+
+        if (!name || !code) {
+          failed++;
+          continue;
+        }
+
+        const existing = await prisma.department.findFirst({
+          where: {
+            collegeId,
+            code
+          }
+        });
+
+        if (existing) {
+          await prisma.department.update({
+            where: { id: existing.id },
+            data: { name }
+          });
+        } else {
+          await prisma.department.create({
+            data: { name, code, collegeId }
+          });
+        }
+        successful++;
+      } catch (err) {
+        failed++;
+      }
+    }
+    
+    return res.json({ data: { successful, failed } });
+  } catch (error) {
+    res.status(500).json({ error: { message: error.message } });
+  }
+});
+
 // Update a department
 router.put('/:id', async (req, res) => {
   try {

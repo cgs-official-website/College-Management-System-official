@@ -5,9 +5,10 @@ import { Input } from '../../../components/ui/Input';
 import { Search, Plus, Trash2, Edit2, Building2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
 
 export default function DepartmentsTab({ onSelect }) {
-  const { departments, isLoading, createDepartment, updateDepartment, deleteDepartment } = useDepartments();
+  const { departments, isLoading, createDepartment, updateDepartment, deleteDepartment, bulkImport } = useDepartments();
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingDept, setEditingDept] = useState(null);
@@ -59,9 +60,12 @@ export default function DepartmentsTab({ onSelect }) {
             className="pl-10 mb-0"
           />
         </div>
-        <Button onClick={handleOpenAdd}>
-          <Plus className="w-4 h-4 mr-2" /> Add Department
-        </Button>
+        <div className="flex gap-2">
+          <ExcelUploadButton onUpload={bulkImport.mutateAsync} isLoading={bulkImport.isPending} />
+          <Button onClick={handleOpenAdd}>
+            <Plus className="w-4 h-4 mr-2" /> Add Department
+          </Button>
+        </div>
       </div>
 
       {isFormOpen && (

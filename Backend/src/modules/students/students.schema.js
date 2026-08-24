@@ -24,6 +24,9 @@ export const createStudentSchema = z.object({
   address: z.string().nullish(),
   gender: z.string().nullish(),
   dateOfBirth: z.string().nullish(),
+  residenceType: z.string().nullish().default('Day Scholar'),
+  hostelBlockId: z.string().uuid().nullish(),
+  hostelRoom: z.string().nullish(),
 });
 
 export const updateStudentSchema = createStudentSchema.partial();

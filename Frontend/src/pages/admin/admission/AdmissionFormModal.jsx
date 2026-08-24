@@ -19,6 +19,7 @@ export function AdmissionFormModal({ isOpen, onClose, onSubmit, initialData = nu
       phone: '',
       courseId: '',
       previousSchool: '',
+      residenceType: 'Day Scholar',
       status: 'Pending'
     }
   });
@@ -32,6 +33,7 @@ export function AdmissionFormModal({ isOpen, onClose, onSubmit, initialData = nu
         phone: '',
         courseId: '',
         previousSchool: '',
+        residenceType: 'Day Scholar',
         status: 'Pending'
       });
     }
@@ -105,6 +107,17 @@ export function AdmissionFormModal({ isOpen, onClose, onSubmit, initialData = nu
             label="Previous School / Institution" 
             placeholder="e.g. Lincoln High School"
             {...register('previousSchool')}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Select 
+            label="Residence Type" 
+            {...register('residenceType')}
+            options={[
+              { value: 'Day Scholar', label: 'Day Scholar' },
+              { value: 'Hosteller', label: 'Hosteller' }
+            ]}
           />
         </div>
 

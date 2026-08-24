@@ -6,9 +6,10 @@ import { Search, Plus, Trash2, Edit2, GraduationCap, ChevronLeft } from 'lucide-
 import { useForm } from 'react-hook-form';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useDepartments } from '../../../hooks/useDepartments';
+import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
 
 export default function CoursesTab({ departmentId, departmentName, onSelect, onClearFilter }) {
-  const { courses, isLoading, createCourse, updateCourse, deleteCourse } = useCourses(departmentId);
+  const { courses, isLoading, createCourse, updateCourse, deleteCourse, bulkImport } = useCourses(departmentId);
   const { departments } = useDepartments(); // needed for the dropdown when adding/editing if no department is selected
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -84,9 +85,12 @@ export default function CoursesTab({ departmentId, departmentName, onSelect, onC
             className="pl-10 mb-0"
           />
         </div>
-        <Button onClick={handleOpenAdd}>
-          <Plus className="w-4 h-4 mr-2" /> Add Program
-        </Button>
+        <div className="flex gap-2">
+          <ExcelUploadButton onUpload={bulkImport.mutateAsync} isLoading={bulkImport.isPending} />
+          <Button onClick={handleOpenAdd}>
+            <Plus className="w-4 h-4 mr-2" /> Add Program
+          </Button>
+        </div>
       </div>
 
       {isFormOpen && (

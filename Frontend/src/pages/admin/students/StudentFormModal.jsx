@@ -24,7 +24,8 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
       section: '',
       parentName: '',
       parentPhone: '',
-      address: ''
+      address: '',
+      residenceType: 'Day Scholar'
     }
   });
 
@@ -41,7 +42,8 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
         section: '',
         parentName: '',
         parentPhone: '',
-        address: ''
+        address: '',
+        residenceType: 'Day Scholar'
       });
     }
   }, [isOpen, initialData, reset]);
@@ -169,6 +171,16 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
               <Input 
                 label="Home Address" 
                 {...register('address')}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Select 
+                label="Residence Type" 
+                {...register('residenceType')}
+                options={[
+                  { value: 'Day Scholar', label: 'Day Scholar' },
+                  { value: 'Hosteller', label: 'Hosteller' }
+                ]}
               />
             </div>
           </div>

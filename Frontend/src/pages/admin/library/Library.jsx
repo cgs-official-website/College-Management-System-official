@@ -6,12 +6,13 @@ import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { BookFormModal } from './BookFormModal';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
 
 export default function Library() {
   const confirm = useConfirm();
   const { userData } = useAuth();
   const collegeId = userData?.collegeId || 'default_college_id';
-  const { books, isLoading, addBook, updateBook, deleteBook, isAdding, isUpdating } = useLibrary(collegeId);
+  const { books, isLoading, addBook, updateBook, deleteBook, isAdding, isUpdating, bulkImport } = useLibrary(collegeId);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -60,10 +61,16 @@ export default function Library() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Library Management</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage physical book inventory and track borrowing.</p>
         </div>
-        <Button onClick={handleOpenAdd}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add New Book
-        </Button>
+        <div className="flex gap-2">
+          <ExcelUploadButton 
+            onUpload={bulkImport} 
+            isLoading={isAdding} 
+          />
+          <Button onClick={handleOpenAdd}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add New Book
+          </Button>
+        </div>
       </div>
 
       {/* Toolbar */}

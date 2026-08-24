@@ -245,3 +245,113 @@ export const deleteStaff = async (req, res) => {
   logger.info(`[info] req=${req.id || ''} college=${collegeId} teacherId=${id} actor=${actorId} Soft-deleted staff`);
   res.json({ success: true, message: 'Staff member deleted successfully' });
 };
+
+export const bulkImportStaff = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const actorId = req.user?.id || req.user?.userId;
+  const { data } = req.body;
+
+  if (!collegeId) {
+    return res.status(400).json({ success: false, error: { message: 'College ID is required' } });
+  }
+  
+  if (!Array.isArray(data) || data.length === 0) {
+    return res.status(400).json({ success: false, error: { message: 'No data provided for import' } });
+  }
+
+  const results = { successful: 0, failed: 0, errors: [] };
+  const departmentsCache = {};
+  
+  for (const [index, row] of data.entries()) {
+    try {
+      const employeeId = String(row['Employee_ID*'] || row['Employee_ID'] || '').trim();
+      const staffName = String(row['Staff_Name*'] || row['Staff_Name'] || '').trim();
+      const departmentName = String(row['Department*'] || row['Department'] || 'General').trim();
+
+      if (!employeeId || !staffName) {
+        throw new Error('Employee_ID and Staff_Name are required');
+      }
+
+      // Department lookup or creation
+      let deptId = departmentsCache[departmentName];
+      if (!deptId) {
+        let dept = await prisma.department.findFirst({
+          where: { collegeId, name: { equals: departmentName, mode: 'insensitive' } }
+        });
+        if (!dept) {
+          dept = await prisma.department.create({
+            data: {
+              name: departmentName,
+              code: departmentName.substring(0, 3).toUpperCase(),
+              collegeId
+            }
+          });
+        }
+        departmentsCache[departmentName] = dept.id;
+        deptId = dept.id;
+      }
+
+      const email = String(row['Email_ID'] || `${employeeId.toLowerCase()}@example.com`).toLowerCase().trim();
+
+      await prisma.$transaction(async (tx) => {
+        let user = await tx.user.findFirst({
+          where: { email, collegeId }
+        });
+
+        if (!user) {
+          const defaultPassword = await bcrypt.hash('Staff@123', 10);
+          user = await tx.user.create({
+            data: {
+              email,
+              collegeId,
+              role: 'teacher',
+              passwordHash: defaultPassword,
+              accountStatus: 'active'
+            }
+          });
+        }
+
+        const joiningDate = row['Date_of_Joining*'] || row['Date_of_Joining'] ? new Date(row['Date_of_Joining*'] || row['Date_of_Joining']) : new Date();
+        const dateOfBirth = row['Date_of_Birth'] ? new Date(row['Date_of_Birth']) : null;
+        
+        await tx.teacher.create({
+          data: {
+            collegeId,
+            userId: user.id,
+            departmentId: deptId,
+            designation: String(row['Designation*'] || row['Designation'] || 'Staff'),
+            joiningDate: isNaN(joiningDate) ? new Date() : joiningDate,
+            salaryGrade: 'Grade A',
+            
+            // New fields mapped from Excel
+            gender: row['Gender*'] || row['Gender'] ? String(row['Gender*'] || row['Gender']) : null,
+            dateOfBirth: dateOfBirth && !isNaN(dateOfBirth) ? dateOfBirth : null,
+            employmentType: row['Employment_Type*'] || row['Employment_Type'] ? String(row['Employment_Type*'] || row['Employment_Type']) : null,
+            qualification: row['Qualification'] ? String(row['Qualification']) : null,
+            experienceYears: row['Experience_Years'] ? parseInt(row['Experience_Years'], 10) : null,
+            mobileNumber: row['Mobile_Number*'] || row['Mobile_Number'] ? String(row['Mobile_Number*'] || row['Mobile_Number']) : null,
+            emailId: email,
+            aadhaarNumber: row['Aadhaar_Number'] ? String(row['Aadhaar_Number']) : null,
+            panNumber: row['PAN_Number'] ? String(row['PAN_Number']) : null,
+            bloodGroup: row['Blood_Group'] ? String(row['Blood_Group']) : null,
+            address: row['Address'] ? String(row['Address']) : null,
+            city: row['City'] ? String(row['City']) : null,
+            district: row['District'] ? String(row['District']) : null,
+            state: row['State'] ? String(row['State']) : null,
+            pincode: row['Pincode'] ? String(row['Pincode']) : null,
+            emergencyContactName: row['Emergency_Contact_Name'] ? String(row['Emergency_Contact_Name']) : null,
+            emergencyContactNumber: row['Emergency_Contact_Number'] ? String(row['Emergency_Contact_Number']) : null,
+          }
+        });
+      });
+
+      results.successful++;
+    } catch (error) {
+      results.failed++;
+      results.errors.push(`Row ${index + 2}: ${error.message}`);
+    }
+  }
+
+  logger.info(`[info] req=${req.id || ''} college=${collegeId} actor=${actorId} Bulk imported staff: ${results.successful} success, ${results.failed} failed`);
+  res.json({ success: true, data: results });
+};

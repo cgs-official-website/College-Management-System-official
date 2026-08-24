@@ -13,7 +13,8 @@ const submitSchema = z.object({
   previousSchool: z.string().optional(),
   marksheetDetails: z.record(z.string(), z.any()).optional().default({}),
   createdFromLeadId: z.string().uuid().optional(),
-  status: z.string().optional().default('Pending')
+  status: z.string().optional().default('Pending'),
+  residenceType: z.string().optional().default('Day Scholar')
 });
 
 const updateSchema = z.object({
@@ -52,6 +53,7 @@ export const getAdmissions = async (req, res) => {
       status: a.status.charAt(0).toUpperCase() + a.status.slice(1),
       seatHoldExpiresAt: a.seatHoldExpiresAt,
       cutoffCheckResult: a.cutoffCheckResult,
+      residenceType: a.residenceType,
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
     };
@@ -109,6 +111,7 @@ export const submitApplication = async (req, res) => {
       marksheetDetails,
       createdFromLeadId: payload.createdFromLeadId,
       status: payload.status || 'Pending',
+      residenceType: payload.residenceType || 'Day Scholar',
       cutoffCheckResult: { passed: true }
     },
     include: {

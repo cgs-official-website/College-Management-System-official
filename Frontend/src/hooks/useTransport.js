@@ -40,6 +40,24 @@ export const useTransport = () => {
     }
   });
 
+  const bulkImportMutation = useMutation({
+    mutationFn: async (data) => {
+      const response = await api.post('/transport/bulk', { data });
+      return response.data;
+    },
+    onSuccess: (res) => {
+      const stats = res?.data || {};
+      toast.success(`Imported ${stats.successful || 0} vehicles successfully!`);
+      if (stats.failed > 0) {
+        toast.error(`${stats.failed} failed.`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['transport'] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to bulk import transport vehicles');
+    }
+  });
+
   const rawData = query.data?.data || [];
   const stats = query.data?.stats || {
     totalBuses: rawData.length,
@@ -55,8 +73,10 @@ export const useTransport = () => {
     isError: query.isError,
     isAdding: createMutation.isPending,
     isDeleting: deleteMutation.isPending,
+    isImporting: bulkImportMutation.isPending,
     createItem: createMutation.mutateAsync,
     deleteItem: deleteMutation.mutateAsync,
+    bulkImport: bulkImportMutation.mutateAsync,
     refetch: query.refetch
   };
 };

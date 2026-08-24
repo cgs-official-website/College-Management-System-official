@@ -36,7 +36,8 @@ import {
   Smartphone,
   MessageSquareWarning,
   LifeBuoy,
-  ShieldCheck
+  ShieldCheck,
+  Package
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import PlaceholderModule from '../../components/ui/PlaceholderModule';
@@ -62,6 +63,8 @@ import TransportDashboard from './transport/TransportDashboard';
 import PlacementsDashboard from './placements/PlacementsDashboard';
 import ComplaintsDashboard from './complaints/ComplaintsDashboard';
 import MobileAppsDashboard from './apps/MobileAppsDashboard';
+import ApiIntegrations from './integrations/ApiIntegrations';
+import InventoryDashboard from './inventory/InventoryDashboard';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
 
@@ -108,6 +111,8 @@ const AdminLayout = () => {
     { name: 'Notice Board', path: '/admin/notices', icon: Megaphone, moduleKey: 'notices' },
     { name: 'Placements', path: '/admin/placements', icon: Briefcase, moduleKey: 'placements' },
     { name: 'Reports', path: '/admin/reports', icon: FileText, moduleKey: 'reports' },
+    { name: 'Inventory', path: '/admin/inventory', icon: Package, moduleKey: 'inventory' },
+    { name: 'API Integrations', path: '/admin/api-integrations', icon: Zap, moduleKey: 'api_integration' },
     { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon, moduleKey: 'settings' },
     { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck, moduleKey: 'roles' },
   ].filter(link => hasAccess(link.moduleKey));
@@ -307,6 +312,8 @@ const AdminLayout = () => {
               <Route path="/notices/*" element={hasAccess('notices') ? <NoticeBoard /> : <Navigate to="/404" replace />} />
               <Route path="/placements/*" element={hasAccess('placements') ? <PlacementsDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/reports/*" element={hasAccess('reports') ? <Reports /> : <Navigate to="/404" replace />} />
+              <Route path="/inventory/*" element={hasAccess('inventory') ? <InventoryDashboard /> : <Navigate to="/404" replace />} />
+              <Route path="/api-integrations/*" element={hasAccess('api_integration') ? <ApiIntegrations /> : <Navigate to="/404" replace />} />
               <Route path="/settings/*" element={hasAccess('settings') ? <Settings /> : <Navigate to="/404" replace />} />
               <Route path="*" element={<Navigate to="/404" replace />} />
             </Routes>

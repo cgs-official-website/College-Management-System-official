@@ -120,6 +120,71 @@ router.post('/', async (req, res) => {
   }
 });
 
+router.post('/bulk', async (req, res) => {
+  try {
+    const { data } = req.body;
+    if (!Array.isArray(data)) {
+      return res.status(400).json({ error: { message: 'Data must be an array' } });
+    }
+
+    const collegeId = req.tenant.collegeId;
+    let successful = 0;
+    let failed = 0;
+
+    for (const row of data) {
+      try {
+        const name = row['Course_Name']?.toString().trim();
+        const code = row['Course_Code']?.toString().trim();
+        const semester = parseInt(row['Semester']) || 1;
+        const credits = parseInt(row['Credits']) || 0;
+        const departmentCode = row['Department_Code']?.toString().trim();
+
+        if (!name || !code || !departmentCode) {
+          failed++;
+          continue;
+        }
+
+        // Find or create department
+        let department = await prisma.department.findFirst({
+          where: { collegeId, code: departmentCode }
+        });
+
+        if (!department) {
+          department = await prisma.department.create({
+            data: {
+              name: departmentCode, // use code as name temporarily if not present
+              code: departmentCode,
+              collegeId
+            }
+          });
+        }
+
+        const existing = await prisma.course.findFirst({
+          where: { collegeId, code }
+        });
+
+        if (existing) {
+          await prisma.course.update({
+            where: { id: existing.id },
+            data: { name, semester, credits, departmentId: department.id }
+          });
+        } else {
+          await prisma.course.create({
+            data: { name, code, semester, credits, departmentId: department.id, collegeId }
+          });
+        }
+        successful++;
+      } catch (err) {
+        failed++;
+      }
+    }
+    
+    return res.json({ data: { successful, failed } });
+  } catch (error) {
+    res.status(500).json({ error: { message: error.message } });
+  }
+});
+
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;

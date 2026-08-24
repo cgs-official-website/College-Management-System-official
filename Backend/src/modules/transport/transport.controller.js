@@ -96,3 +96,57 @@ export const deleteItem = async (req, res) => {
   logger.info(`[info] req=${req.id || ''} college=${collegeId} routeId=${id} actor=${actorId} Deleted transport route`);
   res.json({ success: true, message: 'Transport route deleted successfully' });
 };
+
+export const bulkImportVehicles = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const actorId = req.user?.id || req.user?.userId;
+  const { data } = req.body;
+
+  if (!collegeId) {
+    return res.status(400).json({ success: false, error: { message: 'College ID is required' } });
+  }
+  
+  if (!Array.isArray(data) || data.length === 0) {
+    return res.status(400).json({ success: false, error: { message: 'No data provided for import' } });
+  }
+
+  const results = { successful: 0, failed: 0, errors: [] };
+  
+  for (const [index, row] of data.entries()) {
+    try {
+      const vehicleNo = String(row['Vehicle_No*'] || row['Vehicle_No'] || '').trim();
+
+      if (!vehicleNo) {
+        throw new Error('Vehicle_No is required');
+      }
+
+      const insExpiry = row['Insurance_Expiry_Date'] ? new Date(row['Insurance_Expiry_Date']) : null;
+      const fcExpiry = row['FC_Expiry_Date'] ? new Date(row['FC_Expiry_Date']) : null;
+      const permitExpiry = row['Permit_Expiry_Date'] ? new Date(row['Permit_Expiry_Date']) : null;
+
+      await prisma.vehicle.create({
+        data: {
+          collegeId,
+          vehicleNo: vehicleNo,
+          vehicleType: row['Vehicle_Type'] ? String(row['Vehicle_Type']) : null,
+          seatingCapacity: row['Seating_Capacity'] ? parseInt(row['Seating_Capacity'], 10) : null,
+          rcNumber: row['RC_Number'] ? String(row['RC_Number']) : null,
+          insuranceExpiryDate: insExpiry && !isNaN(insExpiry) ? insExpiry : null,
+          fcExpiryDate: fcExpiry && !isNaN(fcExpiry) ? fcExpiry : null,
+          permitExpiryDate: permitExpiry && !isNaN(permitExpiry) ? permitExpiry : null,
+          driverName: row['Driver_Name'] ? String(row['Driver_Name']) : null,
+          driverLicenseNo: row['Driver_License_No'] ? String(row['Driver_License_No']) : null,
+          driverContact: row['Driver_Contact'] ? String(row['Driver_Contact']) : null,
+        }
+      });
+
+      results.successful++;
+    } catch (error) {
+      results.failed++;
+      results.errors.push(`Row ${index + 2}: ${error.message}`);
+    }
+  }
+
+  logger.info(`[info] req=${req.id || ''} college=${collegeId} actor=${actorId} Bulk imported vehicles: ${results.successful} success, ${results.failed} failed`);
+  res.json({ success: true, data: results });
+};

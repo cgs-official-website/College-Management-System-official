@@ -16,12 +16,16 @@ import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Modal } from '../../../components/ui/Modal';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
 
 export default function HostelDashboard() {
   const confirm = useConfirm();
-  const { items: blocks, stats, isLoading, isAdding, createItem, deleteItem } = useHostel();
+  const { items: blocks, stats, isLoading, isAdding, createItem, deleteItem, students, isLoadingStudents, assignRoom, isAssigningRoom, isImporting, bulkImport } = useHostel();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [assignFormData, setAssignFormData] = useState({ hostelBlockId: '', hostelRoom: '' });
   const [formData, setFormData] = useState({
     name: '',
     type: 'Boys',
@@ -62,6 +66,21 @@ export default function HostelDashboard() {
     }
   };
 
+  const handleAssignRoom = async (e) => {
+    e.preventDefault();
+    if (!selectedStudent) return;
+    try {
+      await assignRoom({ 
+        id: selectedStudent.id, 
+        hostelBlockId: assignFormData.hostelBlockId, 
+        hostelRoom: assignFormData.hostelRoom 
+      });
+      setIsAssignModalOpen(false);
+      setSelectedStudent(null);
+      setAssignFormData({ hostelBlockId: '', hostelRoom: '' });
+    } catch {}
+  };
+
   const handleDelete = async (id, name) => {
     const ok = await confirm({
       title: 'Delete Hostel Block',
@@ -83,13 +102,19 @@ export default function HostelDashboard() {
           <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Hostel & Accommodation</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">Manage residential blocks, room allocations, and student occupancy.</p>
         </div>
-        <Button 
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 shadow-lg shadow-primary-500/20"
-        >
-          <Plus className="w-4 h-4" />
-          Add Hostel Block
-        </Button>
+        <div className="flex gap-2">
+          <ExcelUploadButton 
+            onUpload={bulkImport} 
+            isLoading={isImporting} 
+          />
+          <Button 
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 shadow-lg shadow-primary-500/20"
+          >
+            <Plus className="w-4 h-4" />
+            Add Hostel Block
+          </Button>
+        </div>
       </div>
 
       {/* Stats Grid */}
@@ -242,6 +267,76 @@ export default function HostelDashboard() {
         </div>
       </motion.div>
 
+      {/* Hosteller Students Table */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm space-y-4"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Hosteller Students</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Assign rooms to students marked as Hostellers.</p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200 dark:border-white/10 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                <th className="py-3.5 px-4">Student</th>
+                <th className="py-3.5 px-4">Admission No.</th>
+                <th className="py-3.5 px-4">Department</th>
+                <th className="py-3.5 px-4">Hostel Block</th>
+                <th className="py-3.5 px-4">Room No.</th>
+                <th className="py-3.5 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-white/5 text-sm">
+              {isLoadingStudents ? (
+                <tr>
+                  <td colSpan={6} className="py-4 text-center text-slate-500">Loading students...</td>
+                </tr>
+              ) : students.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-slate-400">
+                    <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                    <p>No hosteller students found.</p>
+                  </td>
+                </tr>
+              ) : (
+                students.map((student) => (
+                  <tr key={student.id} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                    <td className="py-4 px-4 font-medium text-slate-900 dark:text-white">{student.name}</td>
+                    <td className="py-4 px-4 text-slate-500">{student.admissionNo}</td>
+                    <td className="py-4 px-4 text-slate-500">{student.department}</td>
+                    <td className="py-4 px-4 text-slate-800 dark:text-slate-200">{student.hostelBlockName || '-'}</td>
+                    <td className="py-4 px-4 text-slate-800 dark:text-slate-200">{student.hostelRoom || '-'}</td>
+                    <td className="py-4 px-4 text-right">
+                      <Button 
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedStudent(student);
+                          setAssignFormData({ 
+                            hostelBlockId: student.hostelBlockId || '', 
+                            hostelRoom: student.hostelRoom || '' 
+                          });
+                          setIsAssignModalOpen(true);
+                        }}
+                      >
+                        Assign Room
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </motion.div>
+
       {/* Add Block Modal */}
       <Modal
         isOpen={isModalOpen}
@@ -330,6 +425,56 @@ export default function HostelDashboard() {
             </Button>
             <Button type="submit" isLoading={isAdding}>
               Save Hostel Block
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Assign Room Modal */}
+      <Modal
+        isOpen={isAssignModalOpen}
+        onClose={() => {
+          setIsAssignModalOpen(false);
+          setSelectedStudent(null);
+        }}
+        title="Assign Hostel Room"
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={handleAssignRoom} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+              Select Hostel Block
+            </label>
+            <select
+              value={assignFormData.hostelBlockId}
+              onChange={(e) => setAssignFormData({ ...assignFormData, hostelBlockId: e.target.value })}
+              className="w-full px-3 py-2 bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              required
+            >
+              <option value="">-- Select Block --</option>
+              {blocks.map(b => (
+                <option key={b.id} value={b.id}>{b.name} ({b.type})</option>
+              ))}
+            </select>
+          </div>
+
+          <Input
+            label="Room Number"
+            placeholder="e.g. 101-A"
+            value={assignFormData.hostelRoom}
+            onChange={(e) => setAssignFormData({ ...assignFormData, hostelRoom: e.target.value })}
+            required
+          />
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-white/5">
+            <Button variant="secondary" type="button" onClick={() => {
+              setIsAssignModalOpen(false);
+              setSelectedStudent(null);
+            }}>
+              Cancel
+            </Button>
+            <Button type="submit" isLoading={isAssigningRoom}>
+              Assign Room
             </Button>
           </div>
         </form>

@@ -8,10 +8,11 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useCourses } from '../../../hooks/useCourses';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useStaff } from '../../../hooks/useStaff';
+import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
 
 export default function SectionsTab({ courseId, courseName, onClearFilter }) {
   const { userData } = useAuth();
-  const { sections, isLoading, createSection, updateSection, deleteSection } = useSections(courseId);
+  const { sections, isLoading, createSection, updateSection, deleteSection, bulkImport } = useSections(courseId);
   const { courses } = useCourses(); // needed for dropdown if no course selected
   const { staff } = useStaff(userData?.collegeId);
   
@@ -83,9 +84,12 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
             className="pl-10 mb-0"
           />
         </div>
-        <Button onClick={handleOpenAdd}>
-          <Plus className="w-4 h-4 mr-2" /> Add Class
-        </Button>
+        <div className="flex gap-2">
+          <ExcelUploadButton onUpload={bulkImport.mutateAsync} isLoading={bulkImport.isPending} />
+          <Button onClick={handleOpenAdd}>
+            <Plus className="w-4 h-4 mr-2" /> Add Class
+          </Button>
+        </div>
       </div>
 
       {isFormOpen && (

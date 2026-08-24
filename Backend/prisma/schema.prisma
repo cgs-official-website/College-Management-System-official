@@ -53,6 +53,10 @@ model College {
   transportRoutes     TransportRoute[]
   users               User[]
   projects            Project[]
+  apiIntegrations     ApiIntegration[]
+  inventoryItems      InventoryItem[]
+  hostelRooms         HostelRoom[]
+  vehicles            Vehicle[]
 }
 
 model BillingSubscription {
@@ -202,6 +206,7 @@ model Course {
   exams        Exam[]
   sections     Section[]
   timetable    TimetableSlot[]
+  students     Student[]
 
   @@index([collegeId])
 }
@@ -241,6 +246,24 @@ model Teacher {
   timetable    TimetableSlot[]
   sections     Section[]       @relation("TeacherSections")
 
+  gender                  String?
+  dateOfBirth             DateTime?
+  employmentType          String?
+  qualification           String?
+  experienceYears         Int?
+  mobileNumber            String?
+  emailId                 String?
+  aadhaarNumber           String?
+  panNumber               String?
+  bloodGroup              String?
+  address                 String?
+  city                    String?
+  district                String?
+  state                   String?
+  pincode                 String?
+  emergencyContactName    String?
+  emergencyContactNumber  String?
+
   @@index([collegeId])
 }
 
@@ -265,10 +288,37 @@ model Student {
   marks            Mark[]
   parents          ParentStudentLink[]
   scholarships     Scholarship[]
+  residenceType    String                 @default("Day Scholar")
+  hostelBlockId    String?                @db.Uuid
+  hostelRoom       String?
+  hostelBlock      HostelBlock?           @relation(fields: [hostelBlockId], references: [id])
   college          College                @relation(fields: [collegeId], references: [id])
   department       Department             @relation(fields: [departmentId], references: [id])
   section          Section?               @relation(fields: [sectionId], references: [id])
   user             User                   @relation(fields: [userId], references: [id])
+  courseId         String?                @db.Uuid
+  course           Course?                @relation(fields: [courseId], references: [id])
+
+  aadhaarNumber       String?
+  communityCategory   String?
+  yearOfStudy         String?
+  fatherName          String?
+  motherName          String?
+  parentMobile        String?
+  studentMobile       String?
+  emailId             String?
+  address             String?
+  city                String?
+  district            String?
+  state               String?
+  pincode             String?
+  nationality         String?
+  admissionQuota      String?
+  dateOfAdmission     DateTime?
+  previousInstitution String?
+  transportRequired   String?
+  hostelRequired      String?
+  semesterFees        Float?
 
   @@index([collegeId])
 }
@@ -321,6 +371,7 @@ model Admission {
   createdFromLeadId String?    @db.Uuid
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
+  residenceType     String     @default("Day Scholar")
   college           College    @relation(fields: [collegeId], references: [id])
   department        Department @relation(fields: [departmentId], references: [id])
 
@@ -533,6 +584,12 @@ model LibraryItem {
   availableCopies Int      @default(1)
   location        String?
   college         College  @relation(fields: [collegeId], references: [id])
+  edition         String?
+  department      String?
+  price           Float?
+  rackNo          String?
+  purchaseDate    DateTime?
+  vendorName      String?
 }
 
 model HostelBlock {
@@ -540,6 +597,25 @@ model HostelBlock {
   collegeId String  @db.Uuid
   name      String
   college   College @relation(fields: [collegeId], references: [id])
+  students  Student[]
+  rooms     HostelRoom[]
+}
+
+model HostelRoom {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId     String       @db.Uuid
+  hostelBlockId String       @db.Uuid
+  roomNo        String
+  roomType      String?
+  capacity      Int?
+  floor         String?
+  wardenName    String?
+  wardenContact String?
+  
+  college       College      @relation(fields: [collegeId], references: [id])
+  hostelBlock   HostelBlock  @relation(fields: [hostelBlockId], references: [id])
+  
+  @@unique([hostelBlockId, roomNo])
 }
 
 model TransportRoute {
@@ -664,4 +740,64 @@ model DocumentVault {
   collegeId String  @db.Uuid
   fileName  String
   college   College @relation(fields: [collegeId], references: [id])
+}
+
+model ApiIntegration {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId     String   @db.Uuid
+  provider      String   // e.g., 'whatsapp'
+  apiKey        String?
+  apiSecret     String?
+  webhookUrl    String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  college       College  @relation(fields: [collegeId], references: [id])
+  
+  @@unique([collegeId, provider])
+  @@index([collegeId])
+}
+
+model InventoryItem {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId   String   @db.Uuid
+  name        String
+  sku         String?
+  category    String?
+  quantity    Int      @default(0)
+  unitPrice   Float    @default(0.0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  departmentLocation String?
+  unitOfMeasure      String?
+  reorderLevel       Int?
+  vendorName         String?
+  purchaseDate       DateTime?
+  warrantyExpiry     DateTime?
+  assetTagNo         String?
+  remarks            String?
+  college     College  @relation(fields: [collegeId], references: [id])
+
+  @@index([collegeId])
+}
+
+model Vehicle {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId           String   @db.Uuid
+  vehicleNo           String
+  vehicleType         String?
+  seatingCapacity     Int?
+  rcNumber            String?
+  insuranceExpiryDate DateTime?
+  fcExpiryDate        DateTime?
+  permitExpiryDate    DateTime?
+  driverName          String?
+  driverLicenseNo     String?
+  driverContact       String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  college             College  @relation(fields: [collegeId], references: [id])
+  
+  @@index([collegeId])
 }

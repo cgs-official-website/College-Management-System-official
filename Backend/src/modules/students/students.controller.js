@@ -32,6 +32,7 @@ export const getStudents = async (req, res) => {
       },
       department: true,
       section: true,
+      hostelBlock: true,
     },
     orderBy: { createdAt: 'desc' }
   });
@@ -60,6 +61,10 @@ export const getStudents = async (req, res) => {
       bloodGroup: s.bloodGroup,
       emergencyContact: s.emergencyContact,
       status: s.user?.accountStatus || 'active',
+      residenceType: s.residenceType,
+      hostelBlock: s.hostelBlock?.name || null,
+      hostelBlockId: s.hostelBlockId,
+      hostelRoom: s.hostelRoom,
       customRole: s.user?.customRole?.name || null,
       customRoleId: s.user?.customRoleId || null,
       createdAt: s.createdAt,
@@ -91,6 +96,7 @@ export const getStudentById = async (req, res) => {
       },
       department: true,
       section: true,
+      hostelBlock: true,
     }
   });
 
@@ -122,6 +128,10 @@ export const getStudentById = async (req, res) => {
       bloodGroup: student.bloodGroup,
       emergencyContact: student.emergencyContact,
       status: student.user?.accountStatus || 'active',
+      residenceType: student.residenceType,
+      hostelBlock: student.hostelBlock?.name || null,
+      hostelBlockId: student.hostelBlockId,
+      hostelRoom: student.hostelRoom,
       createdAt: student.createdAt,
     }
   });
@@ -197,6 +207,9 @@ export const createStudent = async (req, res) => {
         batchYear: payload.batchYear || `${new Date().getFullYear()}`,
         bloodGroup: payload.bloodGroup,
         emergencyContact: payload.emergencyContact || payload.phone || payload.parentPhone,
+        residenceType: payload.residenceType || 'Day Scholar',
+        ...(payload.hostelBlockId ? { hostelBlockId: payload.hostelBlockId } : {}),
+        ...(payload.hostelRoom ? { hostelRoom: payload.hostelRoom } : {}),
         ...(payload.sectionId ? { sectionId: payload.sectionId } : {})
       },
       include: {
@@ -267,6 +280,9 @@ export const updateStudent = async (req, res) => {
         ...(payload.batchYear !== undefined ? { batchYear: payload.batchYear } : {}),
         ...(payload.bloodGroup !== undefined ? { bloodGroup: payload.bloodGroup || null } : {}),
         ...(payload.emergencyContact || payload.phone ? { emergencyContact: payload.emergencyContact || payload.phone } : {}),
+        ...(payload.residenceType ? { residenceType: payload.residenceType } : {}),
+        ...(payload.hostelBlockId !== undefined ? { hostelBlockId: payload.hostelBlockId || null } : {}),
+        ...(payload.hostelRoom !== undefined ? { hostelRoom: payload.hostelRoom || null } : {}),
         ...(deptId ? { departmentId: deptId } : {}),
         ...(payload.sectionId !== undefined ? { sectionId: payload.sectionId || null } : {})
       },
@@ -307,4 +323,127 @@ export const deleteStudent = async (req, res) => {
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} studentId=${id} actor=${actorId} Deleted student`);
   res.json({ success: true, message: 'Student deleted successfully' });
+};
+
+export const bulkImportStudents = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const actorId = req.user?.id || req.user?.userId;
+  const { data } = req.body; // Expecting an array of parsed Excel rows
+
+  if (!collegeId) {
+    return res.status(400).json({ success: false, error: { message: 'College ID is required' } });
+  }
+  
+  if (!Array.isArray(data) || data.length === 0) {
+    return res.status(400).json({ success: false, error: { message: 'No data provided for import' } });
+  }
+
+  const results = { successful: 0, failed: 0, errors: [] };
+
+  // Fetch or create a default department if none specified
+  const departmentsCache = {};
+  
+  for (const [index, row] of data.entries()) {
+    try {
+      const admissionNo = String(row['Admission_No*'] || row['Admission_No'] || '').trim();
+      const studentName = String(row['Student_Name*'] || row['Student_Name'] || '').trim();
+      const departmentName = String(row['Department*'] || row['Department'] || 'General').trim();
+      const rollNo = String(row['Roll_No'] || `R-${Date.now().toString().slice(-4)}`).trim();
+
+      if (!admissionNo || !studentName) {
+        throw new Error('Admission_No and Student_Name are required');
+      }
+
+      // Department lookup or creation
+      let deptId = departmentsCache[departmentName];
+      if (!deptId) {
+        let dept = await prisma.department.findFirst({
+          where: { collegeId, name: { equals: departmentName, mode: 'insensitive' } }
+        });
+        if (!dept) {
+          dept = await prisma.department.create({
+            data: {
+              name: departmentName,
+              code: departmentName.substring(0, 3).toUpperCase(),
+              collegeId
+            }
+          });
+        }
+        departmentsCache[departmentName] = dept.id;
+        deptId = dept.id;
+      }
+
+      // Split name
+      const nameParts = studentName.split(' ');
+      const fName = nameParts[0];
+      const lName = nameParts.slice(1).join(' ');
+      const email = String(row['Email_ID'] || `${admissionNo.toLowerCase()}@example.com`).toLowerCase().trim();
+
+      await prisma.$transaction(async (tx) => {
+        let user = await tx.user.findFirst({
+          where: { email, collegeId }
+        });
+
+        if (!user) {
+          const defaultPassword = await bcrypt.hash('Student@123', 10);
+          user = await tx.user.create({
+            data: {
+              email,
+              collegeId,
+              role: 'student',
+              passwordHash: defaultPassword,
+              accountStatus: 'active'
+            }
+          });
+        }
+
+        const dateOfBirth = row['Date_of_Birth*'] || row['Date_of_Birth'] ? new Date(row['Date_of_Birth*'] || row['Date_of_Birth']) : null;
+        const dateOfAdmission = row['Date_of_Admission*'] || row['Date_of_Admission'] ? new Date(row['Date_of_Admission*'] || row['Date_of_Admission']) : null;
+        
+        await tx.student.create({
+          data: {
+            collegeId,
+            userId: user.id,
+            departmentId: deptId,
+            admissionNumber: admissionNo,
+            rollNumber: rollNo,
+            batchYear: String(row['Year_of_Study*'] || row['Year_of_Study'] || new Date().getFullYear()),
+            bloodGroup: row['Blood_Group'] || null,
+            emergencyContact: String(row['Parent_Mobile*'] || row['Parent_Mobile'] || row['Student_Mobile'] || ''),
+            residenceType: String(row['Hostel_Required'] || '').toLowerCase() === 'yes' ? 'Hosteller' : 'Day Scholar',
+            
+            // New fields mapped from Excel
+            aadhaarNumber: row['Aadhaar_Number'] ? String(row['Aadhaar_Number']) : null,
+            communityCategory: row['Community_Category'] ? String(row['Community_Category']) : null,
+            yearOfStudy: row['Year_of_Study*'] || row['Year_of_Study'] ? String(row['Year_of_Study*'] || row['Year_of_Study']) : null,
+            fatherName: row['Father_Name*'] || row['Father_Name'] ? String(row['Father_Name*'] || row['Father_Name']) : null,
+            motherName: row['Mother_Name'] ? String(row['Mother_Name']) : null,
+            parentMobile: row['Parent_Mobile*'] || row['Parent_Mobile'] ? String(row['Parent_Mobile*'] || row['Parent_Mobile']) : null,
+            studentMobile: row['Student_Mobile'] ? String(row['Student_Mobile']) : null,
+            emailId: email,
+            address: row['Address'] ? String(row['Address']) : null,
+            city: row['City'] ? String(row['City']) : null,
+            district: row['District'] ? String(row['District']) : null,
+            state: row['State'] ? String(row['State']) : null,
+            pincode: row['Pincode'] ? String(row['Pincode']) : null,
+            nationality: row['Nationality'] ? String(row['Nationality']) : null,
+            admissionQuota: row['Admission_Quota'] ? String(row['Admission_Quota']) : null,
+            dateOfAdmission: dateOfAdmission && !isNaN(dateOfAdmission) ? dateOfAdmission : null,
+            previousInstitution: row['Previous_Institution'] ? String(row['Previous_Institution']) : null,
+            transportRequired: row['Transport_Required'] ? String(row['Transport_Required']) : null,
+            hostelRequired: row['Hostel_Required'] ? String(row['Hostel_Required']) : null,
+            semesterFees: row['Semester Fees'] ? parseFloat(row['Semester Fees']) : null,
+          }
+        });
+      });
+
+      results.successful++;
+    } catch (error) {
+      results.failed++;
+      results.errors.push(`Row ${index + 2}: ${error.message}`);
+    }
+  }
+
+  logger.info(`[info] req=${req.id || ''} college=${collegeId} actor=${actorId} Bulk imported students: ${results.successful} success, ${results.failed} failed`);
+  res.json({ success: true, data: results });
 };

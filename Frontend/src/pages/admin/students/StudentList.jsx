@@ -4,16 +4,17 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { DataTable } from '../../../components/tables/DataTable';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
-import { Search, Plus, Upload, Edit, Trash2, Eye } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, Eye } from 'lucide-react';
 import { StudentFormModal } from './StudentFormModal';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
 
 export default function StudentList() {
   const confirm = useConfirm();
   const { userData } = useAuth();
   const collegeId = userData?.collegeId || 'default_college_id';
-  const { students, isLoading, addStudent, updateStudent, deleteStudent, isAdding, isUpdating } = useStudents(collegeId);
+  const { students, isLoading, addStudent, updateStudent, deleteStudent, isAdding, isUpdating, isImporting, bulkImport } = useStudents(collegeId);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -133,10 +134,10 @@ export default function StudentList() {
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage student records and information.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => toast('Bulk import coming soon!')}>
-            <Upload className="w-4 h-4 mr-2" />
-            Import
-          </Button>
+          <ExcelUploadButton 
+            onUpload={bulkImport} 
+            isLoading={isImporting} 
+          />
           <Button onClick={handleOpenAdd}>
             <Plus className="w-4 h-4 mr-2" />
             Add Student

@@ -9,12 +9,13 @@ import { StaffDetailsModal } from './StaffDetailsModal';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import apiClient from '../../../services/apiClient';
 import toast from 'react-hot-toast';
+import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
 
 export default function HRManagement() {
   const confirm = useConfirm();
   const { userData } = useAuth();
   const collegeId = userData?.collegeId || 'default_college_id';
-  const { staff, isLoading, addStaff, updateStaff, deleteStaff, isAdding, isUpdating } = useStaff(collegeId);
+  const { staff, isLoading, addStaff, updateStaff, deleteStaff, isAdding, isUpdating, isImporting, bulkImport } = useStaff(collegeId);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -91,10 +92,16 @@ export default function HRManagement() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">HR & Staff Directory</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage all college employees and faculty.</p>
         </div>
-        <Button onClick={handleOpenAdd}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Staff Member
-        </Button>
+        <div className="flex gap-2">
+          <ExcelUploadButton 
+            onUpload={bulkImport} 
+            isLoading={isImporting} 
+          />
+          <Button onClick={handleOpenAdd}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Staff Member
+          </Button>
+        </div>
       </div>
 
       {/* Toolbar */}

@@ -136,12 +136,16 @@ app.use('/api/v1/sections', sectionsRoutes);
 import assignmentsRoutes from './modules/assignments/assignments.routes.js';
 import payrollRoutes from './modules/payroll/payroll.routes.js';
 import projectsRoutes from './modules/projects/projects.routes.js';
+import apiIntegrationRoutes from './modules/api_integrations/api_integrations.routes.js';
+import inventoryRoutes from './modules/inventory/inventory.routes.js';
 
 app.use('/api/v1/public', stubs.publicRoutes);
 app.use('/api/v1/mock', stubs.mockDataRoutes);
 app.use('/api/v1/assignments', assignmentsRoutes);
 app.use('/api/v1/payroll', payrollRoutes);
 app.use('/api/v1/projects', projectsRoutes);
+app.use('/api/v1/integrations', apiIntegrationRoutes);
+app.use('/api/v1/inventory', inventoryRoutes);
 
 // Sentry error handler if initialized
 Sentry.setupExpressErrorHandler(app);

@@ -48,16 +48,34 @@ export function useStaff(collegeId) {
     }
   });
 
+  const bulkImport = useMutation({
+    mutationFn: (data) => api.post('/staff/bulk', { data }),
+    onSuccess: (res) => {
+      const stats = res.data?.data || {};
+      toast.success(`Imported ${stats.successful || 0} staff successfully!`);
+      if (stats.failed > 0) {
+        toast.error(`${stats.failed} failed.`);
+        console.error('Import errors:', stats.errors);
+      }
+      queryClient.invalidateQueries({ queryKey: ['staff', collegeId] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to bulk import staff');
+    }
+  });
+
   return {
     staff,
     isLoading,
     isAdding: addStaff.isPending,
     isUpdating: updateStaff.isPending,
     isDeleting: deleteStaff.isPending,
+    isImporting: bulkImport.isPending,
     error,
     refetch,
     addStaff: addStaff.mutateAsync,
     updateStaff: updateStaff.mutateAsync,
     deleteStaff: deleteStaff.mutateAsync,
+    bulkImport: bulkImport.mutateAsync,
   };
 }

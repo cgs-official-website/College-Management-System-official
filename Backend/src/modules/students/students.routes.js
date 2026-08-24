@@ -8,7 +8,8 @@ import {
   getStudentById,
   createStudent,
   updateStudent,
-  deleteStudent
+  deleteStudent,
+  bulkImportStudents
 } from './students.controller.js';
 
 const router = Router();
@@ -18,6 +19,7 @@ router.use(authenticate, resolveTenant);
 router.get('/', requirePermission('students', 'read'), catchAsync(getStudents));
 router.get('/:id', requirePermission('students', 'read'), catchAsync(getStudentById));
 router.post('/', requirePermission('students', 'create'), catchAsync(createStudent));
+router.post('/bulk', requirePermission('students', 'create'), catchAsync(bulkImportStudents));
 router.put('/:id', requirePermission('students', 'update'), catchAsync(updateStudent));
 router.delete('/:id', requirePermission('students', 'delete'), catchAsync(deleteStudent));
 
