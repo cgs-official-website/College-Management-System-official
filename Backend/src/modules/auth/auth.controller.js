@@ -3,7 +3,9 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma, logger } from '../../server.js';
 import { redis, redisKeys } from '../../lib/cache.js';
-import { loginSchema, registerAdminSchema, refreshTokenSchema } from './auth.schema.js';
+import { loginSchema, registerAdminSchema, refreshTokenSchema, forgotPasswordSchema, resetPasswordSchema } from './auth.schema.js';
+import { sendMail } from '../../services/email/email.service.js';
+import { getWelcomeEmailTemplate, getPasswordResetTemplate } from '../../services/email/templates.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret';
@@ -224,6 +226,15 @@ export const registerAdmin = async (req, res) => {
       return { college, admin };
     });
 
+    // Send Welcome Email to Admin
+    const welcomeHtml = getWelcomeEmailTemplate({
+      name: 'College Admin',
+      email: data.adminEmail,
+      password: data.password,
+      loginUrl: 'http://localhost:5173/login'
+    });
+    sendMail({ to: data.adminEmail, subject: 'Welcome to Zuna ERP', html: welcomeHtml }).catch(err => logger.error(err));
+
     res.status(201).json({ success: true, data: result });
   } catch (error) {
     res.status(400).json({ success: false, error: { message: error.message } });
@@ -329,5 +340,70 @@ export const completeStaffSetup = async (req, res) => {
   } catch (error) {
     console.error('completeStaffSetup Error:', error);
     res.status(400).json({ success: false, error: { message: error.message || 'Invalid or expired token' } });
+  }
+};
+
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = forgotPasswordSchema.parse(req.body);
+
+    const user = await prisma.user.findFirst({
+      where: { email }
+    });
+
+    if (!user) {
+      // Don't leak whether the email exists. Return success anyway.
+      return res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
+    }
+
+    // Create a one-time token signed with the user's current password hash.
+    // If the password changes, this token immediately becomes invalid.
+    const secret = JWT_SECRET + user.passwordHash;
+    const token = jwt.sign({ userId: user.id, email: user.email }, secret, { expiresIn: '15m' });
+
+    // Ensure frontend is running on standard port, fallback to environment variable if available
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const resetLink = `${frontendUrl}/reset-password?token=${token}&id=${user.id}`;
+
+    const resetHtml = getPasswordResetTemplate({ resetLink });
+    
+    await sendMail({ to: user.email, subject: 'Zuna ERP - Password Reset Request', html: resetHtml });
+
+    res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
+  } catch (error) {
+    res.status(400).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  try {
+    const { token, userId, password } = resetPasswordSchema.parse(req.body);
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, error: { message: 'Invalid or expired token' } });
+    }
+
+    const secret = JWT_SECRET + user.passwordHash;
+    
+    try {
+      jwt.verify(token, secret);
+    } catch (err) {
+      return res.status(400).json({ success: false, error: { message: 'Invalid or expired token' } });
+    }
+
+    const newPasswordHash = await bcrypt.hash(password, 10);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: newPasswordHash }
+    });
+
+    res.json({ success: true, message: 'Password has been successfully reset.' });
+  } catch (error) {
+    res.status(400).json({ success: false, error: { message: error.message } });
   }
 };

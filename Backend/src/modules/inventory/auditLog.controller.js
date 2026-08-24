@@ -1,6 +1,8 @@
 import { prisma, logger } from '../../server.js';
 import { invalidateCachePattern } from '../../lib/cache.js';
 import { stockMovementSchema } from './inventory.schema.js';
+import { sendMail } from '../../services/email/email.service.js';
+import { getLowStockAlertTemplate } from '../../services/email/templates.js';
 
 export const getAuditLogs = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
@@ -215,6 +217,29 @@ export const createStockMovement = async (req, res) => {
   ]);
 
   logger.info(`[info] college=${collegeId} actor=${actorId} Recorded ${payload.movementType} movement for item id=${item.id} qty=${payload.quantity} reason='${payload.reason}'`);
+
+  // Low Stock Alert
+  if (
+    payload.movementType === 'OUTBOUND' &&
+    item.reorderLevel !== null &&
+    result.updatedItem.quantity < item.reorderLevel
+  ) {
+    // Ideally fetch the inventory manager's email or college admin's email.
+    // Using a fallback for demonstration or if it's the admin executing it.
+    const alertEmail = req.user?.email || 'admin@college.edu';
+    
+    const alertHtml = getLowStockAlertTemplate({
+      itemName: result.updatedItem.name,
+      currentStock: result.updatedItem.quantity,
+      reorderLevel: item.reorderLevel
+    });
+    
+    sendMail({
+      to: alertEmail,
+      subject: `Low Stock Alert: ${result.updatedItem.name}`,
+      html: alertHtml
+    }).catch(err => logger.error(`Failed to send low stock alert: ${err.message}`));
+  }
 
   res.status(201).json({
     success: true,

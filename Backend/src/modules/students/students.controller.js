@@ -1,6 +1,8 @@
 import { prisma, logger } from '../../server.js';
 import bcrypt from 'bcryptjs';
 import { createStudentSchema, updateStudentSchema } from './students.schema.js';
+import { sendMail } from '../../services/email/email.service.js';
+import { getWelcomeEmailTemplate } from '../../services/email/templates.js';
 
 export const getStudents = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId || req.query.collegeId;
@@ -222,6 +224,16 @@ export const createStudent = async (req, res) => {
   });
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} studentId=${student.id} actor=${actorId} Created student '${payload.firstName} ${payload.lastName || ''}'`);
+
+  // Send Welcome Email asynchronously
+  const fullName = `${payload.firstName} ${payload.lastName || ''}`.trim();
+  const welcomeHtml = getWelcomeEmailTemplate({
+    name: fullName,
+    email: email,
+    password: 'Student@123',
+    loginUrl: 'http://localhost:5173/login'
+  });
+  sendMail({ to: email, subject: 'Welcome to Zuna ERP', html: welcomeHtml }).catch(err => logger.error(`Failed to send welcome email to student ${email}: ${err.message}`));
 
   res.status(201).json({
     success: true,

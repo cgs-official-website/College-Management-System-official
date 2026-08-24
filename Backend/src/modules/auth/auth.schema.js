@@ -16,3 +16,13 @@ export const registerAdminSchema = z.object({
 export const refreshTokenSchema = z.object({
   refreshToken: z.string()
 });
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email()
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string(),
+  userId: z.string().uuid(),
+  password: z.string().min(6, "Password must be at least 6 characters long")
+});
