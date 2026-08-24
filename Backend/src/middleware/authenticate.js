@@ -1,13 +1,13 @@
 import jwt from 'jsonwebtoken';
-import { redis } from '../lib/cache.js';
-import { prisma } from '../server.js';
+import { redis, redisKeys } from '../lib/cache.js';
+import { prisma, logger } from '../server.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 
 export const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing or invalid token' });
+    return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Missing or invalid authorization token' } });
   }
 
   const token = authHeader.split(' ')[1];
@@ -15,11 +15,13 @@ export const authenticate = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     
-    // Check if token/session is revoked in Redis
+    // Check if token/session is revoked in Redis (with fail-open safety)
     if (decoded.jti) {
-      const isRevoked = await redis.get(`revoked:${decoded.jti}`).catch(() => null);
-      if (isRevoked) {
-        return res.status(401).json({ error: 'Token revoked' });
+      if (redis.status === 'ready') {
+        const isRevoked = await redis.get(redisKeys.revokedToken(decoded.jti)).catch(() => null);
+        if (isRevoked) {
+          return res.status(401).json({ success: false, error: { code: 'TOKEN_REVOKED', message: 'Token has been revoked' } });
+        }
       }
     }
 
@@ -30,14 +32,14 @@ export const authenticate = async (req, res, next) => {
     });
 
     if (!user || user.accountStatus !== 'active') {
-      return res.status(403).json({ error: 'Account disabled or deleted' });
+      return res.status(403).json({ success: false, error: { code: 'ACCOUNT_INACTIVE', message: 'Account is disabled or deleted' } });
     }
 
     // If not superadmin, ensure college is active or trial
     if (user.role !== 'superadmin' && user.college) {
       const blockedStatuses = ['rejected'];
       if (blockedStatuses.includes(user.college.status)) {
-        return res.status(403).json({ error: { code: 'COLLEGE_REJECTED', message: 'College was rejected' } });
+        return res.status(403).json({ success: false, error: { code: 'COLLEGE_REJECTED', message: 'College was rejected' } });
       }
     }
 
@@ -54,7 +56,10 @@ export const authenticate = async (req, res, next) => {
     req.tenant = user.collegeId ? { collegeId: user.collegeId } : null;
     next();
   } catch (error) {
-    console.error('Authentication Error:', error);
-    return res.status(403).json({ error: 'Token expired or invalid' });
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ success: false, error: { code: 'TOKEN_EXPIRED', message: 'Access token expired' } });
+    }
+    logger.warn(`[warn] JWT Authentication Failed: ${error.message}`);
+    return res.status(401).json({ success: false, error: { code: 'INVALID_TOKEN', message: 'Invalid or expired token' } });
   }
 };

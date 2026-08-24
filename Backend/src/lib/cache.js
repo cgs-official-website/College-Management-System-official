@@ -42,6 +42,19 @@ redis.on('ready', () => {
 });
 
 /**
+ * Standardized Redis key naming generator
+ * Ensures module caches never conflict with authentication / session keys.
+ */
+export const redisKeys = {
+  refreshToken: (tokenHash) => `auth:refresh:${tokenHash}`,
+  userRefreshToken: (userId) => `auth:user_refresh:${userId}`,
+  revokedToken: (jti) => `auth:revoked:${jti}`,
+  dashboardStats: (collegeId) => `dashboard:stats:${collegeId}`,
+  inventoryItems: (collegeId, paramsStr = '') => `inventory:items:${collegeId}:${paramsStr}`,
+  inventoryCategories: (collegeId) => `inventory:categories:${collegeId}:*`
+};
+
+/**
  * Cache-aside getOrSet wrapper.
  * Fails open (falls back to fetchFn) if Redis is down.
  */
@@ -49,7 +62,14 @@ export async function getOrSet(key, ttlSeconds, fetchFn) {
   if (redis.status === 'ready') {
     try {
       const cached = await redis.get(key);
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        try {
+          return JSON.parse(cached);
+        } catch (parseErr) {
+          logger.warn(`[warn] Redis JSON parse error for key ${key}. Falling back to fetch.`);
+          await redis.del(key).catch(() => {});
+        }
+      }
     } catch (err) {
       logger.warn(`[warn] Redis cache read failed for key ${key}: ${err.message}. Falling open.`);
     }
@@ -70,14 +90,25 @@ export async function getOrSet(key, ttlSeconds, fetchFn) {
 
 /**
  * Invalidate cache keys matching a pattern (e.g. "inventory:categories:collegeId:*").
+ * Prevents wiping authentication / session keys.
  * Fails open if Redis is offline.
  */
 export async function invalidateCachePattern(pattern) {
   if (redis.status === 'ready') {
     try {
+      // Guard: Never allow deleting auth keys via generic pattern invalidation
+      if (pattern.startsWith('auth:') || pattern === '*') {
+        logger.warn(`[warn] Blocked dangerous cache invalidation pattern: ${pattern}`);
+        return;
+      }
+
       const keys = await redis.keys(pattern);
       if (keys && keys.length > 0) {
-        await redis.del(...keys);
+        // Filter out any auth keys just in case
+        const safeKeys = keys.filter(k => !k.startsWith('auth:'));
+        if (safeKeys.length > 0) {
+          await redis.del(...safeKeys);
+        }
       }
     } catch (err) {
       logger.warn(`[warn] Redis cache invalidation failed for pattern ${pattern}: ${err.message}.`);

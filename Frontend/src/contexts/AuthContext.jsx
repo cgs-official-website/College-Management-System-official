@@ -17,10 +17,15 @@ export function AuthProvider({ children }) {
 
   async function login(email, password) {
     const response = await api.post('/auth/login', { email, password });
-    localStorage.setItem('zuna_token', response.data.accessToken);
+    const { accessToken, refreshToken, user } = response.data;
+
+    localStorage.setItem('zuna_token', accessToken);
+    if (refreshToken) {
+      localStorage.setItem('zuna_refresh', refreshToken);
+    }
     
     await restoreSession();
-    return response.data.user;
+    return user;
   }
 
   async function register(email, password, additionalData) {
@@ -38,7 +43,12 @@ export function AuthProvider({ children }) {
   }
 
   function logout() {
+    const refreshToken = localStorage.getItem('zuna_refresh');
+    if (refreshToken) {
+      api.post('/auth/logout', { refreshToken }).catch(() => {});
+    }
     localStorage.removeItem('zuna_token');
+    localStorage.removeItem('zuna_refresh');
     setCurrentUser(null);
     setUserRole(null);
     setUserData(null);
@@ -55,7 +65,9 @@ export function AuthProvider({ children }) {
 
   const restoreSession = async () => {
     const token = localStorage.getItem('zuna_token');
-    if (!token) {
+    const refreshToken = localStorage.getItem('zuna_refresh');
+    
+    if (!token && !refreshToken) {
       setLoading(false);
       return;
     }
