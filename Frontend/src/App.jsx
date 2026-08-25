@@ -6,6 +6,7 @@ import LandingPage from './pages/landing/LandingPage';
 import DemoSeeder from './pages/landing/DemoSeeder';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import StudentRegister from './pages/auth/StudentRegister';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
 import StaffSetup from './pages/auth/StaffSetup';
@@ -14,6 +15,7 @@ import ProtectedRoute from './components/ui/ProtectedRoute';
 import DashboardRedirect from './components/ui/DashboardRedirect';
 import SuperAdminLayout from './pages/superadmin/SuperAdminLayout';
 import AdminLayout from './pages/admin/AdminLayout';
+import StudentLayout from './pages/student/StudentLayout';
 import NotFound from './pages/error/NotFound';
 import { Toaster } from 'react-hot-toast';
 
@@ -36,6 +38,11 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/register/:roleParam" element={<Register />} />
             <Route path="/register/:roleParam/:collegeSlug" element={<Register />} />
+            
+            {/* Student Registration (Public with Token) */}
+            <Route path="/student/register" element={<StudentRegister />} />
+            <Route path="/student/register/:tokenParam" element={<StudentRegister />} />
+
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/staff-setup" element={<StaffSetup />} />
@@ -46,8 +53,11 @@ function App() {
             {/* Super Admin Routes */}
             <Route path="/super/*" element={<ProtectedRoute allowedRoles={['superadmin']}><SuperAdminLayout /></ProtectedRoute>} />
 
-            {/* Admin/Staff/Student Routes */}
+            {/* Admin/Staff Routes */}
             <Route path="/admin/*" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>} />
+
+            {/* Student Portal Routes */}
+            <Route path="/student/*" element={<ProtectedRoute allowedRoles={['student', 'superadmin']}><StudentLayout /></ProtectedRoute>} />
             
             {/* 404 Route */}
             <Route path="*" element={<NotFound />} />

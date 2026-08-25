@@ -96,27 +96,28 @@ export default function StudentList() {
       cell: (row) => (
         <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
           row.status === 'active' 
-            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
+            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' 
             : 'bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-400'
         }`}>
-          {row.status === 'active' ? 'Active' : 'Inactive'}
+          {row.status ? row.status.charAt(0).toUpperCase() + row.status.slice(1) : 'Active'}
         </span>
       )
     },
     {
       header: 'Actions',
+      accessorKey: 'id',
       cell: (row) => (
         <div className="flex items-center gap-2">
           <button 
             onClick={() => handleOpenEdit(row)}
-            className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+            className="p-1.5 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-slate-500 hover:text-primary-600 transition-colors"
             title="Edit"
           >
             <Edit className="w-4 h-4" />
           </button>
           <button 
             onClick={() => handleDelete(row.id)}
-            className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+            className="p-1.5 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-slate-500 hover:text-red-600 transition-colors"
             title="Delete"
           >
             <Trash2 className="w-4 h-4" />
@@ -131,9 +132,9 @@ export default function StudentList() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Students Directory</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage student records and information.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage student records and import admissions.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ExcelUploadButton 
             onUpload={bulkImport} 
             isLoading={isImporting} 

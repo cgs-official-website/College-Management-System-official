@@ -65,6 +65,7 @@ model College {
   customSections      CustomSection[]
   customRecords       CustomRecord[]
   emailTemplates      EmailTemplate[]
+  studentRegistrationLinks StudentRegistrationLink[]
 }
 
 model BillingSubscription {
@@ -333,7 +334,9 @@ model Student {
   semesterFees        Float?
   customFields        Json?
 
+  @@unique([collegeId, admissionNumber])
   @@index([collegeId])
+  @@index([collegeId, emailId])
 }
 
 model Parent {
@@ -344,6 +347,20 @@ model Parent {
   college   College             @relation(fields: [collegeId], references: [id])
   user      User                @relation(fields: [userId], references: [id])
   students  ParentStudentLink[]
+
+  @@index([collegeId])
+}
+
+model StudentRegistrationLink {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId   String    @db.Uuid
+  tokenHash   String    @unique
+  isActive    Boolean   @default(true)
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String?   @db.Uuid
+  college     College   @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 
   @@index([collegeId])
 }

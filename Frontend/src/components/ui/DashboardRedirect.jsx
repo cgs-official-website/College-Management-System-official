@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { FaSpinner } from 'react-icons/fa';
@@ -18,12 +18,10 @@ const DashboardRedirect = () => {
   }
 
   if (userRole === 'superadmin') return <Navigate to="/super" replace />;
+  if (userRole === 'student') return <Navigate to="/student" replace />;
   
   // Everyone else goes to the admin panel where their role-based permissions take over
   return <Navigate to="/admin" replace />;
-
-  // Fallback or unassigned role
-  return <Navigate to="/login" replace />;
 };
 
 export default DashboardRedirect;

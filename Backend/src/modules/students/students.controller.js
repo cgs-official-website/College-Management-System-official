@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { prisma, logger } from '../../server.js';
 import bcrypt from 'bcryptjs';
 import { createStudentSchema, updateStudentSchema } from './students.schema.js';
@@ -461,4 +462,102 @@ export const bulkImportStudents = async (req, res) => {
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} actor=${actorId} Bulk imported students: ${results.successful} success, ${results.failed} failed`);
   res.json({ success: true, data: results });
+};
+
+export const getRegistrationLink = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  if (!collegeId) {
+    return res.status(400).json({ success: false, error: { code: 'COLLEGE_REQUIRED', message: 'College ID is required' } });
+  }
+
+  let link = await prisma.studentRegistrationLink.findFirst({
+    where: { collegeId, isActive: true },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  let rawToken = null;
+
+  if (!link) {
+    rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    link = await prisma.studentRegistrationLink.create({
+      data: {
+        collegeId,
+        tokenHash,
+        isActive: true,
+        createdById: req.user?.id || req.user?.userId
+      }
+    });
+  }
+
+  res.json({
+    success: true,
+    data: {
+      id: link.id,
+      isActive: link.isActive,
+      expiresAt: link.expiresAt,
+      createdAt: link.createdAt,
+      rawToken,
+      path: rawToken ? `/student/register?token=${rawToken}` : null
+    }
+  });
+};
+
+export const regenerateRegistrationLink = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  if (!collegeId) {
+    return res.status(400).json({ success: false, error: { code: 'COLLEGE_REQUIRED', message: 'College ID is required' } });
+  }
+
+  // Deactivate all previous links for this college
+  await prisma.studentRegistrationLink.updateMany({
+    where: { collegeId },
+    data: { isActive: false }
+  });
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+  const newLink = await prisma.studentRegistrationLink.create({
+    data: {
+      collegeId,
+      tokenHash,
+      isActive: true,
+      createdById: req.user?.id || req.user?.userId
+    }
+  });
+
+  logger.info(`[info] College ${collegeId} regenerated student registration link (id=${newLink.id})`);
+
+  res.json({
+    success: true,
+    message: 'Registration link regenerated successfully. Previous links have been invalidated.',
+    data: {
+      id: newLink.id,
+      isActive: newLink.isActive,
+      expiresAt: newLink.expiresAt,
+      rawToken,
+      path: `/student/register?token=${rawToken}`
+    }
+  });
+};
+
+export const toggleRegistrationLink = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const { isActive } = req.body;
+
+  if (!collegeId) {
+    return res.status(400).json({ success: false, error: { code: 'COLLEGE_REQUIRED', message: 'College ID is required' } });
+  }
+
+  await prisma.studentRegistrationLink.updateMany({
+    where: { collegeId },
+    data: { isActive: !!isActive }
+  });
+
+  res.json({
+    success: true,
+    message: `Student registration link has been ${isActive ? 'enabled' : 'disabled'}.`
+  });
 };
