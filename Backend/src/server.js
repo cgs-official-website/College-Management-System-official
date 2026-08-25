@@ -60,11 +60,13 @@ app.use(cors({
     // Allow requests with no origin (mobile apps, curl, Postman)
     if (!origin) return callback(null, true);
 
-    // Allow any vercel.app domain or the explicit FRONTEND_URL
+    // Allow any vercel.app domain, railway.app domain, or teamzuna.in domain
     if (
       allowedOrigins.includes(origin) ||
       origin.endsWith('.vercel.app') ||
-      origin.endsWith('.railway.app')
+      origin.endsWith('.railway.app') ||
+      origin.endsWith('.teamzuna.in') ||
+      origin === 'https://teamzuna.in'
     ) {
       return callback(null, true);
     }
