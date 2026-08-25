@@ -9,12 +9,20 @@ import {
   createStudent,
   updateStudent,
   deleteStudent,
-  bulkImportStudents
+  bulkImportStudents,
+  getRegistrationLink,
+  regenerateRegistrationLink,
+  toggleRegistrationLink
 } from './students.controller.js';
 
 const router = Router();
 
 router.use(authenticate, resolveTenant);
+
+// Registration link management for Admin
+router.get('/registration-link', requirePermission('students', 'read'), catchAsync(getRegistrationLink));
+router.post('/registration-link/regenerate', requirePermission('students', 'update'), catchAsync(regenerateRegistrationLink));
+router.patch('/registration-link/toggle', requirePermission('students', 'update'), catchAsync(toggleRegistrationLink));
 
 router.get('/', requirePermission('students', 'read'), catchAsync(getStudents));
 router.get('/:id', requirePermission('students', 'read'), catchAsync(getStudentById));

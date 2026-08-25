@@ -170,7 +170,7 @@ export const createItem = async (req, res) => {
     }
 
     return newItem;
-  });
+  }, { maxWait: 15000, timeout: 30000 });
 
   await Promise.all([
     invalidateCachePattern(`inventory:items:${collegeId}:*`),
@@ -287,7 +287,7 @@ export const updateItem = async (req, res) => {
     });
 
     return updated;
-  });
+  }, { maxWait: 15000, timeout: 30000 });
 
   await Promise.all([
     invalidateCachePattern(`inventory:items:${collegeId}:*`),
@@ -347,7 +347,7 @@ export const deleteItem = async (req, res) => {
           quantity: 0
         }
       });
-    });
+    }, { maxWait: 15000, timeout: 30000 });
 
     await Promise.all([
       invalidateCachePattern(`inventory:items:${collegeId}:*`),

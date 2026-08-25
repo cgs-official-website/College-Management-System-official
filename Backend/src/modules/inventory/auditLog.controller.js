@@ -209,7 +209,7 @@ export const createStockMovement = async (req, res) => {
     });
 
     return { updatedItem, auditLog };
-  });
+  }, { maxWait: 15000, timeout: 30000 });
 
   await Promise.all([
     invalidateCachePattern(`inventory:items:${collegeId}:*`),

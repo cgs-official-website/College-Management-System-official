@@ -141,7 +141,9 @@ import inventoryRoutes from './modules/inventory/inventory.routes.js';
 import customRoutes from './modules/custom/custom.routes.js';
 import builderRoutes from './modules/builder/builder.routes.js';
 import dynamicRoutes from './modules/dynamic/dynamic.routes.js';
+import studentPortalRoutes from './modules/student_portal/studentPortal.routes.js';
 
+app.use('/api/v1/student', studentPortalRoutes);
 app.use('/api/v1/public', stubs.publicRoutes);
 app.use('/api/v1/mock', stubs.mockDataRoutes);
 app.use('/api/v1/assignments', assignmentsRoutes);

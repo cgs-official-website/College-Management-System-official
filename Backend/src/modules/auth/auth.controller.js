@@ -3,7 +3,14 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma, logger } from '../../server.js';
 import { redis, redisKeys } from '../../lib/cache.js';
-import { loginSchema, registerAdminSchema, refreshTokenSchema, forgotPasswordSchema, resetPasswordSchema } from './auth.schema.js';
+import { 
+  loginSchema, 
+  registerAdminSchema, 
+  refreshTokenSchema, 
+  studentRegisterSchema,
+  forgotPasswordSchema, 
+  resetPasswordSchema 
+} from './auth.schema.js';
 import { sendMail } from '../../services/email/email.service.js';
 import { getWelcomeEmailTemplate, getPasswordResetTemplate } from '../../services/email/templates.js';
 
@@ -12,15 +19,48 @@ const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secre
 
 export const login = async (req, res) => {
   try {
-    const { email, password } = loginSchema.parse(req.body);
+    const validated = loginSchema.parse(req.body);
+    const rawEmail = (validated.email || validated.identifier || '').trim();
+    const password = validated.password;
+    const collegeSlug = validated.collegeSlug;
 
-    const user = await prisma.user.findFirst({
-      where: { email },
-      include: {
-        college: true
+    // Reject non-email formats (e.g. Admission Numbers are not accepted for login)
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail);
+    if (!isEmail) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password. Please sign in using your registered email address.' }
+      });
+    }
+
+    const normalizedEmail = rawEmail.toLowerCase();
+    let user = null;
+
+    if (collegeSlug) {
+      const college = await prisma.college.findUnique({
+        where: { slug: collegeSlug.trim().toLowerCase() }
+      });
+      if (!college) {
+        return res.status(401).json({ success: false, error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } });
       }
-    });
+      user = await prisma.user.findFirst({
+        where: { email: normalizedEmail, collegeId: college.id },
+        include: {
+          college: true,
+          studentProfile: true
+        }
+      });
+    } else {
+      user = await prisma.user.findFirst({
+        where: { email: normalizedEmail },
+        include: {
+          college: true,
+          studentProfile: true
+        }
+      });
+    }
 
+    // Generic 401 on missing user or invalid password (zero account enumeration)
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       return res.status(401).json({ success: false, error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } });
     }
@@ -85,6 +125,189 @@ export const login = async (req, res) => {
           email: user.email,
           name: user.name
         }
+      }
+    });
+  } catch (error) {
+    res.status(400).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentRegistrationInfo = async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ success: false, error: { code: 'INVALID_TOKEN', message: 'Registration token is required' } });
+    }
+
+    // Compute SHA-256 hash of the raw token
+    const tokenHash = crypto.createHash('sha256').update(token.trim()).digest('hex');
+
+    const link = await prisma.studentRegistrationLink.findUnique({
+      where: { tokenHash },
+      include: { college: true }
+    });
+
+    if (!link || !link.isActive) {
+      return res.status(404).json({ success: false, error: { code: 'LINK_INVALID', message: 'Student registration link is invalid or has been disabled' } });
+    }
+
+    if (link.expiresAt && link.expiresAt < new Date()) {
+      return res.status(410).json({ success: false, error: { code: 'LINK_EXPIRED', message: 'Student registration link has expired' } });
+    }
+
+    if (link.college.status === 'rejected') {
+      return res.status(403).json({ success: false, error: { code: 'COLLEGE_REJECTED', message: 'College registration was rejected' } });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        collegeId: link.collegeId,
+        collegeName: link.college.name,
+        collegeSlug: link.college.slug,
+        logoUrl: link.college.logoUrl || null,
+        expiresAt: link.expiresAt
+      }
+    });
+  } catch (error) {
+    res.status(400).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const studentRegister = async (req, res) => {
+  try {
+    const payload = studentRegisterSchema.parse(req.body);
+    const { token, admissionNumber, email, firstName, lastName, phone, password } = payload;
+
+    // 1. Hash raw token with SHA-256 and look up registration link
+    const tokenHash = crypto.createHash('sha256').update(token.trim()).digest('hex');
+    const link = await prisma.studentRegistrationLink.findUnique({
+      where: { tokenHash },
+      include: { college: true }
+    });
+
+    if (!link || !link.isActive) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'INVALID_REGISTRATION_TOKEN', message: 'Invalid or deactivated registration link' }
+      });
+    }
+
+    if (link.expiresAt && link.expiresAt < new Date()) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'REGISTRATION_LINK_EXPIRED', message: 'Registration link has expired' }
+      });
+    }
+
+    const collegeId = link.collegeId;
+
+    // 2. Find pre-created student record for this college
+    const student = await prisma.student.findFirst({
+      where: {
+        collegeId,
+        admissionNumber: { equals: admissionNumber.trim(), mode: 'insensitive' },
+        deletedAt: null
+      },
+      include: {
+        user: true
+      }
+    });
+
+    if (!student) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'STUDENT_RECORD_NOT_FOUND', message: 'No student record found matching the provided admission number in this college.' }
+      });
+    }
+
+    // 3. Email verification against existing student record
+    const normalizedEmail = email.trim().toLowerCase();
+    const existingStudentEmail = (student.emailId || student.user?.email || '').trim().toLowerCase();
+
+    if (existingStudentEmail && existingStudentEmail !== normalizedEmail) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'EMAIL_MISMATCH', message: 'The provided email does not match our official student records.' }
+      });
+    }
+
+    // 4. Duplicate registration guard: Check if user is already registered and active
+    if (student.user && student.user.accountStatus === 'active') {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'ALREADY_REGISTERED', message: 'This student account has already been registered. Please log in with your credentials.' }
+      });
+    }
+
+    // 5. Atomic transaction to create/activate User and link Student
+    const passwordHash = await bcrypt.hash(password, 10);
+    const fullName = `${firstName.trim()} ${lastName ? lastName.trim() : ''}`.trim();
+
+    const result = await prisma.$transaction(async (tx) => {
+      let user = null;
+      if (student.userId) {
+        user = await tx.user.update({
+          where: { id: student.userId },
+          data: {
+            email: normalizedEmail,
+            name: fullName,
+            passwordHash,
+            accountStatus: 'active',
+            role: 'student'
+          }
+        });
+      } else {
+        const existingUser = await tx.user.findFirst({
+          where: { email: normalizedEmail, collegeId }
+        });
+
+        if (existingUser) {
+          user = await tx.user.update({
+            where: { id: existingUser.id },
+            data: {
+              name: fullName,
+              passwordHash,
+              accountStatus: 'active',
+              role: 'student'
+            }
+          });
+        } else {
+          user = await tx.user.create({
+            data: {
+              email: normalizedEmail,
+              name: fullName,
+              collegeId,
+              passwordHash,
+              role: 'student',
+              accountStatus: 'active'
+            }
+          });
+        }
+      }
+
+      // Update student record with userId and contact details
+      const updatedStudent = await tx.student.update({
+        where: { id: student.id },
+        data: {
+          userId: user.id,
+          emailId: normalizedEmail,
+          studentMobile: phone || student.studentMobile,
+          emergencyContact: phone || student.emergencyContact
+        }
+      });
+
+      return { user, student: updatedStudent };
+    });
+
+    logger.info(`[info] Student ${normalizedEmail} (admission=${student.admissionNumber}, collegeId=${collegeId}) registered successfully`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Registration completed successfully! You can now log in using your Admission Number or Email.',
+      data: {
+        admissionNumber: student.admissionNumber,
+        email: normalizedEmail
       }
     });
   } catch (error) {
@@ -193,12 +416,9 @@ export const registerAdmin = async (req, res) => {
   try {
     const data = registerAdminSchema.parse(req.body);
     
-    // Ensure unique slug by appending random string
     const uniqueSlug = `${data.slug}-${Math.random().toString(36).substring(2, 8)}`;
     
-    // Transaction to atomically create College and Admin
     const result = await prisma.$transaction(async (tx) => {
-      // Generate custom ZUNAC ID based on count
       const count = await tx.college.count();
       const nextId = count + 1;
       const registrationNo = `ZUNAC${nextId.toString().padStart(3, '0')}`;
@@ -226,15 +446,6 @@ export const registerAdmin = async (req, res) => {
       return { college, admin };
     });
 
-    // Send Welcome Email to Admin
-    const welcomeHtml = getWelcomeEmailTemplate({
-      name: 'College Admin',
-      email: data.adminEmail,
-      password: data.password,
-      loginUrl: 'http://localhost:5173/login'
-    });
-    sendMail({ to: data.adminEmail, subject: 'Welcome to Zuna ERP', html: welcomeHtml }).catch(err => logger.error(err));
-
     res.status(201).json({ success: true, data: result });
   } catch (error) {
     res.status(400).json({ success: false, error: { message: error.message } });
@@ -247,6 +458,18 @@ export const getMe = async (req, res) => {
       where: { id: req.user.userId },
       include: { 
         college: true,
+        studentProfile: {
+          include: {
+            department: true,
+            section: true,
+            course: true
+          }
+        },
+        teacherProfile: {
+          include: {
+            department: true
+          }
+        },
         customRole: {
           include: {
             permissions: {
@@ -263,7 +486,6 @@ export const getMe = async (req, res) => {
       return res.status(404).json({ success: false, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
     }
 
-    // Exclude password hash
     const { passwordHash, ...safeUser } = user;
     res.json({ success: true, data: safeUser });
   } catch (error) {
@@ -352,16 +574,12 @@ export const forgotPassword = async (req, res) => {
     });
 
     if (!user) {
-      // Don't leak whether the email exists. Return success anyway.
       return res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
     }
 
-    // Create a one-time token signed with the user's current password hash.
-    // If the password changes, this token immediately becomes invalid.
     const secret = JWT_SECRET + user.passwordHash;
     const token = jwt.sign({ userId: user.id, email: user.email }, secret, { expiresIn: '15m' });
 
-    // Ensure frontend is running on standard port, fallback to environment variable if available
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const resetLink = `${frontendUrl}/reset-password?token=${token}&id=${user.id}`;
 

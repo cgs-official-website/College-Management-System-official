@@ -167,3 +167,5 @@ export const StudentSettings = () => {
     </div>
   );
 };
+
+export default StudentSettings;

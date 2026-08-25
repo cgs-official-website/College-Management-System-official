@@ -34,7 +34,8 @@ const Login = () => {
     setError('');
     
     try {
-      await login(data.email.toLowerCase().trim(), data.password);
+      const email = data.email.toLowerCase().trim();
+      await login(email, data.password);
       // Redirection is handled by useEffect when AuthContext resolves user role
     } catch (err) {
       console.error("Login Error:", err);
@@ -44,16 +45,15 @@ const Login = () => {
       } else if (err.code === 'COLLEGE_REJECTED') {
         navigate('/rejected');
         return;
-      } else if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential' || err.status === 401) {
-        setError('Invalid email or password.');
+      } else if (err.code === 'INVALID_CREDENTIALS' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential' || err.status === 401) {
+        setError('Invalid email address or password.');
       } else if (err.code === 'auth/too-many-requests' || err.status === 429) {
         setError('Too many failed attempts. Please try again later.');
       } else {
-        setError(err.message || 'Failed to sign in. Please check your network and try again.');
+        setError(err.message || 'Failed to sign in. Please check your credentials and try again.');
       }
       setIsLoading(false);
     }
-    // We intentionally don't set isLoading(false) on success to keep the loading state until redirect
   };
 
   return (
@@ -117,7 +117,9 @@ const Login = () => {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
               {/* Email Input */}
               <div>
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Email Address</label>
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
+                  Email
+                </label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Mail className="h-5 w-5 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
@@ -128,11 +130,11 @@ const Login = () => {
                       required: "Email is required",
                       pattern: {
                         value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                        message: "Invalid email address"
+                        message: "Please enter a valid email address"
                       }
                     })}
                     className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-all shadow-sm dark:shadow-none"
-                    placeholder="admin@college.edu"
+                    placeholder="Email"
                   />
                 </div>
                 {errors.email && <p className="mt-1.5 text-xs text-red-500 font-medium">{errors.email.message}</p>}
@@ -190,17 +192,19 @@ const Login = () => {
               </button>
             </form>
             
-            <div className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-white/5 pt-6">
-              Need an account?{' '}
-              <Link to="/register" className="font-bold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors">
-                Create your environment
-              </Link>
+            <div className="mt-6 pt-6 border-t border-slate-100 dark:border-white/5 space-y-3 text-center text-sm text-slate-500 dark:text-slate-400">
+              <div>
+                College administrator?{' '}
+                <Link to="/register" className="font-bold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors">
+                  Register college
+                </Link>
+              </div>
             </div>
           </div>
         </motion.div>
       </div>
 
-      {/* Decorative Right Panel (Optional, hidden on small screens) */}
+      {/* Decorative Right Panel */}
       <div className="hidden lg:flex w-1/2 bg-slate-100 dark:bg-[#060D1A] border-l border-slate-200 dark:border-white/5 relative items-center justify-center overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 dark:opacity-10 mix-blend-overlay"></div>
         <div className="absolute inset-0 bg-gradient-to-t from-slate-100 via-transparent to-slate-100 dark:from-[#060D1A] dark:via-transparent dark:to-[#060D1A]"></div>
@@ -209,9 +213,9 @@ const Login = () => {
           <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-200 dark:border-emerald-500/30 rounded-xl flex items-center justify-center mb-6">
             <Lock className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white mb-4">Enterprise-Grade Security</h2>
+          <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white mb-4">Unified Authentication</h2>
           <p className="text-slate-600 dark:text-slate-400 text-lg leading-relaxed">
-            Zuna utilizes role-based cryptographic isolation to ensure that student, teacher, and administrative data remains absolutely secure.
+            Students, faculty, and administrators sign in securely using their institutional email address with encrypted session persistence.
           </p>
         </div>
       </div>
