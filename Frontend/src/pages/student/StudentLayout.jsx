@@ -26,9 +26,7 @@ import {
   Moon, 
   RefreshCw,
   Bell,
-  CheckCircle2,
-  ArrowUpRight,
-  ShieldCheck
+  ArrowUpRight
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 import { useStudentProfile, useStudentDashboard } from '../../hooks/useStudentPortal';
@@ -55,6 +53,12 @@ const StudentLayout = () => {
   const { logout, userData } = useAuth();
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
   const { theme, toggleTheme } = useTheme();
+  const { data: profileData } = useStudentProfile();
+
+  const profile = profileData?.data;
+  const residenceType = (profile?.residenceType || userData?.residenceType || 'Day Scholar').toLowerCase();
+  const isHosteller = residenceType.includes('hostel');
+  const isDayScholar = !isHosteller;
 
   useEffect(() => {
     const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
@@ -67,7 +71,7 @@ const StudentLayout = () => {
     navigate('/login');
   };
 
-  const navLinks = [
+  const allNavLinks = [
     { name: 'Dashboard', path: '/student', icon: LayoutDashboard },
     { name: 'My Courses', path: '/student/courses', icon: BookOpen },
     { name: 'Assignments', path: '/student/assignments', icon: FileBarChart },
@@ -77,13 +81,15 @@ const StudentLayout = () => {
     { name: 'Fees & Finance', path: '/student/fees', icon: Calculator },
     { name: 'Notice Board', path: '/student/notices', icon: Megaphone },
     { name: 'Library', path: '/student/library', icon: LibraryIcon },
-    { name: 'Hostel', path: '/student/hostel', icon: Home },
-    { name: 'Transport', path: '/student/transport', icon: Bus },
+    { name: 'Hostel', path: '/student/hostel', icon: Home, show: isHosteller },
+    { name: 'Transport', path: '/student/transport', icon: Bus, show: isDayScholar },
     { name: 'Placements', path: '/student/placement', icon: Briefcase },
     { name: 'Complaints', path: '/student/complaints', icon: MessageSquareWarning },
     { name: 'Documents', path: '/student/documents', icon: Files },
     { name: 'Settings', path: '/student/settings', icon: Settings },
   ];
+
+  const navLinks = allNavLinks.filter(link => link.show === undefined || link.show === true);
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-[#020813] text-slate-900 dark:text-slate-200 overflow-hidden font-sans transition-colors duration-300">
@@ -124,7 +130,9 @@ const StudentLayout = () => {
             </div>
             <div className="flex-1 overflow-hidden">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate" title={userData?.collegeName || 'College Name'}>{userData?.collegeName || 'College Name'}</h3>
-              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">STUDENT PORTAL</p>
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
+                STUDENT • {isHosteller ? 'HOSTELLER' : 'DAY SCHOLAR'}
+              </p>
             </div>
           </div>
         </div>
@@ -170,7 +178,7 @@ const StudentLayout = () => {
                </div>
                <div className="truncate">
                  <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate">{userData?.firstName || 'Student'} {userData?.lastName || ''}</p>
-                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">STUDENT</p>
+                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">STUDENT PORTAL</p>
                </div>
              </div>
              <LogOut className="w-5 h-5 text-slate-400 group-hover:text-red-600 transition-colors shrink-0 ml-2" />
@@ -240,7 +248,7 @@ const StudentLayout = () => {
           
           <div className="max-w-7xl mx-auto relative">
             <Routes>
-              <Route path="/" element={<StudentDashboardHome />} />
+              <Route path="/" element={<StudentDashboardHome isHosteller={isHosteller} isDayScholar={isDayScholar} />} />
               <Route path="/courses" element={<StudentCoursesDashboard />} />
               <Route path="/assignments" element={<StudentAssignmentsDashboard />} />
               <Route path="/attendance" element={<StudentAttendanceDashboard />} />
@@ -249,8 +257,8 @@ const StudentLayout = () => {
               <Route path="/fees" element={<StudentFeesDashboard />} />
               <Route path="/notices" element={<StudentNoticesDashboard />} />
               <Route path="/library" element={<StudentLibraryDashboard />} />
-              <Route path="/hostel" element={<StudentHostel />} />
-              <Route path="/transport" element={<StudentTransport />} />
+              <Route path="/hostel" element={isHosteller ? <StudentHostel /> : <Navigate to="/student" replace />} />
+              <Route path="/transport" element={isDayScholar ? <StudentTransport /> : <Navigate to="/student" replace />} />
               <Route path="/placement" element={<StudentPlacements />} />
               <Route path="/complaints" element={<StudentComplaints />} />
               <Route path="/documents" element={<StudentDocumentsDashboard />} />
@@ -264,7 +272,7 @@ const StudentLayout = () => {
   );
 };
 
-const StudentDashboardHome = () => {
+const StudentDashboardHome = ({ isHosteller, isDayScholar }) => {
   const { data: dashboardData, isLoading } = useStudentDashboard();
   const { data: profileData } = useStudentProfile();
   const navigate = useNavigate();
@@ -281,7 +289,7 @@ const StudentDashboardHome = () => {
             Welcome back, {profile?.firstName || 'Student'}! 👋
           </h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">
-            {profile?.department || 'Academic'} • Admission No: <span className="font-bold text-slate-700 dark:text-slate-200">{profile?.admissionNumber || '-'}</span>
+            {profile?.department || 'Academic'} • Admission No: <span className="font-bold text-slate-700 dark:text-slate-200">{profile?.admissionNumber || '-'}</span> • <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300">{isHosteller ? 'Hosteller' : 'Day Scholar'}</span>
           </p>
         </div>
       </div>
@@ -381,19 +389,35 @@ const StudentDashboardHome = () => {
           <p className="text-xs text-slate-500 mt-1">Check tuition fee invoices and payment status.</p>
         </div>
 
-        <div 
-          onClick={() => navigate('/student/library')}
-          className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer group"
-        >
-          <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-500/10 text-purple-600 flex items-center justify-center mb-3">
-            <LibraryIcon className="w-5 h-5" />
+        {isHosteller ? (
+          <div 
+            onClick={() => navigate('/student/hostel')}
+            className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-600 flex items-center justify-center mb-3">
+              <Home className="w-5 h-5" />
+            </div>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-900 dark:text-white">Hostel Residence</h3>
+              <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-amber-600 transition-colors" />
+            </div>
+            <p className="text-xs text-slate-500 mt-1">View your assigned room and hostel block allocation.</p>
           </div>
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-slate-900 dark:text-white">Library Catalog</h3>
-            <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-purple-600 transition-colors" />
+        ) : (
+          <div 
+            onClick={() => navigate('/student/transport')}
+            className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 flex items-center justify-center mb-3">
+              <Bus className="w-5 h-5" />
+            </div>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-900 dark:text-white">Campus Transport</h3>
+              <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-cyan-600 transition-colors" />
+            </div>
+            <p className="text-xs text-slate-500 mt-1">View daily bus route and pickup stop pass.</p>
           </div>
-          <p className="text-xs text-slate-500 mt-1">Search available physical library books and rack locations.</p>
-        </div>
+        )}
       </div>
 
       {/* Recent Campus Notices */}

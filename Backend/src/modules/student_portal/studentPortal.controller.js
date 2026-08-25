@@ -30,7 +30,9 @@ export const getStudentProfile = async (req, res) => {
         batchYear: student.batchYear,
         bloodGroup: student.bloodGroup,
         emergencyContact: student.emergencyContact,
-        residenceType: student.residenceType,
+        residenceType: student.residenceType || 'Day Scholar',
+        isHosteller: (student.residenceType || '').toLowerCase().includes('hostel'),
+        isDayScholar: !(student.residenceType || '').toLowerCase().includes('hostel'),
         hostelBlock: student.hostelBlock?.name || null,
         hostelRoom: student.hostelRoom,
         collegeName: student.college?.name,
@@ -573,7 +575,9 @@ export const createStudentComplaint = async (req, res) => {
 export const getStudentHostel = async (req, res) => {
   try {
     const student = req.student;
-    if (!student.hostelBlockId && !student.hostelRoom) {
+    const isHosteller = (student.residenceType || '').toLowerCase().includes('hostel');
+
+    if (!isHosteller && !student.hostelBlockId && !student.hostelRoom) {
       return res.json({
         success: true,
         data: {
@@ -587,7 +591,7 @@ export const getStudentHostel = async (req, res) => {
       success: true,
       data: {
         isHosteller: true,
-        blockName: student.hostelBlock?.name || 'Main Block',
+        blockName: student.hostelBlock?.name || 'Main Hostel Block',
         roomNo: student.hostelRoom || 'N/A',
         residenceType: student.residenceType || 'Hostel'
       }
@@ -600,9 +604,24 @@ export const getStudentHostel = async (req, res) => {
 export const getStudentTransport = async (req, res) => {
   try {
     const student = req.student;
+    const isHosteller = (student.residenceType || '').toLowerCase().includes('hostel');
+
+    if (isHosteller) {
+      return res.json({
+        success: true,
+        data: {
+          isTransportEligible: false,
+          isHosteller: true,
+          message: 'Transport module is not applicable for hostel residents'
+        }
+      });
+    }
+
     res.json({
       success: true,
       data: {
+        isTransportEligible: true,
+        isHosteller: false,
         transportRequired: student.transportRequired || 'No',
         route: 'Campus Route 1',
         pickupPoint: student.address || 'Campus Gate'

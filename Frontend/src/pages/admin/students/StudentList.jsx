@@ -4,9 +4,8 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { DataTable } from '../../../components/tables/DataTable';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
-import { Search, Plus, Edit, Trash2, Eye, Link as LinkIcon } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, Eye } from 'lucide-react';
 import { StudentFormModal } from './StudentFormModal';
-import { StudentRegistrationLinkModal } from './StudentRegistrationLinkModal';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
@@ -19,7 +18,6 @@ export default function StudentList() {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
 
   const filteredStudents = students.filter(student => {
@@ -134,17 +132,9 @@ export default function StudentList() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Students Directory</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage student records, share registration links, and import admissions.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage student records and import admissions.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button 
-            variant="outline" 
-            onClick={() => setIsLinkModalOpen(true)}
-            className="border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
-          >
-            <LinkIcon className="w-4 h-4 mr-2" />
-            Registration Link
-          </Button>
           <ExcelUploadButton 
             onUpload={bulkImport} 
             isLoading={isImporting} 
@@ -183,11 +173,6 @@ export default function StudentList() {
         onSubmit={handleSubmit}
         initialData={editingStudent}
         isLoading={isAdding || isUpdating}
-      />
-
-      <StudentRegistrationLinkModal 
-        isOpen={isLinkModalOpen}
-        onClose={() => setIsLinkModalOpen(false)}
       />
     </div>
   );
