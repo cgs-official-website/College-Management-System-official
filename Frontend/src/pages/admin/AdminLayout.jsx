@@ -40,7 +40,8 @@ import {
   ShieldCheck,
   Package,
   Sun,
-  Moon
+  Moon,
+  IndianRupee
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useTheme } from '../../hooks/useTheme';
@@ -69,6 +70,8 @@ import ComplaintsDashboard from './complaints/ComplaintsDashboard';
 import MobileAppsDashboard from './apps/MobileAppsDashboard';
 import ApiIntegrations from './integrations/ApiIntegrations';
 import InventoryDashboard from './inventory/InventoryDashboard';
+import PayrollDashboard from './payroll/PayrollDashboard';
+import Payslips from '../staff/Payslips';
 import CustomDashboard from '../../modules/custom/CustomDashboard';
 import ModuleBuilder from '../../modules/builder/ModuleBuilder';
 import DynamicDashboard from '../../modules/dynamic/DynamicDashboard';
@@ -114,22 +117,24 @@ const AdminLayout = () => {
     { name: 'Attendance', path: '/admin/attendance', icon: Clock, moduleKey: 'attendance' },
     { name: 'Exams', path: '/admin/exams', icon: ClipboardList, moduleKey: 'exams' },
     { name: 'Fees & Finance', path: '/admin/fees', icon: Calculator, moduleKey: 'fees' },
-    { name: 'Library', path: '/admin/library', icon: LibraryIcon, moduleKey: 'library' },
-    { name: 'Hostel', path: '/admin/hostel', icon: Home, moduleKey: 'hostel' },
-    { name: 'Transport', path: '/admin/transport', icon: Bus, moduleKey: 'transport' },
-    { name: 'Infrastructure', path: '/admin/infrastructure', icon: Building, moduleKey: 'infrastructure' },
+    // { name: 'Library', path: '/admin/library', icon: LibraryIcon, moduleKey: 'library' },
+    // { name: 'Hostel', path: '/admin/hostel', icon: Home, moduleKey: 'hostel' },
+    // { name: 'Transport', path: '/admin/transport', icon: Bus, moduleKey: 'transport' },
+    // { name: 'Infrastructure', path: '/admin/infrastructure', icon: Building, moduleKey: 'infrastructure' },
     { name: 'Notice Board', path: '/admin/notices', icon: Megaphone, moduleKey: 'notices' },
     { name: 'Placements', path: '/admin/placements', icon: Briefcase, moduleKey: 'placements' },
     { name: 'Reports', path: '/admin/reports', icon: FileText, moduleKey: 'reports' },
-    { name: 'Inventory', path: '/admin/inventory', icon: Package, moduleKey: 'inventory' },
-    { name: 'API Integrations', path: '/admin/api-integrations', icon: Zap, moduleKey: 'api_integration' },
-    { name: 'Module Builder', path: '/admin/builder', icon: Settings2, moduleKey: 'custom' },
-    ...(customEntitiesData?.map(ent => ({
-      name: ent.name,
-      path: `/admin/dynamic/${ent.slug}`,
-      icon: FileText,
-      moduleKey: 'custom'
-    })) || []),
+    // { name: 'Inventory', path: '/admin/inventory', icon: Package, moduleKey: 'inventory' },
+    // { name: 'Payroll', path: '/admin/payroll', icon: IndianRupee, moduleKey: 'payroll' },
+    // ...(userRole === 'teacher' || userRole === 'staff' || userRole === 'admin' ? [{ name: 'My Payslips', path: '/admin/my-payslips', icon: IndianRupee, moduleKey: null }] : []),
+    // { name: 'API Integrations', path: '/admin/api-integrations', icon: Zap, moduleKey: 'api_integration' },
+    // { name: 'Module Builder', path: '/admin/builder', icon: Settings2, moduleKey: 'custom' },
+    // ...(customEntitiesData?.map(ent => ({
+    //   name: ent.name,
+    //   path: `/admin/dynamic/${ent.slug}`,
+    //   icon: FileText,
+    //   moduleKey: 'custom'
+    // })) || []),
     { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon, moduleKey: 'settings' },
     { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck, moduleKey: 'roles' },
   ].filter(link => hasAccess(link.moduleKey));
@@ -339,6 +344,8 @@ const AdminLayout = () => {
               <Route path="/reports/*" element={hasAccess('reports') ? <Reports /> : <Navigate to="/404" replace />} />
               <Route path="/inventory/*" element={hasAccess('inventory') ? <InventoryDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/api-integrations/*" element={hasAccess('api_integration') ? <ApiIntegrations /> : <Navigate to="/404" replace />} />
+              <Route path="/payroll/*" element={hasAccess('payroll') ? <PayrollDashboard /> : <Navigate to="/404" replace />} />
+              <Route path="/my-payslips/*" element={<Payslips />} />
               <Route path="/builder/*" element={hasAccess('custom') ? <ModuleBuilder /> : <Navigate to="/404" replace />} />
               <Route path="/dynamic/:entitySlug/*" element={hasAccess('custom') ? <DynamicDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/custom/*" element={hasAccess('custom') ? <CustomDashboard /> : <Navigate to="/404" replace />} />

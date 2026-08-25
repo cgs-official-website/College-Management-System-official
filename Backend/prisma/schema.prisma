@@ -42,6 +42,7 @@ model College {
   parents             Parent[]
   paymentTransactions PaymentTransaction[]
   payrollRecords      PayrollRecord[]
+  payrolls            Payroll[]
   placements          Placement[]
   roles               Role[]
   scholarships        Scholarship[]
@@ -63,6 +64,7 @@ model College {
   customFieldDefs     CustomFieldDef[]
   customSections      CustomSection[]
   customRecords       CustomRecord[]
+  emailTemplates      EmailTemplate[]
 }
 
 model BillingSubscription {
@@ -126,9 +128,9 @@ model User {
   payrollRecords      PayrollRecord[]
   timesheets          Timesheet[]
   inventoryAuditLogs  InventoryAuditLog[]
+  payrolls            Payroll[]
 
   @@unique([collegeId, email])
-  @@index([collegeId])
 }
 
 model Role {
@@ -936,3 +938,42 @@ model CustomRecord {
   entity      CustomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
   college     College      @relation(fields: [collegeId], references: [id])
 }
+
+model EmailTemplate {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  subject     String
+  status      String   @default("Active")
+  contentHtml String?
+  collegeId   String?  @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  college     College? @relation(fields: [collegeId], references: [id])
+
+  @@index([collegeId])
+}
+
+model Payroll {
+  id            String    @id @default(uuid())
+  collegeId     String    @db.Uuid
+  staffId       String    @db.Uuid
+  month         Int       // 1-12
+  year          Int
+  basicPay      Float
+  allowances    Float     @default(0)
+  deductions    Float     @default(0)
+  netPay        Float
+  status        String    @default("Pending") // Pending, Paid, Cancelled
+  paymentDate   DateTime?
+  paymentMethod String?
+  remarks       String?
+
+  staff         User      @relation(fields: [staffId], references: [id])
+  college       College   @relation(fields: [collegeId], references: [id])
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([staffId, month, year])
+}
+

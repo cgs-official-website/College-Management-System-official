@@ -2,8 +2,7 @@ import { prisma, logger } from '../../server.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { createStaffSchema, updateStaffSchema } from './staff.schema.js';
-import { sendMail } from '../../services/email/email.service.js';
-import { getWelcomeEmailTemplate } from '../../services/email/templates.js';
+import { sendDynamicMail } from '../../services/email/email.service.js';
 
 export const getStaff = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
@@ -133,13 +132,18 @@ export const createStaff = async (req, res) => {
   logger.info(`[info] req=${req.id || ''} college=${collegeId} teacherId=${teacher.id} actor=${actorId} Created staff '${payload.name}'`);
 
   // Send Welcome Email asynchronously
-  const welcomeHtml = getWelcomeEmailTemplate({
-    name: payload.name,
-    email: email,
-    password: 'Staff@123',
-    loginUrl: 'http://localhost:5173/login'
+  const loginUrl = `${process.env.FRONTEND_URL}/login`;
+  
+  await sendDynamicMail({
+    to: email,
+    templateName: 'Staff Welcome',
+    variables: {
+      name: payload.name,
+      email,
+      password: 'Staff@123',
+      loginUrl
+    }
   });
-  sendMail({ to: email, subject: 'Welcome to Zuna ERP', html: welcomeHtml }).catch(err => logger.error(`Failed to send welcome email to staff ${email}: ${err.message}`));
 
   res.status(201).json({
     success: true,

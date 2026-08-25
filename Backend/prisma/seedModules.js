@@ -19,6 +19,7 @@ const DEFAULT_MODULES = [
   { key: 'transport', label: 'Transport & Routes' },
   { key: 'api_integration', label: 'API Integrations' },
   { key: 'inventory', label: 'Inventory Management' },
+  { key: 'payroll', label: 'Payroll Management' },
 ];
 
 async function seedModules() {

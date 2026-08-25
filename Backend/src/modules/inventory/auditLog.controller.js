@@ -1,8 +1,7 @@
 import { prisma, logger } from '../../server.js';
 import { invalidateCachePattern } from '../../lib/cache.js';
 import { stockMovementSchema } from './inventory.schema.js';
-import { sendMail } from '../../services/email/email.service.js';
-import { getLowStockAlertTemplate } from '../../services/email/templates.js';
+import { sendDynamicMail } from '../../services/email/email.service.js';
 
 export const getAuditLogs = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
@@ -228,17 +227,15 @@ export const createStockMovement = async (req, res) => {
     // Using a fallback for demonstration or if it's the admin executing it.
     const alertEmail = req.user?.email || 'admin@college.edu';
     
-    const alertHtml = getLowStockAlertTemplate({
-      itemName: result.updatedItem.name,
-      currentStock: result.updatedItem.quantity,
-      reorderLevel: item.reorderLevel
-    });
-    
-    sendMail({
+    await sendDynamicMail({
       to: alertEmail,
-      subject: `Low Stock Alert: ${result.updatedItem.name}`,
-      html: alertHtml
-    }).catch(err => logger.error(`Failed to send low stock alert: ${err.message}`));
+      templateName: 'Low Stock Alert',
+      variables: {
+        itemName: item.name,
+        currentStock: String(result.updatedItem.quantity),
+        reorderLevel: String(item.reorderLevel)
+      }
+    });
   }
 
   res.status(201).json({

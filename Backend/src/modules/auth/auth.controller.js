@@ -4,8 +4,7 @@ import jwt from 'jsonwebtoken';
 import { prisma, logger } from '../../server.js';
 import { redis, redisKeys } from '../../lib/cache.js';
 import { loginSchema, registerAdminSchema, refreshTokenSchema, forgotPasswordSchema, resetPasswordSchema } from './auth.schema.js';
-import { sendMail } from '../../services/email/email.service.js';
-import { getWelcomeEmailTemplate, getPasswordResetTemplate } from '../../services/email/templates.js';
+import { sendDynamicMail } from '../../services/email/email.service.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret';
@@ -227,13 +226,18 @@ export const registerAdmin = async (req, res) => {
     });
 
     // Send Welcome Email to Admin
-    const welcomeHtml = getWelcomeEmailTemplate({
-      name: 'College Admin',
-      email: data.adminEmail,
-      password: data.password,
-      loginUrl: 'http://localhost:5173/login'
+    const loginUrl = `${process.env.FRONTEND_URL}/login`;
+    
+    await sendDynamicMail({
+      to: data.adminEmail,
+      templateName: 'Admin Welcome',
+      variables: {
+        name: data.adminName,
+        email: data.adminEmail,
+        password: temporaryPassword,
+        loginUrl
+      }
     });
-    sendMail({ to: data.adminEmail, subject: 'Welcome to Zuna ERP', html: welcomeHtml }).catch(err => logger.error(err));
 
     res.status(201).json({ success: true, data: result });
   } catch (error) {
@@ -361,13 +365,16 @@ export const forgotPassword = async (req, res) => {
     const secret = JWT_SECRET + user.passwordHash;
     const token = jwt.sign({ userId: user.id, email: user.email }, secret, { expiresIn: '15m' });
 
-    // Ensure frontend is running on standard port, fallback to environment variable if available
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const resetLink = `${frontendUrl}/reset-password?token=${token}&id=${user.id}`;
-
-    const resetHtml = getPasswordResetTemplate({ resetLink });
     
-    await sendMail({ to: user.email, subject: 'Zuna ERP - Password Reset Request', html: resetHtml });
+    await sendDynamicMail({
+      to: user.email,
+      templateName: 'Password Reset',
+      variables: {
+        resetLink
+      }
+    });
 
     res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
   } catch (error) {

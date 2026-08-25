@@ -17,6 +17,7 @@ export const requirePermission = (moduleKey, action) => async (req, res, next) =
     }
 
     const { role, customRoleId, collegeId, userId } = req.user;
+    console.log(`[requirePermission] Checking access for role='${role}', module='${moduleKey}', action='${action}', user='${userId}'`);
 
     // 1. System roles (superadmin, admin) have full access by default
     if (role === 'superadmin' || role === 'admin') {
@@ -64,6 +65,7 @@ export const requirePermission = (moduleKey, action) => async (req, res, next) =
 
     const modulePerm = req._permissionsCache[moduleKey];
     if (!modulePerm) {
+      console.error(`[requirePermission] modulePerm not found for ${moduleKey}. customRoleId: ${customRoleId}, permissionsCache keys:`, Object.keys(req._permissionsCache));
       return res.status(403).json({
         success: false,
         error: {
