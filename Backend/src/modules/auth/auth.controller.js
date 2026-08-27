@@ -12,6 +12,7 @@ import {
   resetPasswordSchema 
 } from './auth.schema.js';
 import { sendDynamicMail } from '../../services/email/email.service.js';
+import { getNextCollegeCode } from '../../lib/collegeCodeGenerator.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret';
@@ -167,11 +168,15 @@ export const registerAdmin = async (req, res) => {
     const adminName = (data.name || `${data.collegeName} Administrator`).trim();
 
     const result = await prisma.$transaction(async (tx) => {
+      // Generate next sequential College Code (e.g. ZUNAC002, ZUNAC003, ...)
+      const registrationNo = await getNextCollegeCode(tx);
+
       // 1. Create College in PENDING state awaiting Super Admin approval
       const college = await tx.college.create({
         data: {
           name: data.collegeName.trim(),
           slug: finalSlug,
+          registrationNo,
           status: 'pending',
           aicteNumber: data.aicteNumber || null,
           ugcCode: data.ugcRecognition || null,
@@ -206,7 +211,7 @@ export const registerAdmin = async (req, res) => {
       });
 
       return { college, adminUser };
-    });
+    }, { maxWait: 15000, timeout: 30000 });
 
     // Seed Redis status cache to 'pending'
     if (redis && redis.status === 'ready') {
@@ -245,7 +250,7 @@ export const registerAdmin = async (req, res) => {
       }
     });
 
-    logger.info(`[info] College ${result.college.name} (id=${result.college.id}) registered with Admin ${result.adminUser.email}`);
+    logger.info(`[info] College ${result.college.name} (${result.college.registrationNo}, id=${result.college.id}) registered with Admin ${result.adminUser.email}`);
 
     return res.status(201).json({
       success: true,
@@ -256,6 +261,8 @@ export const registerAdmin = async (req, res) => {
           id: result.college.id,
           name: result.college.name,
           slug: result.college.slug,
+          registrationNo: result.college.registrationNo,
+          collegeCode: result.college.registrationNo,
           status: result.college.status
         },
         user: {

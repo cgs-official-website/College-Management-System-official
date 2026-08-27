@@ -194,8 +194,13 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
+import { ensureCollegeCodeSequence } from './lib/collegeCodeGenerator.js';
+
 const server = app.listen(PORT, () => {
   logger.info(`[info] Zuna ERP Backend running on port ${PORT}`);
+  ensureCollegeCodeSequence().catch(err => {
+    logger.warn(`[warn] Failed to initialize college sequence: ${err.message}`);
+  });
 });
 
 // Graceful shutdown

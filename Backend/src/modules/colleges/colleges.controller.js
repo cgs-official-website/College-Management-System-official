@@ -13,6 +13,8 @@ export const getAllColleges = async (req, res) => {
   }
 };
 
+import { getNextCollegeCode } from '../../lib/collegeCodeGenerator.js';
+
 export const onboardCollege = async (req, res) => {
   try {
     const { adminUser, collegeData } = onboardCollegeSchema.parse(req.body);
@@ -35,10 +37,14 @@ export const onboardCollege = async (req, res) => {
 
     // Perform transaction to create college and admin user
     const result = await prisma.$transaction(async (tx) => {
+      // Generate next sequential College Code (e.g. ZUNAC002, ZUNAC003, ...)
+      const registrationNo = await getNextCollegeCode(tx);
+
       const college = await tx.college.create({
         data: {
           name: collegeData.name,
           slug,
+          registrationNo,
           status: 'pending',
           address: fullAddress || null,
           affiliationCode: collegeData.affiliationCode || null,
@@ -60,8 +66,8 @@ export const onboardCollege = async (req, res) => {
         }
       });
 
-      return { collegeCode: college.id, adminEmail: admin.email };
-    });
+      return { collegeCode: registrationNo, registrationNo, collegeId: college.id, adminEmail: admin.email };
+    }, { maxWait: 15000, timeout: 30000 });
 
     res.status(201).json({ data: result });
   } catch (error) {
@@ -100,7 +106,8 @@ export const getMyCollegeStatus = async (req, res) => {
         collegeName: college.name,
         slug: college.slug,
         status: college.status,
-        registrationNo: college.registrationNo
+        registrationNo: college.registrationNo,
+        collegeCode: college.registrationNo
       }
     });
   } catch (error) {

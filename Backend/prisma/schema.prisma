@@ -9,7 +9,7 @@ datasource db {
 model College {
   name                String
   slug                String                 @unique
-  registrationNo      String?
+  registrationNo      String?                @unique
   address             String?
   status              String                 @default("trial")
   createdAt           DateTime               @default(now())

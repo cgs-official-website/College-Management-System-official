@@ -27,7 +27,9 @@ export const PendingApproval = () => {
           ...prev,
           name: data.collegeName || prev.name,
           id: data.collegeId || prev.id,
-          status: data.status
+          status: data.status,
+          registrationNo: data.registrationNo || prev.registrationNo,
+          collegeCode: data.collegeCode || data.registrationNo || prev.collegeCode
         }));
 
         if (data.status === 'active' || data.status === 'trial') {
@@ -96,11 +98,10 @@ export const PendingApproval = () => {
             <Building2 className="w-4 h-4 text-primary-500" />
             {collegeInfo.name}
           </p>
-          {collegeInfo.id && (
-            <p className="text-xs text-slate-400 font-mono">
-              ID: {collegeInfo.id}
-            </p>
-          )}
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-mono pt-1">
+            <span>Code: <strong className="text-primary-600 dark:text-primary-400 font-bold">{collegeInfo.registrationNo || collegeInfo.collegeCode || 'ZUNAC...'}</strong></span>
+            {collegeInfo.id && <span className="opacity-75">ID: {collegeInfo.id.substring(0, 8)}</span>}
+          </div>
         </div>
         
         <div className="space-y-3">
