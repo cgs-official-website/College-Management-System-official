@@ -23,8 +23,8 @@ export const publicRoutes = Router();
 publicRoutes.get('/plans', (req, res) => {
   res.json({
     data: [
-      { id: '1', name: 'Starter', price: '$49', duration: 'month', storage: '10GB', studentCount: 'Up to 500', order: 1 },
-      { id: '2', name: 'Professional', price: '$99', duration: 'month', storage: '50GB', studentCount: 'Up to 2000', order: 2 },
+      { id: '1', name: 'Starter', price: '₹3999', duration: 'month', storage: '10GB', studentCount: 'Up to 500', order: 1 },
+      { id: '2', name: 'Professional', price: '₹7999', duration: 'month', storage: '50GB', studentCount: 'Up to 2000', order: 2 },
       { id: '3', name: 'Enterprise', price: 'Custom', duration: 'year', storage: 'Unlimited', studentCount: 'Unlimited', order: 3 }
     ]
   });

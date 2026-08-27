@@ -169,8 +169,10 @@ import builderRoutes from './modules/builder/builder.routes.js';
 import dynamicRoutes from './modules/dynamic/dynamic.routes.js';
 import emailTemplatesRoutes from './modules/email/emailTemplates.routes.js';
 import studentPortalRoutes from './modules/student_portal/studentPortal.routes.js';
-
+import landingPageRoutes from './modules/landing_page/landingPage.routes.js';
+import subscriptionsRoutes from './modules/subscriptions/subscriptions.routes.js';
 app.use('/api/v1/student', studentPortalRoutes);
+app.use('/api/v1/subscriptions', subscriptionsRoutes);
 app.use('/api/v1/public', stubs.publicRoutes);
 app.use('/api/v1/mock', stubs.mockDataRoutes);
 app.use('/api/v1/assignments', assignmentsRoutes);
@@ -182,6 +184,7 @@ app.use('/api/v1/custom', customRoutes);
 app.use('/api/v1/builder', builderRoutes);
 app.use('/api/v1/dynamic', dynamicRoutes);
 app.use('/api/v1/email-templates', emailTemplatesRoutes);
+app.use('/api/v1/landing-page', landingPageRoutes);
 
 // Sentry error handler if initialized
 Sentry.setupExpressErrorHandler(app);

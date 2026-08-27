@@ -20,7 +20,8 @@ import {
   CreditCard,
   Sun,
   Moon,
-  Mail
+  Mail,
+  LayoutTemplate
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 import SuperColleges from './SuperColleges';
@@ -28,6 +29,7 @@ import SuperAdmins from './SuperAdmins';
 import SuperSettings from './SuperSettings';
 import SuperSubscriptions from './SuperSubscriptions';
 import SuperEmailTemplates from './SuperEmailTemplates';
+import LandingPageSettings from './LandingPageSettings';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
 import GlobalModulesDashboard from './GlobalModulesDashboard';
@@ -57,6 +59,7 @@ const SuperAdminLayout = () => {
     { name: 'Admins', path: '/super/admins', icon: Users },
     { name: 'Modules', path: '/super/modules', icon: Package },
     { name: 'Email Templates', path: '/super/email-templates', icon: Mail },
+    { name: 'Landing Page', path: '/super/landing-page', icon: LayoutTemplate },
     { name: 'Subscriptions', path: '/super/subscriptions', icon: CreditCard },
     { name: 'Settings', path: '/super/settings', icon: Settings },
   ];
@@ -220,6 +223,7 @@ const SuperAdminLayout = () => {
               <Route path="/admins" element={<SuperAdmins />} />
               <Route path="/modules/*" element={<GlobalModulesDashboard />} />
               <Route path="/email-templates" element={<SuperEmailTemplates />} />
+              <Route path="/landing-page" element={<LandingPageSettings />} />
               <Route path="/subscriptions" element={<SuperSubscriptions />} />
               <Route path="/settings" element={<SuperSettings />} />
             </Routes>

@@ -4,34 +4,35 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, CreditCard, Edit2, Check, X, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-
-const DEFAULT_PLANS = [
-  { id: 'plan_1', name: 'Demo Plan', price: '₹0', duration: '30 Days', storage: '5 GB', studentCount: '100', status: 'active', order: 1 },
-  { id: 'plan_2', name: 'Professional', price: '₹999', duration: 'Monthly', storage: '100 GB', studentCount: '2000', status: 'inactive', order: 2 },
-  { id: 'plan_3', name: 'Enterprise', price: 'Custom', duration: 'Yearly', storage: 'Unlimited', studentCount: 'Unlimited', status: 'inactive', order: 3 },
-];
+import apiClient from '../../services/apiClient';
 
 const SuperSubscriptions = () => {
   const [plans, setPlans] = useState([]);
+  const [availableModules, setAvailableModules] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingPlan, setEditingPlan] = useState(null);
+  const [selectedModules, setSelectedModules] = useState([]);
 
   const fetchPlans = async () => {
     setIsLoading(true);
     try {
-      // Simulate API call using localStorage for now as there's no backend model
-      const stored = localStorage.getItem('zuna_subscription_plans');
-      let fetchedPlans = stored ? JSON.parse(stored) : [];
-      
-      if (fetchedPlans.length === 0) {
-        fetchedPlans = DEFAULT_PLANS;
-        localStorage.setItem('zuna_subscription_plans', JSON.stringify(fetchedPlans));
+      const [plansRes, modulesRes] = await Promise.all([
+        apiClient.get('/subscriptions'),
+        apiClient.get('/modules')
+      ]);
+
+      if (plansRes?.status === 'success') {
+        setPlans(plansRes.data);
+      } else {
+        toast.error("Failed to load subscription plans");
       }
 
-      setPlans(fetchedPlans.sort((a, b) => a.order - b.order));
+      if (modulesRes?.success) {
+        setAvailableModules(modulesRes.data);
+      }
     } catch (error) {
-      console.error("Error fetching plans:", error);
-      toast.error("Failed to load subscription plans");
+      console.error("Error fetching data:", error);
+      toast.error("Failed to load data");
     } finally {
       setIsLoading(false);
     }
@@ -44,10 +45,14 @@ const SuperSubscriptions = () => {
   const handleToggleStatus = async (plan) => {
     const newStatus = plan.status === 'active' ? 'inactive' : 'active';
     try {
-      const newPlans = plans.map(p => p.id === plan.id ? { ...p, status: newStatus } : p);
-      localStorage.setItem('zuna_subscription_plans', JSON.stringify(newPlans));
-      setPlans(newPlans);
-      toast.success(`Plan marked as ${newStatus}`);
+      const response = await apiClient.put(`/subscriptions/${plan.id}`, {
+        ...plan,
+        status: newStatus
+      });
+      if (response?.status === 'success') {
+        setPlans(plans.map(p => p.id === plan.id ? response.data : p));
+        toast.success(`Plan marked as ${newStatus}`);
+      }
     } catch (error) {
       console.error(error);
       toast.error("Failed to update status");
@@ -61,17 +66,19 @@ const SuperSubscriptions = () => {
       const updatedData = {
         name: formData.get('name'),
         price: formData.get('price'),
-        storage: formData.get('storage'),
-        duration: formData.get('duration'),
-        studentCount: formData.get('studentCount'),
+        modules: selectedModules,
       };
 
-      const newPlans = plans.map(p => p.id === editingPlan.id ? { ...p, ...updatedData } : p);
-      localStorage.setItem('zuna_subscription_plans', JSON.stringify(newPlans));
-      
-      setPlans(newPlans);
-      setEditingPlan(null);
-      toast.success("Plan updated successfully");
+      const response = await apiClient.put(`/subscriptions/${editingPlan.id}`, {
+        ...editingPlan,
+        ...updatedData
+      });
+
+      if (response?.status === 'success') {
+        setPlans(plans.map(p => p.id === editingPlan.id ? response.data : p));
+        setEditingPlan(null);
+        toast.success("Plan updated successfully");
+      }
     } catch (error) {
       console.error(error);
       toast.error("Failed to update plan");
@@ -104,7 +111,10 @@ const SuperSubscriptions = () => {
                 {plan.status.toUpperCase()}
               </span>
               <button 
-                onClick={() => setEditingPlan(plan)}
+                onClick={() => {
+                  setEditingPlan(plan);
+                  setSelectedModules(plan.modules || []);
+                }}
                 className="p-2 bg-slate-50 hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 rounded-lg text-slate-500 hover:text-primary-600 transition-colors"
                 title="Edit Plan"
               >
@@ -115,28 +125,20 @@ const SuperSubscriptions = () => {
             <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mb-1">{plan.name}</h3>
             <div className="flex items-baseline gap-1 mb-6">
               <span className="text-4xl font-extrabold text-slate-900 dark:text-white">{plan.price}</span>
-              <span className="text-slate-500 dark:text-slate-400 font-medium">/{plan.duration}</span>
+              <span className="text-slate-500 dark:text-slate-400 font-medium">/ student</span>
             </div>
 
             <div className="space-y-4 mb-8 flex-1">
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Storage</p>
-                <p className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-primary-500" /> {plan.storage}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Duration</p>
-                <p className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-primary-500" /> {plan.duration}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Student Count</p>
-                <p className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-primary-500" /> {plan.studentCount}
-                </p>
-              </div>
+              {plan.modules && plan.modules.map(mod => {
+                const moduleLabel = availableModules.find(m => m.key === mod)?.label || mod.replace(/_/g, ' ');
+                return (
+                  <div key={mod}>
+                    <p className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-primary-500 shrink-0" /> <span className="capitalize">{moduleLabel}</span>
+                    </p>
+                  </div>
+                );
+              })}
             </div>
 
             <button
@@ -172,16 +174,23 @@ const SuperSubscriptions = () => {
                   <input name="price" defaultValue={editingPlan.price} className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl" placeholder="e.g. ₹999 or Custom" required />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Storage</label>
-                  <input name="storage" defaultValue={editingPlan.storage} className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl" placeholder="e.g. 100 GB" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Duration</label>
-                  <input name="duration" defaultValue={editingPlan.duration} className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl" placeholder="e.g. Monthly" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Student Count</label>
-                  <input name="studentCount" defaultValue={editingPlan.studentCount} className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl" placeholder="e.g. 2000" required />
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Included Modules</label>
+                  <div className="grid grid-cols-2 gap-3 max-h-48 overflow-y-auto p-2 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl">
+                    {availableModules.map(mod => (
+                      <label key={mod.key} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer hover:text-primary-600">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedModules.includes(mod.key)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedModules([...selectedModules, mod.key]);
+                            else setSelectedModules(selectedModules.filter(k => k !== mod.key));
+                          }}
+                          className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        {mod.label}
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 <div className="pt-4 flex justify-end gap-3">
                   <button type="button" onClick={() => setEditingPlan(null)} className="px-4 py-2 font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">Cancel</button>

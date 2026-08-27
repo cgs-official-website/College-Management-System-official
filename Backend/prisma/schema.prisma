@@ -17,8 +17,12 @@ model College {
   academicYear        String?
   affiliationCode     String?
   aicteNumber         String?
+  aicteCode           String?
   logoUrl             String?
   ugcCode             String?
+  pan                 String?
+  tan                 String?
+  affiliationType     AffiliationType?
   id                  String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   admissions          Admission[]
   assignments         Assignment[]
@@ -80,6 +84,8 @@ model BillingSubscription {
   currentPeriodEnd DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+  subscriptionPlanId String?   @db.Uuid
+  subscriptionPlan   SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id], onDelete: SetNull)
   college          College   @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 }
 
@@ -1003,4 +1009,36 @@ model Payroll {
 
   @@unique([staffId, month, year])
 }
+enum AffiliationType {
+  AUTONOMOUS
+  UNIVERSITY
+}
 
+model LandingPageContent {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  heroBadge    String   @default("Next-Gen Campus OS")
+  heroTitle    String   @default("Architect Your Future.")
+  heroSubtitle String   @default("The most powerful, beautifully animated, and strictly secured digital environment for educational institutions worldwide.")
+  aboutText    String?
+  features       Json?
+  stats          Json?
+  contactEmail   String?  @default("support@zuna.edu")
+  contactPhone   String?
+  contactAddress String?
+  updatedAt      DateTime @updatedAt
+}
+
+model SubscriptionPlan {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String
+  price        String
+  duration     String
+  storage      String
+  studentCount String
+  status       String   @default("active")
+  order        Int      @default(0)
+  modules      String[] @default([])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  billingSubscriptions BillingSubscription[]
+}

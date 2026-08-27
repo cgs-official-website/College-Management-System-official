@@ -179,8 +179,12 @@ export const registerAdmin = async (req, res) => {
           registrationNo,
           status: 'pending',
           aicteNumber: data.aicteNumber || null,
-          ugcCode: data.ugcRecognition || null,
+          aicteCode: data.aicteCode || null,
+          ugcCode: data.ugcCode || data.ugcRecognition || null,
           affiliationCode: data.affiliationCode || null,
+          affiliationType: data.affiliationType || null,
+          pan: data.pan || null,
+          tan: data.tan || null,
           logoUrl: data.logoUrl || null
         }
       });
@@ -565,7 +569,15 @@ export const getMe = async (req, res) => {
     const user = await prisma.user.findUnique({
       where: { id: req.user.userId },
       include: { 
-        college: true,
+        college: {
+          include: {
+            billingSubscription: {
+              include: {
+                subscriptionPlan: true
+              }
+            }
+          }
+        },
         studentProfile: {
           include: {
             department: true,
@@ -596,6 +608,11 @@ export const getMe = async (req, res) => {
 
     const { passwordHash, ...safeUser } = user;
     safeUser.collegeStatus = user.college?.status || null;
+
+    // Attach allowedModules if a subscription plan is mapped
+    if (safeUser.college?.billingSubscription?.subscriptionPlan) {
+      safeUser.allowedModules = safeUser.college.billingSubscription.subscriptionPlan.modules;
+    }
     res.json({ success: true, data: safeUser });
   } catch (error) {
     res.status(400).json({ success: false, error: { message: error.message } });
