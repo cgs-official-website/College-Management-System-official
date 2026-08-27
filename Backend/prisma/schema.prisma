@@ -124,7 +124,7 @@ model User {
   refreshTokens  RefreshToken[]
   studentProfile Student?
   teacherProfile Teacher?
-  college        College?         @relation(fields: [collegeId], references: [id])
+  college        College?         @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   complaints          Complaint[]
   payrollRecords      PayrollRecord[]
   timesheets          Timesheet[]
@@ -189,7 +189,7 @@ model Department {
   collegeId  String      @db.Uuid
   admissions Admission[]
   courses    Course[]
-  college    College     @relation(fields: [collegeId], references: [id])
+  college    College     @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   students   Student[]
   teachers   Teacher[]
   customFields Json?
@@ -211,7 +211,7 @@ model Course {
   departmentId String          @db.Uuid
   assignments  Assignment[]
   attendance   Attendance[]
-  college      College         @relation(fields: [collegeId], references: [id])
+  college      College         @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   department   Department      @relation(fields: [departmentId], references: [id])
   enrollments  Enrollment[]
   exams        Exam[]
@@ -230,7 +230,7 @@ model Section {
   name      String
   capacity  Int
   createdAt DateTime        @default(now())
-  college   College         @relation(fields: [collegeId], references: [id])
+  college   College         @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   course    Course          @relation(fields: [courseId], references: [id])
   students  Student[]
   timetable TimetableSlot[]
@@ -252,7 +252,7 @@ model Teacher {
   collegeId    String          @db.Uuid
   assignments  Assignment[]
   attendance   Attendance[]
-  college      College         @relation(fields: [collegeId], references: [id])
+  college      College         @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   department   Department      @relation(fields: [departmentId], references: [id])
   user         User            @relation(fields: [userId], references: [id])
   timetable    TimetableSlot[]
@@ -305,7 +305,7 @@ model Student {
   hostelBlockId    String?                @db.Uuid
   hostelRoom       String?
   hostelBlock      HostelBlock?           @relation(fields: [hostelBlockId], references: [id])
-  college          College                @relation(fields: [collegeId], references: [id])
+  college          College                @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   department       Department             @relation(fields: [departmentId], references: [id])
   section          Section?               @relation(fields: [sectionId], references: [id])
   user             User                   @relation(fields: [userId], references: [id])
@@ -347,7 +347,7 @@ model Parent {
   collegeId String              @db.Uuid
   userId    String              @unique @db.Uuid
   createdAt DateTime            @default(now())
-  college   College             @relation(fields: [collegeId], references: [id])
+  college   College             @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   user      User                @relation(fields: [userId], references: [id])
   students  ParentStudentLink[]
 
@@ -385,7 +385,7 @@ model Enrollment {
   semester  Int
   status    String   @default("enrolled")
   createdAt DateTime @default(now())
-  college   College  @relation(fields: [collegeId], references: [id])
+  college   College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   course    Course   @relation(fields: [courseId], references: [id])
   student   Student  @relation(fields: [studentId], references: [id])
 
@@ -405,7 +405,7 @@ model Admission {
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
   residenceType     String     @default("Day Scholar")
-  college           College    @relation(fields: [collegeId], references: [id])
+  college           College    @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   department        Department @relation(fields: [departmentId], references: [id])
   customFields      Json?
 
@@ -423,7 +423,7 @@ model Attendance {
   id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   studentId             String   @db.Uuid
   courseId              String   @db.Uuid
-  college               College  @relation(fields: [collegeId], references: [id])
+  college               College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   course                Course   @relation(fields: [courseId], references: [id])
   student               Student  @relation(fields: [studentId], references: [id])
   teacher               Teacher  @relation(fields: [teacherId], references: [id])
@@ -442,7 +442,7 @@ model Exam {
   updatedAt DateTime @updatedAt
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   courseId  String   @db.Uuid
-  college   College  @relation(fields: [collegeId], references: [id])
+  college   College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   course    Course   @relation(fields: [courseId], references: [id])
   marks     Mark[]
 
@@ -459,7 +459,7 @@ model Mark {
   enteredByTeacherId String   @db.Uuid
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
-  college            College  @relation(fields: [collegeId], references: [id])
+  college            College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   exam               Exam     @relation(fields: [examId], references: [id])
   student            Student  @relation(fields: [studentId], references: [id])
 
@@ -476,7 +476,7 @@ model FeeStructure {
   dueDate      DateTime
   createdAt    DateTime @default(now())
   fees         Fee[]
-  college      College  @relation(fields: [collegeId], references: [id])
+  college      College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 
   @@index([collegeId])
 }
@@ -491,7 +491,7 @@ model Fee {
   amountPaid     Float                @default(0)
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
-  college        College              @relation(fields: [collegeId], references: [id])
+  college        College              @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   feeStructure   FeeStructure         @relation(fields: [feeStructureId], references: [id])
   student        Student              @relation(fields: [studentId], references: [id])
   transactions   PaymentTransaction[]
@@ -508,7 +508,7 @@ model Scholarship {
   amountCovered Float
   verified      Boolean  @default(false)
   createdAt     DateTime @default(now())
-  college       College  @relation(fields: [collegeId], references: [id])
+  college       College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   student       Student  @relation(fields: [studentId], references: [id])
 
   @@index([collegeId, studentId])
@@ -524,7 +524,7 @@ model PaymentTransaction {
   status     String
   paidAt     DateTime?
   createdAt  DateTime  @default(now())
-  college    College   @relation(fields: [collegeId], references: [id])
+  college    College   @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   fee        Fee       @relation(fields: [feeId], references: [id])
 
   @@index([collegeId])
@@ -544,7 +544,7 @@ model LeaveRequest {
   substituteTeacherId String?  @db.Uuid
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
-  college             College  @relation(fields: [collegeId], references: [id])
+  college             College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 
   @@index([collegeId])
 }
@@ -561,7 +561,7 @@ model TimetableSlot {
   teacherId    String   @db.Uuid
   room         String
   createdAt    DateTime @default(now())
-  college      College  @relation(fields: [collegeId], references: [id])
+  college      College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   course       Course   @relation(fields: [courseId], references: [id])
   section      Section  @relation(fields: [sectionId], references: [id])
   teacher      Teacher  @relation(fields: [teacherId], references: [id])
@@ -581,7 +581,7 @@ model Assignment {
   teacherId     String                 @db.Uuid
   id            String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   courseId      String                 @db.Uuid
-  college       College                @relation(fields: [collegeId], references: [id])
+  college       College                @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   course        Course                 @relation(fields: [courseId], references: [id])
   teacher       Teacher                @relation(fields: [teacherId], references: [id])
   submissions   AssignmentSubmission[]
@@ -600,7 +600,7 @@ model AssignmentSubmission {
   assignmentId String     @db.Uuid
   studentId    String     @db.Uuid
   assignment   Assignment @relation(fields: [assignmentId], references: [id])
-  college      College    @relation(fields: [collegeId], references: [id])
+  college      College    @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   student      Student    @relation(fields: [studentId], references: [id])
 
   @@unique([assignmentId, studentId])
@@ -617,7 +617,7 @@ model LibraryItem {
   totalCopies     Int      @default(1)
   availableCopies Int      @default(1)
   location        String?
-  college         College  @relation(fields: [collegeId], references: [id])
+  college         College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   edition         String?
   department      String?
   price           Float?
@@ -630,7 +630,7 @@ model HostelBlock {
   id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   collegeId String  @db.Uuid
   name      String
-  college   College @relation(fields: [collegeId], references: [id])
+  college   College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   students  Student[]
   rooms     HostelRoom[]
 }
@@ -646,7 +646,7 @@ model HostelRoom {
   wardenName    String?
   wardenContact String?
   
-  college       College      @relation(fields: [collegeId], references: [id])
+  college       College      @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   hostelBlock   HostelBlock  @relation(fields: [hostelBlockId], references: [id])
   
   @@unique([hostelBlockId, roomNo])
@@ -656,7 +656,7 @@ model TransportRoute {
   id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   collegeId String  @db.Uuid
   name      String
-  college   College @relation(fields: [collegeId], references: [id])
+  college   College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 }
 
 model InfrastructureAsset {
@@ -668,7 +668,7 @@ model InfrastructureAsset {
   location  String   @default("")
   status    String   @default("active")
   createdAt DateTime @default(now())
-  college   College  @relation(fields: [collegeId], references: [id])
+  college   College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 }
 
 model Notice {
@@ -679,7 +679,7 @@ model Notice {
   priority       String   @default("normal")
   targetAudience String   @default("all")
   createdAt      DateTime @default(now())
-  college        College  @relation(fields: [collegeId], references: [id])
+  college        College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 }
 
 model Complaint {
@@ -695,7 +695,7 @@ model Complaint {
   updatedAt   DateTime @updatedAt
   resolvedAt  DateTime?
 
-  college     College  @relation(fields: [collegeId], references: [id])
+  college     College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   user        User     @relation(fields: [userId], references: [id])
 
   @@index([collegeId, status])
@@ -716,7 +716,7 @@ model PayrollRecord {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  college     College  @relation(fields: [collegeId], references: [id])
+  college     College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   user        User     @relation(fields: [userId], references: [id])
 
   @@index([collegeId, userId])
@@ -731,7 +731,7 @@ model Project {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  college     College     @relation(fields: [collegeId], references: [id])
+  college     College     @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   timesheets  Timesheet[]
 
   @@index([collegeId])
@@ -759,21 +759,21 @@ model Placement {
   collegeId   String  @db.Uuid
   companyName String
   eligibility Json?
-  college     College @relation(fields: [collegeId], references: [id])
+  college     College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 }
 
 model StoreItem {
   id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   collegeId String  @db.Uuid
   name      String
-  college   College @relation(fields: [collegeId], references: [id])
+  college   College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 }
 
 model DocumentVault {
   id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   collegeId String  @db.Uuid
   fileName  String
-  college   College @relation(fields: [collegeId], references: [id])
+  college   College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 }
 
 model ApiIntegration {
@@ -786,7 +786,7 @@ model ApiIntegration {
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  college       College  @relation(fields: [collegeId], references: [id])
+  college       College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   
   @@unique([collegeId, provider])
   @@index([collegeId])
@@ -812,7 +812,7 @@ model InventoryItem {
   warrantyExpiry     DateTime?
   assetTagNo         String?
   remarks            String?
-  college     College  @relation(fields: [collegeId], references: [id])
+  college     College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   productCategory ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   auditLogs   InventoryAuditLog[]
 
@@ -883,7 +883,7 @@ model Vehicle {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   
-  college             College  @relation(fields: [collegeId], references: [id])
+  college             College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   
   @@index([collegeId])
 }
@@ -901,7 +901,7 @@ model CustomEntity {
   fields      CustomFieldDef[]
   sections    CustomSection[]
   records     CustomRecord[]
-  college     College  @relation(fields: [collegeId], references: [id])
+  college     College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 
   @@unique([collegeId, slug])
 }
@@ -917,7 +917,7 @@ model CustomSection {
   updatedAt       DateTime @updatedAt
 
   entity          CustomEntity? @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  college         College  @relation(fields: [collegeId], references: [id])
+  college         College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   fields          CustomFieldDef[]
 
   @@unique([collegeId, entityId, name])
@@ -941,7 +941,7 @@ model CustomFieldDef {
 
   entity          CustomEntity? @relation(fields: [entityId], references: [id], onDelete: Cascade)
   section         CustomSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  college         College  @relation(fields: [collegeId], references: [id])
+  college         College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   
   @@unique([collegeId, entityId, key])
   @@unique([collegeId, hardcodedModel, key])
@@ -956,7 +956,7 @@ model CustomRecord {
   updatedAt   DateTime @updatedAt
 
   entity      CustomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  college     College      @relation(fields: [collegeId], references: [id])
+  college     College      @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 }
 
 model EmailTemplate {
@@ -968,7 +968,7 @@ model EmailTemplate {
   collegeId   String?  @db.Uuid
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  college     College? @relation(fields: [collegeId], references: [id])
+  college     College? @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 
   @@index([collegeId])
 }
@@ -980,8 +980,15 @@ model Payroll {
   month         Int       // 1-12
   year          Int
   basicPay      Float
-  allowances    Float     @default(0)
-  deductions    Float     @default(0)
+  hra           Float     @default(0)
+  da            Float     @default(0)
+  specialAllowance Float  @default(0)
+  grossPay      Float
+  pf            Float     @default(0)
+  esi           Float     @default(0)
+  pt            Float     @default(0)
+  tds           Float     @default(0)
+  otherDeductions Float   @default(0)
   netPay        Float
   status        String    @default("Pending") // Pending, Paid, Cancelled
   paymentDate   DateTime?
@@ -989,7 +996,7 @@ model Payroll {
   remarks       String?
 
   staff         User      @relation(fields: [staffId], references: [id])
-  college       College   @relation(fields: [collegeId], references: [id])
+  college       College   @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

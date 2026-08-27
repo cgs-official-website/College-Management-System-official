@@ -11,7 +11,8 @@ const router = Router();
 router.use(authenticate, resolveTenant);
 
 // Admin Routes (using granular permissions per module)
-router.post('/generate', requirePermission('payroll', 'create'), catchAsync(controller.generatePayroll));
+router.post('/', requirePermission('payroll', 'create'), catchAsync(controller.createPayslip));
+router.post('/bulk-import', requirePermission('payroll', 'create'), catchAsync(controller.bulkImportPayrolls));
 router.get('/', requirePermission('payroll', 'read'), catchAsync(controller.getPayrolls));
 router.patch('/:id/status', requirePermission('payroll', 'update'), catchAsync(controller.updatePayrollStatus));
 

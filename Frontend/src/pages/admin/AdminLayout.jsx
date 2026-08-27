@@ -71,7 +71,7 @@ import MobileAppsDashboard from './apps/MobileAppsDashboard';
 import ApiIntegrations from './integrations/ApiIntegrations';
 import InventoryDashboard from './inventory/InventoryDashboard';
 import PayrollDashboard from './payroll/PayrollDashboard';
-import Payslips from '../staff/Payslips';
+
 import CustomDashboard from '../../modules/custom/CustomDashboard';
 import ModuleBuilder from '../../modules/builder/ModuleBuilder';
 import DynamicDashboard from '../../modules/dynamic/DynamicDashboard';
@@ -125,8 +125,8 @@ const AdminLayout = () => {
     { name: 'Placements', path: '/admin/placements', icon: Briefcase, moduleKey: 'placements' },
     { name: 'Reports', path: '/admin/reports', icon: FileText, moduleKey: 'reports' },
     // { name: 'Inventory', path: '/admin/inventory', icon: Package, moduleKey: 'inventory' },
-    // { name: 'Payroll', path: '/admin/payroll', icon: IndianRupee, moduleKey: 'payroll' },
-    // ...(userRole === 'teacher' || userRole === 'staff' || userRole === 'admin' ? [{ name: 'My Payslips', path: '/admin/my-payslips', icon: IndianRupee, moduleKey: null }] : []),
+    { name: 'Payroll', path: '/admin/payroll', icon: IndianRupee, moduleKey: 'payroll' },
+
     // { name: 'API Integrations', path: '/admin/api-integrations', icon: Zap, moduleKey: 'api_integration' },
     // { name: 'Module Builder', path: '/admin/builder', icon: Settings2, moduleKey: 'custom' },
     // ...(customEntitiesData?.map(ent => ({
@@ -345,7 +345,7 @@ const AdminLayout = () => {
               <Route path="/inventory/*" element={hasAccess('inventory') ? <InventoryDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/api-integrations/*" element={hasAccess('api_integration') ? <ApiIntegrations /> : <Navigate to="/404" replace />} />
               <Route path="/payroll/*" element={hasAccess('payroll') ? <PayrollDashboard /> : <Navigate to="/404" replace />} />
-              <Route path="/my-payslips/*" element={<Payslips />} />
+
               <Route path="/builder/*" element={hasAccess('custom') ? <ModuleBuilder /> : <Navigate to="/404" replace />} />
               <Route path="/dynamic/:entitySlug/*" element={hasAccess('custom') ? <DynamicDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/custom/*" element={hasAccess('custom') ? <CustomDashboard /> : <Navigate to="/404" replace />} />
@@ -568,7 +568,7 @@ const AdminDashboardHome = () => {
                       <Icon className={`w-4 h-4 ${color}`} />
                     </div>
                     {/* Card */}
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white-[0.02] hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 transition-colors">
                       <div className="flex items-center justify-between mb-1">
                         <h3 className="font-bold text-slate-900 dark:text-white text-sm">{item.title}</h3>
                         <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{timeStr}</span>
