@@ -245,3 +245,40 @@ export const useStudentDocuments = () => {
     staleTime: 5 * 60 * 1000,
   });
 };
+
+export const useUploadStudentProfileImage = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (fileOrFormData) => {
+      let payload = fileOrFormData;
+      let headers = {};
+
+      if (fileOrFormData instanceof File) {
+        payload = new FormData();
+        payload.append('profileImage', fileOrFormData);
+        headers['Content-Type'] = 'multipart/form-data';
+      }
+
+      const response = await api.post('/student/profile/image', payload, { headers });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['student', 'profile'] });
+    }
+  });
+};
+
+export const useDeleteStudentProfileImage = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await api.delete('/student/profile/image');
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['student', 'profile'] });
+    }
+  });
+};

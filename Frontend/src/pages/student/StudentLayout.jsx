@@ -172,9 +172,15 @@ const StudentLayout = () => {
         <div className="p-4 border-t border-slate-100 dark:border-white/5 mt-auto">
            <div className="flex items-center justify-between group cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 p-2 rounded-xl transition-colors" onClick={handleLogout}>
              <div className="flex items-center gap-3 overflow-hidden">
-               <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 flex items-center justify-center font-bold text-sm shrink-0">
-                 {userData?.firstName?.charAt(0) || 'S'}
-                 {userData?.lastName?.charAt(0) || 'T'}
+               <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
+                 {profile?.hasProfileImage ? (
+                   <img src="/api/v1/student/profile/image" alt="Avatar" className="w-full h-full object-cover" />
+                 ) : (
+                   <>
+                     {userData?.firstName?.charAt(0) || 'S'}
+                     {userData?.lastName?.charAt(0) || 'T'}
+                   </>
+                 )}
                </div>
                <div className="truncate">
                  <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate">{userData?.firstName || 'Student'} {userData?.lastName || ''}</p>
@@ -235,8 +241,12 @@ const StudentLayout = () => {
                 <p className="text-sm font-bold text-slate-900 dark:text-white leading-none">{userData?.firstName || 'Student'}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Verified Student</p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold shadow-md">
-                {userData?.firstName?.charAt(0) || 'S'}
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold shadow-md overflow-hidden">
+                {profile?.hasProfileImage ? (
+                  <img src="/api/v1/student/profile/image" alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  userData?.firstName?.charAt(0) || 'S'
+                )}
               </div>
             </button>
           </div>

@@ -334,6 +334,9 @@ model Student {
   semesterFees        Float?
   customFields        Json?
 
+  profileImageData     String? @db.Text
+  profileImageMimeType String?
+
   @@unique([collegeId, admissionNumber])
   @@index([collegeId])
   @@index([collegeId, emailId])

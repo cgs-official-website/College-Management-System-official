@@ -1,9 +1,14 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { authenticate } from '../../middleware/authenticate.js';
 import { resolveStudent } from './studentResolver.js';
 import { catchAsync } from '../../lib/catchAsync.js';
+import { MAX_PROFILE_IMAGE_SIZE_BYTES } from '../../lib/imageProcessor.js';
 import {
   getStudentProfile,
+  getStudentProfileImage,
+  uploadStudentProfileImage,
+  deleteStudentProfileImage,
   getStudentDashboard,
   getStudentCourses,
   getStudentAssignments,
@@ -25,6 +30,11 @@ import {
   getStudentDocuments
 } from './studentPortal.controller.js';
 
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_PROFILE_IMAGE_SIZE_BYTES }
+});
+
 const router = Router();
 
 // All student portal endpoints require active student authentication & resolver
@@ -32,6 +42,11 @@ router.use(authenticate, resolveStudent);
 
 router.get('/me', catchAsync(getStudentProfile));
 router.get('/profile', catchAsync(getStudentProfile));
+router.get('/profile/image', catchAsync(getStudentProfileImage));
+router.post('/profile/image', upload.single('profileImage'), catchAsync(uploadStudentProfileImage));
+router.put('/profile/image', upload.single('profileImage'), catchAsync(uploadStudentProfileImage));
+router.delete('/profile/image', catchAsync(deleteStudentProfileImage));
+
 router.get('/dashboard', catchAsync(getStudentDashboard));
 router.get('/courses', catchAsync(getStudentCourses));
 router.get('/assignments', catchAsync(getStudentAssignments));

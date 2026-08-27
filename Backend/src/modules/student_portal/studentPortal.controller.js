@@ -1,5 +1,6 @@
 import { prisma, logger } from '../../server.js';
 import { redis, redisKeys } from '../../lib/cache.js';
+import { processStudentProfileImageBuffer, extractBufferFromBase64Payload } from '../../lib/imageProcessor.js';
 
 export const getStudentProfile = async (req, res) => {
   try {
@@ -39,6 +40,8 @@ export const getStudentProfile = async (req, res) => {
         collegeLogo: student.college?.logoUrl,
         yearOfStudy: student.yearOfStudy || student.batchYear,
         status: student.user?.accountStatus || 'active',
+        hasProfileImage: Boolean(student.profileImageMimeType),
+        profileImageUrl: student.profileImageMimeType ? '/api/v1/student/profile/image' : null,
         createdAt: student.createdAt
       }
     });
@@ -642,5 +645,137 @@ export const getStudentDocuments = async (req, res) => {
     res.json({ success: true, data: docs });
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentProfileImage = async (req, res) => {
+  try {
+    const studentId = req.student.id;
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: {
+        profileImageData: true,
+        profileImageMimeType: true
+      }
+    });
+
+    if (!student || !student.profileImageData) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Profile image not found' }
+      });
+    }
+
+    const imageBuffer = Buffer.from(student.profileImageData, 'base64');
+    const mimeType = student.profileImageMimeType || 'image/webp';
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Length', imageBuffer.length);
+    res.setHeader('Cache-Control', 'private, max-age=3600, stale-while-revalidate=600');
+    return res.end(imageBuffer);
+  } catch (error) {
+    logger.error({ studentId: req.student?.id, err: error.message }, 'Failed to retrieve profile image');
+    return res.status(500).json({ success: false, error: { message: 'Failed to retrieve profile image' } });
+  }
+};
+
+export const uploadStudentProfileImage = async (req, res) => {
+  try {
+    const studentId = req.student.id;
+    const collegeId = req.student.collegeId;
+
+    let buffer = null;
+
+    if (req.file && req.file.buffer) {
+      buffer = req.file.buffer;
+    } else if (req.body?.profileImage || req.body?.image || req.body?.data) {
+      const payload = req.body.profileImage || req.body.image || req.body;
+      buffer = extractBufferFromBase64Payload(payload);
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'BAD_REQUEST', message: 'No image file or Base64 data provided' }
+      });
+    }
+
+    const { profileImageData, profileImageMimeType, sizeBytes } = await processStudentProfileImageBuffer(buffer);
+
+    await prisma.student.update({
+      where: { id: studentId },
+      data: {
+        profileImageData,
+        profileImageMimeType
+      }
+    });
+
+    // Invalidate Redis profile cache if available
+    try {
+      if (redis && redis.status === 'ready') {
+        const cacheKey = `student_profile:${collegeId}:${studentId}`;
+        await redis.del(cacheKey);
+      }
+    } catch (cacheErr) {
+      logger.warn({ studentId, err: cacheErr.message }, 'Failed to invalidate student profile cache');
+    }
+
+    logger.info({ studentId, collegeId, mimeType: profileImageMimeType, sizeBytes }, 'Student profile image updated');
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        message: 'Profile image updated successfully',
+        hasProfileImage: true,
+        profileImageUrl: '/api/v1/student/profile/image',
+        mimeType: profileImageMimeType
+      }
+    });
+  } catch (error) {
+    const statusCode = error.status || 500;
+    logger.warn({ studentId: req.student?.id, status: statusCode, errorMsg: error.message }, 'Profile image upload failed');
+    return res.status(statusCode).json({
+      success: false,
+      error: { code: statusCode === 413 ? 'PAYLOAD_TOO_LARGE' : 'BAD_REQUEST', message: error.message }
+    });
+  }
+};
+
+export const deleteStudentProfileImage = async (req, res) => {
+  try {
+    const studentId = req.student.id;
+    const collegeId = req.student.collegeId;
+
+    await prisma.student.update({
+      where: { id: studentId },
+      data: {
+        profileImageData: null,
+        profileImageMimeType: null
+      }
+    });
+
+    try {
+      if (redis && redis.status === 'ready') {
+        const cacheKey = `student_profile:${collegeId}:${studentId}`;
+        await redis.del(cacheKey);
+      }
+    } catch (cacheErr) {
+      logger.warn({ studentId, err: cacheErr.message }, 'Failed to invalidate student profile cache');
+    }
+
+    logger.info({ studentId, collegeId }, 'Student profile image deleted');
+
+    return res.json({
+      success: true,
+      data: {
+        message: 'Profile image deleted successfully',
+        hasProfileImage: false,
+        profileImageUrl: null
+      }
+    });
+  } catch (error) {
+    logger.error({ studentId: req.student?.id, err: error.message }, 'Failed to delete profile image');
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to delete profile image' }
+    });
   }
 };
