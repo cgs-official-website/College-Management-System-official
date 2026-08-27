@@ -5,8 +5,11 @@ export const usePayrolls = (filters) => {
   return useQuery({
     queryKey: ['payrolls', filters],
     queryFn: async () => {
-      const response = await api.get('/payroll', { params: filters });
-      return response.data.data;
+      const cleanFilters = Object.fromEntries(
+        Object.entries(filters).filter(([_, v]) => v !== '' && v !== null && v !== undefined)
+      );
+      const response = await api.get('/payroll', { params: cleanFilters });
+      return response.data;
     }
   });
 };
@@ -16,16 +19,29 @@ export const useMyPayslips = () => {
     queryKey: ['my-payslips'],
     queryFn: async () => {
       const response = await api.get('/payroll/my-payslips');
-      return response.data.data;
+      return response.data;
     }
   });
 };
 
-export const useGeneratePayroll = () => {
+export const useCreatePayslip = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (data) => {
-      const response = await api.post('/payroll/generate', data);
+      const response = await api.post('/payroll', data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['payrolls'] });
+    }
+  });
+};
+
+export const useBulkImportPayrolls = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data) => {
+      const response = await api.post('/payroll/bulk-import', data);
       return response.data;
     },
     onSuccess: () => {

@@ -980,8 +980,15 @@ model Payroll {
   month         Int       // 1-12
   year          Int
   basicPay      Float
-  allowances    Float     @default(0)
-  deductions    Float     @default(0)
+  hra           Float     @default(0)
+  da            Float     @default(0)
+  specialAllowance Float  @default(0)
+  grossPay      Float
+  pf            Float     @default(0)
+  esi           Float     @default(0)
+  pt            Float     @default(0)
+  tds           Float     @default(0)
+  otherDeductions Float   @default(0)
   netPay        Float
   status        String    @default("Pending") // Pending, Paid, Cancelled
   paymentDate   DateTime?
