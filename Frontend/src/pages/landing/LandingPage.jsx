@@ -22,7 +22,9 @@ import {
   Lock,
   Activity,
   Globe,
-  Mail
+  Mail,
+  Phone,
+  MapPin
 } from 'lucide-react';
 
 // Floating Card Component for Hero Section
@@ -57,10 +59,34 @@ const LandingPage = () => {
   const [activePlans, setActivePlans] = useState([]);
   const [fetchError, setFetchError] = useState(null);
 
+  const [landingData, setLandingData] = useState({
+    heroBadge: 'Next-Gen Campus OS',
+    heroTitle: 'Architect Your Future.',
+    heroSubtitle: 'The most powerful, beautifully animated, and strictly secured digital environment for educational institutions worldwide.',
+    contactEmail: 'support@zuna.edu',
+    contactPhone: '+1 (555) 123-4567',
+    contactAddress: '123 Education Blvd, New York, NY'
+  });
+
+  useEffect(() => {
+    const fetchLandingData = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/v1/landing-page');
+        const data = await response.json();
+        if (response.ok && data.data) {
+          setLandingData(data.data);
+        }
+      } catch (error) {
+        console.error("Error fetching landing data:", error);
+      }
+    };
+    fetchLandingData();
+  }, []);
+
   useEffect(() => {
     const fetchPlans = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/v1/public/plans');
+        const response = await fetch('http://localhost:5000/api/v1/subscriptions/public');
         const data = await response.json();
         
         if (response.ok && data.data) {
@@ -104,6 +130,10 @@ const LandingPage = () => {
       setIsDarkMode(true);
     }
   };
+
+  const titleWords = landingData.heroTitle.split(' ');
+  const lastWord = titleWords.pop();
+  const restOfTitle = titleWords.join(' ');
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#020813] text-slate-900 dark:text-slate-200 font-sans transition-colors duration-300 overflow-hidden">
@@ -220,7 +250,7 @@ const LandingPage = () => {
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-primary-500/50 bg-primary-500/10 backdrop-blur-md text-primary-300 text-xs font-bold tracking-widest uppercase shadow-[0_0_20px_rgba(16,185,129,0.3)] mb-8"
             >
               <Zap className="w-4 h-4 text-primary-400 animate-pulse" />
-              Next-Gen Campus OS
+              {landingData.heroBadge}
             </motion.div>
 
             <motion.h1
@@ -229,8 +259,8 @@ const LandingPage = () => {
               transition={{ duration: 0.8, delay: 0.2 }}
               className="text-4xl sm:text-6xl md:text-8xl lg:text-[7rem] font-extrabold text-white leading-tight sm:leading-[1.05] mb-6 uppercase tracking-tighter"
             >
-              Architect <br className="hidden sm:block" />
-              Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-emerald-400 to-teal-300 drop-shadow-[0_0_30px_rgba(16,185,129,0.5)]">Future.</span>
+              {restOfTitle} <br className="hidden sm:block" />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-emerald-400 to-teal-300 drop-shadow-[0_0_30px_rgba(16,185,129,0.5)]">{lastWord}</span>
             </motion.h1>
 
             <motion.p
@@ -239,7 +269,7 @@ const LandingPage = () => {
               transition={{ duration: 1, delay: 0.6 }}
               className="text-slate-300 text-lg md:text-xl mb-12 max-w-2xl leading-relaxed"
             >
-              The most powerful, beautifully animated, and strictly secured digital environment for educational institutions worldwide.
+              {landingData.heroSubtitle}
             </motion.p>
 
             <motion.div
@@ -455,21 +485,15 @@ const LandingPage = () => {
                   <h3 className="text-2xl font-extrabold text-white mb-2 uppercase tracking-wider">{plan.name}</h3>
                   <div className="mb-8 flex items-baseline gap-1 text-white mt-4">
                     <span className="text-5xl font-extrabold">{plan.price}</span>
-                    <span className="text-primary-300 font-bold">/{plan.duration}</span>
+                    <span className="text-primary-300 font-bold">/ student</span>
                   </div>
                   <ul className="space-y-5 mb-10 flex-1">
-                    <li className="flex items-center gap-4 text-sm text-white font-medium">
-                      <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0 drop-shadow-md" />
-                      Storage: {plan.storage}
-                    </li>
-                    <li className="flex items-center gap-4 text-sm text-white font-medium">
-                      <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0 drop-shadow-md" />
-                      Duration: {plan.duration}
-                    </li>
-                    <li className="flex items-center gap-4 text-sm text-white font-medium">
-                      <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0 drop-shadow-md" />
-                      Students: {plan.studentCount}
-                    </li>
+                    {plan.modules && plan.modules.map(mod => (
+                      <li key={mod} className="flex items-center gap-4 text-sm text-white font-medium">
+                        <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0 drop-shadow-md" />
+                        <span className="capitalize">{mod.replace(/_/g, ' ')}</span>
+                      </li>
+                    ))}
                   </ul>
                   <Link to="/login" className="w-full py-4 rounded-2xl bg-white text-primary-900 font-extrabold uppercase tracking-wider text-sm text-center hover:bg-slate-50 transition-all shadow-[0_0_30px_rgba(255,255,255,0.2)]">
                     Select Plan
@@ -533,16 +557,27 @@ const LandingPage = () => {
             <div>
               <h4 className="text-slate-900 dark:text-white font-bold uppercase tracking-wider mb-6">Contact</h4>
               <ul className="space-y-4">
-                <li>
-                  <a href="#" className="flex items-center gap-3 text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors text-sm font-medium">
-                    <Mail className="w-4 h-4" /> support@zuna.edu
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="flex items-center gap-3 text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors text-sm font-medium">
-                    <Globe className="w-4 h-4" /> zuna.ecosystem
-                  </a>
-                </li>
+                {landingData.contactEmail && (
+                  <li>
+                    <a href={`mailto:${landingData.contactEmail}`} className="flex items-center gap-3 text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors text-sm font-medium">
+                      <Mail className="w-4 h-4 shrink-0" /> <span className="truncate">{landingData.contactEmail}</span>
+                    </a>
+                  </li>
+                )}
+                {landingData.contactPhone && (
+                  <li>
+                    <a href={`tel:${landingData.contactPhone}`} className="flex items-center gap-3 text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors text-sm font-medium">
+                      <Phone className="w-4 h-4 shrink-0" /> <span className="truncate">{landingData.contactPhone}</span>
+                    </a>
+                  </li>
+                )}
+                {landingData.contactAddress && (
+                  <li>
+                    <div className="flex items-start gap-3 text-slate-500 dark:text-slate-400 text-sm font-medium">
+                      <MapPin className="w-4 h-4 shrink-0 mt-0.5" /> <span>{landingData.contactAddress}</span>
+                    </div>
+                  </li>
+                )}
               </ul>
             </div>
           </div>

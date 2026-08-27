@@ -101,6 +101,13 @@ const AdminLayout = () => {
   };
 
   const hasAccess = (moduleKey) => {
+    // Check if the college subscription plan restricts this module
+    if (moduleKey && userData?.allowedModules && Array.isArray(userData.allowedModules)) {
+      if (!userData.allowedModules.includes(moduleKey)) {
+        return false;
+      }
+    }
+
     if (userRole === 'admin' || userRole === 'superadmin') return true;
     if (!moduleKey) return true; // Everyone can see dashboard
     return permissions?.[moduleKey]?.canRead === true;

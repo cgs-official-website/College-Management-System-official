@@ -245,7 +245,7 @@ const Register = () => {
                 {Array.from({ length: maxSteps }).map((_, idx) => (
                   <motion.div
                     key={idx}
-                    className={`h-full flex-1 rounded-full ${idx + 1 <= currentStep ? (selectedRole === 'teacher' ? 'bg-teal-500' : selectedRole === 'admin' ? 'bg-indigo-500' : 'bg-primary-500') : 'bg-slate-200 dark:bg-white/10'}`}
+                    className={`h-full flex-1 rounded-full ${idx + 1 <= currentStep ? 'bg-primary-500' : 'bg-slate-200 dark:bg-white/10'}`}
                     initial={{ scaleX: 0 }}
                     animate={{ scaleX: 1 }}
                     transition={{ duration: 0.5, delay: idx * 0.1 }}
@@ -268,7 +268,20 @@ const Register = () => {
               )}
             </AnimatePresence>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 overflow-hidden">
+            <form 
+              onSubmit={handleSubmit(onSubmit)} 
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (currentStep < maxSteps) {
+                    handleNext();
+                  } else {
+                    handleSubmit(onSubmit)();
+                  }
+                }
+              }}
+              className="space-y-6 overflow-hidden"
+            >
               <input type="hidden" {...register("role")} />
               
               <AnimatePresence mode="wait">
@@ -582,11 +595,7 @@ const Register = () => {
                   <button
                     type="button"
                     onClick={handleNext}
-                    className={`flex-[2] py-4 px-4 text-white rounded-xl font-bold transition-all shadow-lg hover:shadow-xl ${
-                      selectedRole === 'teacher' ? 'bg-teal-600 hover:bg-teal-700 shadow-teal-500/30' : 
-                      selectedRole === 'admin' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/30' :
-                      'bg-primary-600 hover:bg-primary-700 shadow-primary-500/30'
-                    }`}
+                    className="flex-[2] py-4 px-4 text-white rounded-xl font-bold transition-all shadow-lg hover:shadow-xl bg-primary-600 hover:bg-primary-700 shadow-primary-500/30"
                   >
                     Continue
                   </button>
@@ -594,17 +603,9 @@ const Register = () => {
                   <button
                     type="submit"
                     disabled={isLoading || fetchingCollege}
-                    className={`flex-[2] flex items-center justify-center py-4 px-4 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden ${
-                      selectedRole === 'teacher' ? 'bg-teal-600 hover:bg-teal-700 shadow-teal-500/30 focus:ring-teal-500' : 
-                      selectedRole === 'admin' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/30 focus:ring-indigo-500' :
-                      'bg-primary-600 hover:bg-primary-700 shadow-primary-500/30 focus:ring-primary-500'
-                    }`}
+                    className="flex-[2] flex items-center justify-center py-4 px-4 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden bg-primary-600 hover:bg-primary-700 shadow-primary-500/30 focus:ring-primary-500"
                   >
-                    <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-r ${
-                      selectedRole === 'teacher' ? 'from-cyan-500 to-teal-600' : 
-                      selectedRole === 'admin' ? 'from-blue-500 to-indigo-600' :
-                      'from-emerald-500 to-primary-600'
-                    }`}></div>
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-r from-emerald-500 to-primary-600"></div>
                     <span className="relative z-10 flex items-center gap-2">
                       {isLoading ? (
                         <>

@@ -555,7 +555,15 @@ export const getMe = async (req, res) => {
     const user = await prisma.user.findUnique({
       where: { id: req.user.userId },
       include: { 
-        college: true,
+        college: {
+          include: {
+            billingSubscription: {
+              include: {
+                subscriptionPlan: true
+              }
+            }
+          }
+        },
         studentProfile: {
           include: {
             department: true,
@@ -585,6 +593,12 @@ export const getMe = async (req, res) => {
     }
 
     const { passwordHash, ...safeUser } = user;
+
+    // Attach allowedModules if a subscription plan is mapped
+    if (safeUser.college?.billingSubscription?.subscriptionPlan) {
+      safeUser.allowedModules = safeUser.college.billingSubscription.subscriptionPlan.modules;
+    }
+
     res.json({ success: true, data: safeUser });
   } catch (error) {
     res.status(400).json({ success: false, error: { message: error.message } });
