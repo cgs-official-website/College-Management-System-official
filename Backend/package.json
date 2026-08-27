@@ -7,11 +7,10 @@
     "node": ">=20.19.0"
   },
   "scripts": {
-    "prestart": "npx prisma db push --accept-data-loss",
     "start": "node --import ./src/instrument.js src/server.js",
     "dev": "nodemon --exec node --import ./src/instrument.js src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate && prisma db push --accept-data-loss"
   },
   "keywords": [],
   "author": "",
