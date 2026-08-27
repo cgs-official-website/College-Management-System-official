@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { FaSpinner } from 'react-icons/fa';
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { currentUser, userRole, loading } = useAuth();
+  const { currentUser, userRole, userData, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -19,15 +19,29 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   if (!currentUser) {
-    // Redirect them to the /login page, but save the current location they were trying to go to
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // If roles are specified and user's role is not in the list, redirect to an unauthorized or generic dashboard
-  // NOTE: If userRole is still null (e.g., they just signed up and firestore isn't updated), we might want to handle that.
+  // Superadmin has universal access
+  if (userRole !== 'superadmin') {
+    const collegeStatus = userData?.collegeStatus || userData?.college?.status;
+    
+    // If college is pending approval, block admin routes and route to pending approval
+    if (collegeStatus === 'pending') {
+      return <Navigate to="/pending-approval" replace />;
+    }
+
+    if (collegeStatus === 'rejected') {
+      return <Navigate to="/rejected" replace />;
+    }
+
+    if (collegeStatus === 'suspended') {
+      return <Navigate to="/pending-approval" replace />;
+    }
+  }
+
+  // If roles are specified and user's role is not in the list, redirect
   if (allowedRoles && (!userRole || !allowedRoles.includes(userRole))) {
-    // They are logged in but don't have the right role
-    // For now, redirect to login, or you could create a generic '/unauthorized' page.
     return <Navigate to="/login" replace />;
   }
 

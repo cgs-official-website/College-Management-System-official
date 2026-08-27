@@ -69,6 +69,45 @@ export const onboardCollege = async (req, res) => {
   }
 };
 
+import { invalidateCollegeStatusCache } from '../../middleware/requireApprovedCollege.js';
+
+export const getMyCollegeStatus = async (req, res) => {
+  try {
+    const collegeId = req.user?.collegeId;
+    if (!collegeId) {
+      return res.status(400).json({ success: false, error: { code: 'NO_COLLEGE_ID', message: 'No college associated with this user' } });
+    }
+
+    const college = await prisma.college.findUnique({
+      where: { id: collegeId },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        status: true,
+        registrationNo: true
+      }
+    });
+
+    if (!college) {
+      return res.status(404).json({ success: false, error: { code: 'COLLEGE_NOT_FOUND', message: 'College not found' } });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        collegeId: college.id,
+        collegeName: college.name,
+        slug: college.slug,
+        status: college.status,
+        registrationNo: college.registrationNo
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
 export const updateCollegeStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -79,9 +118,12 @@ export const updateCollegeStatus = async (req, res) => {
       data: { status }
     });
     
-    res.json({ data: college });
+    // Invalidate Redis cache for live status
+    await invalidateCollegeStatusCache(id);
+
+    res.json({ success: true, data: college });
   } catch (error) {
-    res.status(400).json({ error: { message: error.message } });
+    res.status(400).json({ success: false, error: { message: error.message } });
   }
 };
 

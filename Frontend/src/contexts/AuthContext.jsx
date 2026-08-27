@@ -108,6 +108,7 @@ export function AuthProvider({ children }) {
       }
       setPermissions(permsMap);
       
+      const collegeStatus = data.collegeStatus || data.college?.status || 'active';
       setUserData({
         uid: data.id,
         email: data.email,
@@ -115,6 +116,7 @@ export function AuthProvider({ children }) {
         collegeId: data.collegeId,
         collegeName: data.college?.name,
         collegeLogo: data.college?.logoUrl,
+        collegeStatus: collegeStatus,
         ...data
       });
     } catch (error) {
@@ -153,7 +155,8 @@ export function AuthProvider({ children }) {
     register,
     logout,
     resetPassword,
-    updateUserData
+    updateUserData,
+    restoreSession
   };
 
   return (

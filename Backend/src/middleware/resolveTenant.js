@@ -1,19 +1,24 @@
 import { prisma } from '../server.js';
+import { requireApprovedCollege, getLiveCollegeStatus, invalidateCollegeStatusCache } from './requireApprovedCollege.js';
+
+export { requireApprovedCollege, getLiveCollegeStatus, invalidateCollegeStatusCache };
 
 /**
- * Extracts and strictly enforces tenant context (collegeId).
+ * Extracts and strictly enforces tenant context (collegeId) and verifies live approval status.
  * Must run AFTER authenticate middleware.
  */
 export const resolveTenant = async (req, res, next) => {
   if (!req.user) {
-    return res.status(401).json({ error: 'User context missing' });
+    return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'User context missing' } });
   }
 
-  let collegeId = req.headers?.['x-college-id'] || req.query?.collegeId || req.body?.collegeId || req.user?.collegeId;
+  // Strictly bind collegeId from authenticated user unless superadmin explicitly overrides
+  let collegeId = req.user.role === 'superadmin'
+    ? (req.headers?.['x-college-id'] || req.query?.collegeId || req.body?.collegeId || req.user?.collegeId)
+    : req.user?.collegeId;
 
   if (!collegeId) {
     if (req.user.role === 'superadmin') {
-      // Superadmin fallback: resolve to first active college if not explicitly passed
       const activeCollege = await prisma.college.findFirst({
         where: { status: 'active' },
         orderBy: { createdAt: 'asc' }
@@ -22,7 +27,7 @@ export const resolveTenant = async (req, res, next) => {
         collegeId = activeCollege.id;
       }
     } else {
-      return res.status(403).json({ error: 'Tenant context (collegeId) missing for non-superadmin user' });
+      return res.status(403).json({ success: false, error: { code: 'TENANT_REQUIRED', message: 'Tenant context (collegeId) missing for user' } });
     }
   }
 
@@ -30,5 +35,7 @@ export const resolveTenant = async (req, res, next) => {
   if (!req.user.collegeId && collegeId) {
     req.user.collegeId = collegeId;
   }
-  next();
+
+  // Authoritatively enforce approval status
+  return requireApprovedCollege(req, res, next);
 };

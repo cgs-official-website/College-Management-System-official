@@ -125,7 +125,11 @@ const Register = () => {
       }
 
       await registerUser(data.email.toLowerCase().trim(), data.password, additionalData);
-      // Redirection is handled by useEffect when AuthContext resolves user role
+      if (data.role === 'admin') {
+        navigate('/pending-approval');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       console.error("Registration Error:", err);
       if (err.code === 'auth/email-already-in-use') {

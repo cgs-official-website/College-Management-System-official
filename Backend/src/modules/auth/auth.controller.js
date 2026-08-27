@@ -167,12 +167,12 @@ export const registerAdmin = async (req, res) => {
     const adminName = (data.name || `${data.collegeName} Administrator`).trim();
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Create College
+      // 1. Create College in PENDING state awaiting Super Admin approval
       const college = await tx.college.create({
         data: {
           name: data.collegeName.trim(),
           slug: finalSlug,
-          status: 'active',
+          status: 'pending',
           aicteNumber: data.aicteNumber || null,
           ugcCode: data.ugcRecognition || null,
           affiliationCode: data.affiliationCode || null,
@@ -200,13 +200,20 @@ export const registerAdmin = async (req, res) => {
           pricePerStudent: 0,
           maxStudents: 5000,
           storageLimitGb: 50,
-          status: 'active',
+          status: 'pending',
           trialExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
         }
       });
 
       return { college, adminUser };
     });
+
+    // Seed Redis status cache to 'pending'
+    if (redis && redis.status === 'ready') {
+      try {
+        await redis.set(`college_status:${result.college.id}`, 'pending', 'EX', 3600);
+      } catch (err) {}
+    }
 
     const accessToken = jwt.sign(
       { userId: result.adminUser.id, collegeId: result.college.id, role: 'admin' },
@@ -581,6 +588,7 @@ export const getMe = async (req, res) => {
     }
 
     const { passwordHash, ...safeUser } = user;
+    safeUser.collegeStatus = user.college?.status || null;
     res.json({ success: true, data: safeUser });
   } catch (error) {
     res.status(400).json({ success: false, error: { message: error.message } });
