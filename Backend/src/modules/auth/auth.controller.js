@@ -131,6 +131,141 @@ export const login = async (req, res) => {
   }
 };
 
+export const registerAdmin = async (req, res) => {
+  try {
+    const data = registerAdminSchema.parse(req.body);
+    const email = data.adminEmail.toLowerCase().trim();
+
+    // Check if an account with this email already exists
+    const existingUser = await prisma.user.findFirst({
+      where: { email }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'EMAIL_ALREADY_IN_USE', message: 'An account with this email address is already registered.' }
+      });
+    }
+
+    // Determine unique college slug
+    let baseSlug = (data.slug || data.collegeName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    if (!baseSlug || baseSlug.length < 2) {
+      baseSlug = 'college';
+    }
+
+    let finalSlug = baseSlug;
+    const existingSlug = await prisma.college.findUnique({
+      where: { slug: finalSlug }
+    });
+
+    if (existingSlug) {
+      finalSlug = `${baseSlug}-${crypto.randomBytes(3).toString('hex')}`;
+    }
+
+    const passwordHash = await bcrypt.hash(data.password, 10);
+    const adminName = (data.name || `${data.collegeName} Administrator`).trim();
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Create College
+      const college = await tx.college.create({
+        data: {
+          name: data.collegeName.trim(),
+          slug: finalSlug,
+          status: 'active',
+          aicteNumber: data.aicteNumber || null,
+          ugcCode: data.ugcRecognition || null,
+          affiliationCode: data.affiliationCode || null,
+          logoUrl: data.logoUrl || null
+        }
+      });
+
+      // 2. Create Admin User
+      const adminUser = await tx.user.create({
+        data: {
+          collegeId: college.id,
+          email,
+          name: adminName,
+          passwordHash,
+          role: 'admin',
+          accountStatus: 'active'
+        }
+      });
+
+      // 3. Create Default Billing Subscription
+      await tx.billingSubscription.create({
+        data: {
+          collegeId: college.id,
+          planTier: 'Enterprise',
+          pricePerStudent: 0,
+          maxStudents: 5000,
+          storageLimitGb: 50,
+          status: 'active',
+          trialExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        }
+      });
+
+      return { college, adminUser };
+    });
+
+    const accessToken = jwt.sign(
+      { userId: result.adminUser.id, collegeId: result.college.id, role: 'admin' },
+      JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    const refreshToken = jwt.sign(
+      { userId: result.adminUser.id },
+      REFRESH_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+
+    if (redis && redis.status === 'ready') {
+      try {
+        await redis.set(redisKeys.refreshToken(tokenHash), JSON.stringify({ userId: result.adminUser.id }), 'EX', 7 * 24 * 60 * 60);
+      } catch (cacheErr) {
+        logger.warn(`[warn] Failed to cache refresh token in Redis: ${cacheErr.message}`);
+      }
+    }
+
+    await prisma.refreshToken.create({
+      data: {
+        userId: result.adminUser.id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      }
+    });
+
+    logger.info(`[info] College ${result.college.name} (id=${result.college.id}) registered with Admin ${result.adminUser.email}`);
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        accessToken,
+        refreshToken,
+        college: {
+          id: result.college.id,
+          name: result.college.name,
+          slug: result.college.slug,
+          status: result.college.status
+        },
+        user: {
+          id: result.adminUser.id,
+          role: result.adminUser.role,
+          collegeId: result.college.id,
+          email: result.adminUser.email,
+          name: result.adminUser.name
+        }
+      }
+    });
+  } catch (error) {
+    logger.warn(`[warn] College registration failed: ${error.message}`);
+    return res.status(400).json({ success: false, error: { message: error.message } });
+  }
+};
+
 export const getStudentRegistrationInfo = async (req, res) => {
   try {
     const { token } = req.query;
@@ -408,59 +543,6 @@ export const logout = async (req, res) => {
     res.json({ success: true, message: 'Logged out successfully' });
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
-  }
-};
-
-export const registerAdmin = async (req, res) => {
-  try {
-    const data = registerAdminSchema.parse(req.body);
-    
-    const uniqueSlug = `${data.slug}-${Math.random().toString(36).substring(2, 8)}`;
-    
-    const result = await prisma.$transaction(async (tx) => {
-      const count = await tx.college.count();
-      const nextId = count + 1;
-      const registrationNo = `ZUNAC${nextId.toString().padStart(3, '0')}`;
-
-      const college = await tx.college.create({
-        data: {
-          name: data.collegeName,
-          slug: uniqueSlug,
-          status: 'pending',
-          registrationNo
-        }
-      });
-
-      const passwordHash = await bcrypt.hash(data.password, 10);
-      const admin = await tx.user.create({
-        data: {
-          collegeId: college.id,
-          email: data.adminEmail,
-          passwordHash,
-          role: 'admin',
-          accountStatus: 'active'
-        }
-      });
-
-      return { college, admin };
-    });
-
-    // Send Welcome Email to Admin
-    const loginUrl = `${process.env.FRONTEND_URL}/login`;
-    
-    await sendDynamicMail({
-      to: data.adminEmail,
-      templateName: 'Admin Welcome',
-      variables: {
-        name: data.adminName,
-        email: data.adminEmail,
-        password: temporaryPassword,
-        loginUrl
-      }
-    });
-    res.status(201).json({ success: true, data: result });
-  } catch (error) {
-    res.status(400).json({ success: false, error: { message: error.message } });
   }
 };
 

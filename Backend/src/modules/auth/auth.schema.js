@@ -10,10 +10,16 @@ export const loginSchema = z.object({
 });
 
 export const registerAdminSchema = z.object({
-  collegeName: z.string().min(3),
-  slug: z.string().min(3),
-  adminEmail: z.string().email(),
-  password: z.string().min(6)
+  collegeName: z.string().trim().min(2, 'College name must be at least 2 characters'),
+  slug: z.string().trim().optional(),
+  adminEmail: z.string().trim().email('Please enter a valid email address').toLowerCase(),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  name: z.string().trim().optional(),
+  aicteNumber: z.string().trim().optional().nullable(),
+  ugcRecognition: z.string().trim().optional().nullable(),
+  affiliationCode: z.string().trim().optional().nullable(),
+  logoUrl: z.string().trim().optional().nullable(),
+  logoBase64: z.string().trim().optional().nullable()
 });
 
 export const studentRegisterSchema = z.object({

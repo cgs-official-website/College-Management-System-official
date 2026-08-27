@@ -30,13 +30,26 @@ export function AuthProvider({ children }) {
 
   async function register(email, password, additionalData) {
     if (additionalData.role === 'admin') {
-      await api.post('/auth/register', {
+      const response = await api.post('/auth/register', {
         adminEmail: email,
         password,
         collegeName: additionalData.collegeName,
-        slug: additionalData.collegeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
+        slug: additionalData.collegeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+        aicteNumber: additionalData.aicteNumber || null,
+        ugcRecognition: additionalData.ugcRecognition || null,
+        affiliationCode: additionalData.affiliationCode || null
       });
-      // Automatically log the user in after registration
+
+      const { accessToken, refreshToken, user } = response.data?.data || response.data || {};
+      if (accessToken) {
+        localStorage.setItem('zuna_token', accessToken);
+        if (refreshToken) {
+          localStorage.setItem('zuna_refresh', refreshToken);
+        }
+        await restoreSession();
+        return user;
+      }
+      // Fallback: log the user in
       return await login(email, password);
     }
     throw new Error("Only Admin registration is currently implemented in REST API");
