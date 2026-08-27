@@ -17,8 +17,12 @@ model College {
   academicYear        String?
   affiliationCode     String?
   aicteNumber         String?
+  aicteCode           String?
   logoUrl             String?
   ugcCode             String?
+  pan                 String?
+  tan                 String?
+  affiliationType     AffiliationType?
   id                  String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   admissions          Admission[]
   assignments         Assignment[]
@@ -1004,3 +1008,7 @@ model Payroll {
   @@unique([staffId, month, year])
 }
 
+enum AffiliationType {
+  AUTONOMOUS
+  UNIVERSITY
+}

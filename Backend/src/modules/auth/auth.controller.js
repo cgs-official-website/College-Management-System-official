@@ -174,8 +174,12 @@ export const registerAdmin = async (req, res) => {
           slug: finalSlug,
           status: 'active',
           aicteNumber: data.aicteNumber || null,
-          ugcCode: data.ugcRecognition || null,
+          aicteCode: data.aicteCode || null,
+          ugcCode: data.ugcCode || data.ugcRecognition || null,
           affiliationCode: data.affiliationCode || null,
+          affiliationType: data.affiliationType || null,
+          pan: data.pan || null,
+          tan: data.tan || null,
           logoUrl: data.logoUrl || null
         }
       });

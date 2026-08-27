@@ -17,9 +17,30 @@ export const registerAdminSchema = z.object({
   name: z.string().trim().optional(),
   aicteNumber: z.string().trim().optional().nullable(),
   ugcRecognition: z.string().trim().optional().nullable(),
-  affiliationCode: z.string().trim().optional().nullable(),
+  affiliationCode: z.string().trim().regex(/^[A-Za-z0-9]{10,15}$/, 'Affiliation code must be 10-15 alphanumeric characters'),
+  aicteCode: z.string().trim().regex(/^[A-Za-z0-9]{15,20}$/, 'AICTE code must be 15-20 alphanumeric characters'),
+  pan: z.string().trim().toUpperCase().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Invalid PAN format'),
+  tan: z.string().trim().toUpperCase().regex(/^[A-Z]{4}[0-9]{5}[A-Z]{1}$/, 'Invalid TAN format'),
+  affiliationType: z.enum(['AUTONOMOUS', 'UNIVERSITY'], { required_error: 'Affiliation type is required' }),
+  ugcCode: z.string().trim().optional(),
   logoUrl: z.string().trim().optional().nullable(),
   logoBase64: z.string().trim().optional().nullable()
+}).superRefine((data, ctx) => {
+  if (data.affiliationType === 'UNIVERSITY') {
+    if (!data.ugcCode || data.ugcCode.trim() === '') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'UGC Code is required for affiliated universities',
+        path: ['ugcCode']
+      });
+    } else if (!/^[A-Za-z0-9]+$/.test(data.ugcCode)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'UGC Code must be alphanumeric',
+        path: ['ugcCode']
+      });
+    }
+  }
 });
 
 export const studentRegisterSchema = z.object({
