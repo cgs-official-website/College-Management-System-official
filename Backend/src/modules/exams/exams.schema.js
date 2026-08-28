@@ -9,7 +9,7 @@ export const createExamSchema = z.object({
   departmentName: z.string().optional(),
   date: z.string().optional(),
   maxMarks: z.number().or(z.string().transform(v => Number(v) || 100)).optional().default(100),
-  type: z.enum(['Midterm', 'Final', 'Quiz', 'Practical', 'Internal', 'Semester']).optional().default('Midterm'),
+  type: z.string().min(1, 'Exam type is required').default('Midterm'),
   status: z.enum(['pending', 'active', 'completed']).optional().default('pending'),
   room: z.string().optional().default('Main Hall'),
 });
