@@ -168,12 +168,15 @@ const Register = () => {
       // Redirection is handled by useEffect when AuthContext resolves user role
     } catch (err) {
       console.error("Registration Error:", err);
-      if (err.code === 'auth/email-already-in-use') {
-        setError('This email is already registered.');
+      const apiErrMsg = err.response?.data?.error?.message || err.response?.data?.message || err.response?.data?.error;
+      if (err.code === 'auth/email-already-in-use' || (typeof apiErrMsg === 'string' && apiErrMsg.toLowerCase().includes('already'))) {
+        setError('This email is already registered. Please sign in or use another email.');
       } else if (err.code === 'auth/weak-password') {
         setError('Password is too weak. Please use at least 6 characters.');
+      } else if (apiErrMsg) {
+        setError(apiErrMsg);
       } else {
-        setError(err.response?.data?.error?.message || 'Failed to create account. Please check your network and try again.');
+        setError(err.message || 'Failed to create account. Please check your network and try again.');
       }
       setIsLoading(false); // Reset loading state on error
     }
@@ -297,7 +300,7 @@ const Register = () => {
                   >
                     <div className="md:col-span-2">
                       <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
-                        {selectedRole === 'admin' ? 'Admin Full Name' : 'Full Name'}
+                        {selectedRole === 'admin' ? 'Admin Full Name' : 'Full Name'} <span className="text-red-500">*</span>
                       </label>
                       <div className="relative group">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -314,7 +317,7 @@ const Register = () => {
                     </div>
 
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Email Address</label>
+                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Email Address <span className="text-red-500">*</span></label>
                       <div className="relative group">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                           <Mail className="h-5 w-5 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
@@ -323,7 +326,10 @@ const Register = () => {
                           type="email"
                           {...register("email", { 
                             required: "Email is required",
-                            pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "Invalid email address" }
+                            pattern: { 
+                              value: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, 
+                              message: "Please enter a valid email address with a valid domain (e.g. .com, .edu, .in)" 
+                            }
                           })}
                           className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-all shadow-sm dark:shadow-none"
                           placeholder="address@example.com"
@@ -333,7 +339,7 @@ const Register = () => {
                     </div>
 
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Password</label>
+                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Password <span className="text-red-500">*</span></label>
                       <div className="relative group">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                           <Lock className="h-5 w-5 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
@@ -373,7 +379,7 @@ const Register = () => {
                     {selectedRole === 'admin' && (
                       <>
                         <div className="md:col-span-2">
-                          <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">College Name</label>
+                          <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">College Name <span className="text-red-500">*</span></label>
                           <div className="relative group">
                             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                               <Building2 className="h-5 w-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
@@ -411,7 +417,7 @@ const Register = () => {
 
                     {selectedRole !== 'admin' && !fetchedCollegeId && (
                       <div className={selectedRole === 'teacher' || selectedRole === 'hod' ? "md:col-span-1" : "md:col-span-2"}>
-                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">College Code</label>
+                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">College Code <span className="text-red-500">*</span></label>
                         <div className="relative group">
                           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                             <Building2 className="h-5 w-5 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
@@ -430,7 +436,7 @@ const Register = () => {
                     {(selectedRole === 'teacher' || selectedRole === 'hod') && (
                       <div className={fetchedCollegeId ? "md:col-span-2" : "md:col-span-1"}>
                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
-                          {selectedRole === 'hod' ? 'HOD ID' : 'Teacher ID'}
+                          {selectedRole === 'hod' ? 'HOD ID' : 'Teacher ID'} <span className="text-red-500">*</span>
                         </label>
                         <div className="relative group">
                           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -449,7 +455,7 @@ const Register = () => {
 
                     {selectedRole === 'parent' && (
                       <div className={fetchedCollegeId ? "md:col-span-2" : "md:col-span-1"}>
-                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Student ID (Child)</label>
+                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Student ID (Child) <span className="text-red-500">*</span></label>
                         <div className="relative group">
                           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                             <User className="h-5 w-5 text-slate-400 group-focus-within:text-amber-500 transition-colors" />
@@ -478,7 +484,7 @@ const Register = () => {
                     className="grid grid-cols-1 md:grid-cols-2 gap-5"
                   >
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Affiliation Type</label>
+                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Affiliation Type <span className="text-red-500">*</span></label>
                       <div className="flex gap-4">
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input type="radio" value="AUTONOMOUS" {...register("affiliationType", { required: "Affiliation type is required" })} className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500" />
@@ -493,7 +499,7 @@ const Register = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">AICTE Code</label>
+                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">AICTE Code <span className="text-red-500">*</span></label>
                       <div className="relative group">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                           <FileText className="h-5 w-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
@@ -510,7 +516,7 @@ const Register = () => {
 
                     {affiliationType === 'UNIVERSITY' && (
                       <div>
-                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">UGC Code</label>
+                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">UGC Code <span className="text-red-500">*</span></label>
                         <div className="relative group">
                           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                             <BadgeCheck className="h-5 w-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
@@ -527,7 +533,7 @@ const Register = () => {
                     )}
 
                     <div className={affiliationType === 'UNIVERSITY' ? "md:col-span-2" : "md:col-span-1"}>
-                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Affiliation Code</label>
+                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Affiliation Code <span className="text-red-500">*</span></label>
                       <div className="relative group">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                           <Building2 className="h-5 w-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
@@ -543,7 +549,7 @@ const Register = () => {
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">PAN</label>
+                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">PAN <span className="text-red-500">*</span></label>
                       <div className="relative group">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                           <FileText className="h-5 w-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
@@ -560,7 +566,7 @@ const Register = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">TAN</label>
+                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">TAN <span className="text-red-500">*</span></label>
                       <div className="relative group">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                           <FileText className="h-5 w-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />

@@ -250,6 +250,10 @@ const SuperColleges = () => {
           <CollegeDetailsModal 
             college={selectedCollege} 
             onClose={() => setSelectedCollege(null)} 
+            onManageSubscription={(col) => {
+              setSelectedCollege(null);
+              setSubscriptionCollege(col);
+            }}
           />
         )}
       </AnimatePresence>
@@ -321,11 +325,14 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
       setSuccessData(result.data?.data);
     } catch (error) {
       console.error(error);
-      const errMsg = error.response?.data?.error || error.message;
-      if (errMsg.includes('already in use')) {
+      const apiErr = error.response?.data?.error?.message || error.response?.data?.error || error.response?.data?.message || error.message;
+      const errMsgStr = typeof apiErr === 'string' ? apiErr : JSON.stringify(apiErr);
+      if (errMsgStr.includes('already in use') || errMsgStr.includes('already registered')) {
         setApiError('The admin email address is already in use by another account.');
-      } else if (errMsg.includes('weak-password')) {
+      } else if (errMsgStr.includes('weak-password')) {
         setApiError('The password is too weak. Please use at least 6 characters.');
+      } else if (errMsgStr) {
+        setApiError(errMsgStr);
       } else {
         setApiError('Failed to onboard college. Please try again later.');
       }
@@ -436,17 +443,40 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Official Email *</label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Mail className="h-5 w-5 text-slate-400" /></div>
-                      <input type="email" {...register("collegeEmail", { required: "Official Email is required" })} className="block w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl text-sm" placeholder="contact@oxford.edu" />
+                      <input 
+                        type="email" 
+                        {...register("collegeEmail", { 
+                          required: "Official Email is required",
+                          pattern: {
+                            value: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+                            message: "Please enter a valid email address with a valid domain (e.g. .com, .edu, .in)"
+                          }
+                        })} 
+                        className="block w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl text-sm" 
+                        placeholder="contact@oxford.edu" 
+                      />
                     </div>
                     {errors.collegeEmail && <p className="mt-1.5 text-xs text-red-500">{errors.collegeEmail.message}</p>}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Official Phone</label>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Official Phone (10 Digits)</label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Phone className="h-5 w-5 text-slate-400" /></div>
-                      <input type="text" {...register("officialPhone")} className="block w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl text-sm" placeholder="+919876543210" />
+                      <input 
+                        type="tel" 
+                        maxLength={10}
+                        {...register("officialPhone", {
+                          pattern: {
+                            value: /^[6-9]\d{9}$/,
+                            message: "Please enter a valid 10-digit mobile number"
+                          }
+                        })} 
+                        className="block w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl text-sm" 
+                        placeholder="9876543210" 
+                      />
                     </div>
+                    {errors.officialPhone && <p className="mt-1.5 text-xs text-red-500">{errors.officialPhone.message}</p>}
                   </div>
 
                   <div>
@@ -595,7 +625,18 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Admin Email *</label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Mail className="h-5 w-5 text-slate-400" /></div>
-                      <input type="email" {...register("adminEmail", { required: "Admin Email is required" })} className="block w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl text-sm" placeholder="principal@oxford.edu" />
+                      <input 
+                        type="email" 
+                        {...register("adminEmail", { 
+                          required: "Admin Email is required",
+                          pattern: {
+                            value: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+                            message: "Please enter a valid email address with a valid domain (e.g. .com, .edu, .in)"
+                          }
+                        })} 
+                        className="block w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl text-sm" 
+                        placeholder="principal@oxford.edu" 
+                      />
                     </div>
                     {errors.adminEmail && <p className="mt-1.5 text-xs text-red-500">{errors.adminEmail.message}</p>}
                   </div>
@@ -800,9 +841,10 @@ const CollegeDetailsModal = ({ college, onClose, onManageSubscription }) => {
 
 
 const ManageSubscriptionModal = ({ college, onClose, onSuccess }) => {
+  const { updateCollegeSubscription } = useColleges();
   const { register, handleSubmit } = useForm({
     defaultValues: {
-      plan: college.subscriptionPlan || 'Free',
+      plan: college.subscriptionPlan || 'Enterprise',
       status: college.subscriptionStatus || 'Active',
       endDate: college.subscriptionEndDate ? new Date(college.subscriptionEndDate).toISOString().split('T')[0] : ''
     }
@@ -812,16 +854,18 @@ const ManageSubscriptionModal = ({ college, onClose, onSuccess }) => {
   const onSubmit = async (data) => {
     setIsSubmitting(true);
     try {
-// TODO: Migrate to REST API ->       await updateDoc(doc(db, 'colleges', college.id), {
-//         subscriptionPlan: data.plan,
-//         subscriptionStatus: data.status,
-//         subscriptionEndDate: data.endDate
-//       });
+      await updateCollegeSubscription.mutateAsync({
+        id: college.id,
+        planTier: data.plan,
+        status: data.status,
+        currentPeriodEnd: data.endDate || null
+      });
       toast.success("Subscription updated successfully!");
       onSuccess();
     } catch (error) {
       console.error(error);
-      toast.error("Failed to update subscription.");
+      const errMsg = error.response?.data?.error?.message || error.response?.data?.message || 'Failed to update subscription.';
+      toast.error(errMsg);
     } finally {
       setIsSubmitting(false);
     }

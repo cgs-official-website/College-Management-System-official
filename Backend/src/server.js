@@ -52,6 +52,7 @@ app.use(cors({
   origin: function (origin, callback) {
     const allowedOrigins = [
       'http://localhost:5173',
+      'http://localhost:5174',
       'http://localhost:3000',
       process.env.FRONTEND_URL,
       // Allow all vercel.app subdomains
@@ -60,8 +61,11 @@ app.use(cors({
     // Allow requests with no origin (mobile apps, curl, Postman)
     if (!origin) return callback(null, true);
 
-    // Allow any vercel.app domain, railway.app domain, or teamzuna.in domain
+    const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+
+    // Allow any localhost port, vercel.app domain, railway.app domain, or teamzuna.in domain
     if (
+      isLocalhost ||
       allowedOrigins.includes(origin) ||
       origin.endsWith('.vercel.app') ||
       origin.endsWith('.railway.app') ||

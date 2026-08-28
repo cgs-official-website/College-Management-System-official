@@ -1,13 +1,30 @@
 import { prisma } from '../../server.js';
 import bcrypt from 'bcryptjs';
-import { onboardCollegeSchema, updateCollegeStatusSchema } from './colleges.schema.js';
+import crypto from 'crypto';
+import { onboardCollegeSchema, updateCollegeStatusSchema, updateSubscriptionSchema } from './colleges.schema.js';
 
 export const getAllColleges = async (req, res) => {
   try {
     const colleges = await prisma.college.findMany({
+      include: {
+        billingSubscription: true,
+        users: {
+          where: { role: 'admin' },
+          select: { id: true, name: true, email: true }
+        }
+      },
       orderBy: { createdAt: 'desc' }
     });
-    res.json({ data: colleges });
+    
+    // Map billingSubscription fields to college object for frontend compatibility
+    const mappedColleges = colleges.map(college => ({
+      ...college,
+      subscriptionPlan: college.billingSubscription?.planTier || null,
+      subscriptionStatus: college.billingSubscription?.status || null,
+      subscriptionEndDate: college.billingSubscription?.currentPeriodEnd || college.billingSubscription?.trialExpiresAt || null
+    }));
+
+    res.json({ data: mappedColleges });
   } catch (error) {
     res.status(500).json({ error: { message: error.message } });
   }
@@ -23,23 +40,33 @@ export const onboardCollege = async (req, res) => {
     });
     
     if (existingUser) {
-      return res.status(400).json({ error: { message: 'Email already in use' } });
+      return res.status(400).json({ error: { message: 'The admin email address is already in use by another account.' } });
     }
 
     // Generate a unique slug/shortName
-    const slug = collegeData.shortName || collegeData.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    let baseSlug = (collegeData.shortName || collegeData.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    if (!baseSlug) baseSlug = 'college';
+    
+    let finalSlug = baseSlug;
+    const existingSlug = await prisma.college.findUnique({
+      where: { slug: finalSlug }
+    });
+
+    if (existingSlug) {
+      finalSlug = `${baseSlug}-${crypto.randomBytes(3).toString('hex')}`;
+    }
     
     // Create address string
     const addressParts = [collegeData.streetAddress, collegeData.city, collegeData.district, collegeData.state, collegeData.country, collegeData.pincode].filter(Boolean);
     const fullAddress = addressParts.join(', ');
 
-    // Perform transaction to create college and admin user
+    // Perform transaction to create college, default subscription, and admin user
     const result = await prisma.$transaction(async (tx) => {
       const college = await tx.college.create({
         data: {
           name: collegeData.name,
-          slug,
-          status: 'pending',
+          slug: finalSlug,
+          status: 'active',
           address: fullAddress || null,
           affiliationCode: collegeData.affiliationCode || null,
           aicteNumber: collegeData.aicteNumber || null,
@@ -54,18 +81,36 @@ export const onboardCollege = async (req, res) => {
         data: {
           collegeId: college.id,
           email: adminUser.email,
+          name: adminUser.name,
           passwordHash,
           role: 'admin',
           accountStatus: 'active'
         }
       });
 
-      return { collegeCode: college.id, adminEmail: admin.email };
+      await tx.billingSubscription.create({
+        data: {
+          collegeId: college.id,
+          planTier: 'Enterprise',
+          pricePerStudent: 0,
+          maxStudents: 5000,
+          storageLimitGb: 50,
+          status: 'Active',
+          trialExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        }
+      });
+
+      return { collegeCode: college.id, adminEmail: admin.email, collegeName: college.name };
     });
 
     res.status(201).json({ data: result });
   } catch (error) {
-    res.status(400).json({ error: { message: error.message } });
+    if (error.name === 'ZodError' || error.issues || error.errors) {
+      const issues = error.issues || error.errors;
+      const message = Array.isArray(issues) ? issues.map(e => e.message).join('; ') : error.message;
+      return res.status(400).json({ error: { message } });
+    }
+    res.status(400).json({ error: { message: error.message || 'Failed to onboard college' } });
   }
 };
 
@@ -132,6 +177,49 @@ export const updateCollege = async (req, res) => {
     
     res.json({ data: college });
   } catch (error) {
+    res.status(400).json({ error: { message: error.message } });
+  }
+};
+
+export const updateCollegeSubscription = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { planTier, status, currentPeriodEnd } = updateSubscriptionSchema.parse(req.body);
+
+    const college = await prisma.college.findUnique({
+      where: { id }
+    });
+
+    if (!college) {
+      return res.status(404).json({ error: { message: 'College not found' } });
+    }
+
+    const subscription = await prisma.billingSubscription.upsert({
+      where: { collegeId: id },
+      update: {
+        planTier,
+        status: status || 'Active',
+        currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd) : null,
+        updatedAt: new Date()
+      },
+      create: {
+        collegeId: id,
+        planTier,
+        pricePerStudent: 0,
+        maxStudents: 5000,
+        storageLimitGb: 50,
+        status: status || 'Active',
+        currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd) : null
+      }
+    });
+
+    res.json({ data: subscription });
+  } catch (error) {
+    if (error.name === 'ZodError' || error.issues || error.errors) {
+      const issues = error.issues || error.errors;
+      const message = Array.isArray(issues) ? issues.map(e => e.message).join('; ') : error.message;
+      return res.status(400).json({ error: { message } });
+    }
     res.status(400).json({ error: { message: error.message } });
   }
 };

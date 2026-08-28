@@ -266,6 +266,11 @@ export const registerAdmin = async (req, res) => {
     });
   } catch (error) {
     logger.warn(`[warn] College registration failed: ${error.message}`);
+    if (error.name === 'ZodError' || error.issues || error.errors) {
+      const issues = error.issues || error.errors;
+      const message = Array.isArray(issues) ? issues.map(e => e.message).join('; ') : error.message;
+      return res.status(400).json({ success: false, error: { message } });
+    }
     return res.status(400).json({ success: false, error: { message: error.message } });
   }
 };
