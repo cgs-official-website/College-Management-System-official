@@ -2,8 +2,14 @@ import { prisma, logger } from '../../server.js';
 import { createExamSchema, updateExamSchema, enterMarksSchema, batchEnterMarksSchema } from './exams.schema.js';
 
 // Helper to ensure dummy/default course if needed
-async function ensureDefaultCourse(collegeId, courseName) {
-  let dept = await prisma.department.findFirst({ where: { collegeId } });
+async function ensureDefaultCourse(collegeId, courseName, departmentId = null) {
+  let dept = null;
+  if (departmentId) {
+    dept = await prisma.department.findFirst({ where: { id: departmentId, collegeId } });
+  }
+  if (!dept) {
+    dept = await prisma.department.findFirst({ where: { collegeId } });
+  }
   if (!dept) {
     dept = await prisma.department.create({
       data: { collegeId, name: 'General Department', code: 'GEN' }
@@ -12,7 +18,17 @@ async function ensureDefaultCourse(collegeId, courseName) {
 
   let course = null;
   if (courseName) {
-    course = await prisma.course.findFirst({ where: { collegeId, name: courseName } });
+    course = await prisma.course.findFirst({ 
+      where: { 
+        collegeId, 
+        name: courseName,
+        ...(dept ? { departmentId: dept.id } : {})
+      } 
+    });
+  }
+
+  if (!course && dept) {
+    course = await prisma.course.findFirst({ where: { collegeId, departmentId: dept.id } });
   }
 
   if (!course) {
@@ -24,8 +40,8 @@ async function ensureDefaultCourse(collegeId, courseName) {
       data: {
         collegeId,
         departmentId: dept.id,
-        name: courseName || 'General Engineering',
-        code: `CRS-${Math.floor(100 + Math.random() * 900)}`,
+        name: courseName || `${dept.name} Exam Program`,
+        code: `${dept.code || 'CRS'}-${Math.floor(100 + Math.random() * 900)}`,
         semester: 1,
         credits: 3
       }
@@ -40,7 +56,9 @@ export const getExams = async (req, res) => {
   const exams = await prisma.exam.findMany({
     where: { collegeId },
     include: {
-      course: true,
+      course: {
+        include: { department: true }
+      },
       marks: {
         include: {
           student: {
@@ -64,7 +82,11 @@ export const getExams = async (req, res) => {
       name: exam.name,
       subject: exam.course?.name || exam.name,
       courseName: exam.course?.name || 'General Program',
+      courseCode: exam.course?.code || null,
       courseId: exam.courseId,
+      departmentId: exam.course?.departmentId || null,
+      departmentName: exam.course?.department?.name || 'General',
+      departmentCode: exam.course?.department?.code || null,
       date: exam.date ? new Date(exam.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       maxMarks: exam.maxMarks,
       type: exam.type || 'Midterm',
@@ -93,7 +115,11 @@ export const createExam = async (req, res) => {
   const actorId = req.user?.id || req.user?.userId;
   const payload = createExamSchema.parse(req.body);
 
-  const courseId = payload.courseId || await ensureDefaultCourse(collegeId, payload.courseName || payload.subject);
+  const courseId = payload.courseId || await ensureDefaultCourse(
+    collegeId, 
+    payload.courseName || payload.subject,
+    payload.departmentId
+  );
 
   const exam = await prisma.exam.create({
     data: {
@@ -105,7 +131,11 @@ export const createExam = async (req, res) => {
       type: payload.type || 'Midterm',
       status: payload.status || 'pending'
     },
-    include: { course: true }
+    include: { 
+      course: {
+        include: { department: true }
+      } 
+    }
   });
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} examId=${exam.id} actor=${actorId} Scheduled exam '${exam.name}'`);
@@ -118,6 +148,8 @@ export const createExam = async (req, res) => {
       name: exam.name,
       subject: exam.course?.name || exam.name,
       courseName: exam.course?.name || 'General Program',
+      departmentName: exam.course?.department?.name || 'General',
+      departmentCode: exam.course?.department?.code || null,
       date: exam.date.toISOString().split('T')[0],
       maxMarks: exam.maxMarks,
       type: exam.type,
