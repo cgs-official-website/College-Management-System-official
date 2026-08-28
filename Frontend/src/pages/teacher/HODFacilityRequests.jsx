@@ -7,14 +7,10 @@ import {
   Calendar, 
   Clock, 
   Users, 
-  MapPin, 
   CheckCircle2, 
   XCircle, 
-  AlertCircle, 
   Sparkles,
-  Layers,
-  Send,
-  MessageSquare
+  Send
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useInfrastructure } from '../../hooks/useInfrastructure';
@@ -154,13 +150,15 @@ export default function HODFacilityRequests() {
 
         {isLoading ? (
           <div className="flex gap-3 overflow-x-auto py-2">
-            {[1, 2, 3].map(n => <div key={n} className="h-16 w-48 bg-slate-100 dark:bg-white/5 rounded-2xl animate-pulse shrink-0" />}
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="h-16 w-48 bg-slate-100 dark:bg-white/5 rounded-2xl animate-pulse shrink-0" />
+            ))}
           </div>
         ) : facilities.length === 0 ? (
           <p className="text-xs text-slate-500">No facilities registered by college administration yet.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {facilities.map(fac => (
+            {facilities.map((fac) => (
               <div 
                 key={fac.id} 
                 className="p-3 bg-slate-50 dark:bg-white/[0.02] border border-slate-200/60 dark:border-white/5 rounded-2xl flex items-center justify-between"

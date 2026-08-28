@@ -78,7 +78,9 @@ export default function HostelDashboard() {
       setIsAssignModalOpen(false);
       setSelectedStudent(null);
       setAssignFormData({ hostelBlockId: '', hostelRoom: '' });
-    } catch {}
+    } catch (e) {
+      console.error('Failed to assign room:', e);
+    }
   };
 
   const handleDelete = async (id, name) => {

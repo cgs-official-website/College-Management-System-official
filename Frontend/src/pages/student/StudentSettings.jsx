@@ -32,7 +32,7 @@ export const StudentSettings = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [imageError, setImageError] = useState('');
-  const [imageTimestamp, setImageTimestamp] = useState(Date.now());
+  const [imageTimestamp, setImageTimestamp] = useState(() => Date.now());
 
   const profile = profileData?.data;
 

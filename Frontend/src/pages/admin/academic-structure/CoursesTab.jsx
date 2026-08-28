@@ -1,3 +1,5 @@
+import React, { useState } from 'react';
+import { useCourses } from '../../../hooks/useCourses';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Pagination } from '../../../components/ui/Pagination';

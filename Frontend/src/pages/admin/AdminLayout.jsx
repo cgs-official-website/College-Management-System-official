@@ -562,7 +562,7 @@ const AdminDashboardHome = () => {
                 const diffHours = Math.floor(diffMins / 60);
                 const diffDays = Math.floor(diffHours / 24);
                 
-                let timeStr = '';
+                let timeStr;
                 if (diffMins < 60) timeStr = diffMins <= 1 ? 'Just now' : `${diffMins} minutes ago`;
                 else if (diffHours < 24) timeStr = `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
                 else if (diffDays === 1) timeStr = 'Yesterday';
