@@ -8,6 +8,7 @@ import { useColleges } from '../../hooks/useColleges';
 import api from '../../services/api';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { toast } from 'react-hot-toast';
+import { Pagination } from '../../components/ui/Pagination';
 import { 
   Building2, 
   Plus, 
@@ -39,6 +40,8 @@ const SuperColleges = () => {
   const [selectedCollege, setSelectedCollege] = useState(null);
   const { colleges, isLoading, updateCollegeStatus, deleteCollege: deleteCollegeMutation, refetch } = useColleges();
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const handleApproveCollege = async (collegeId, adminUid) => {
     try {
@@ -71,6 +74,8 @@ const SuperColleges = () => {
     college.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     college.id?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const paginatedColleges = filteredColleges.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
     <div className="space-y-6">
@@ -136,7 +141,7 @@ const SuperColleges = () => {
                   </td>
                 </tr>
               ) : (
-                filteredColleges.map((college) => (
+                paginatedColleges.map((college) => (
                   <tr key={college.id} onClick={() => setSelectedCollege(college)} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer">
                     <td className="px-6 py-4">
                       <div className="flex items-center">
@@ -218,6 +223,16 @@ const SuperColleges = () => {
               )}
             </tbody>
           </table>
+          {filteredColleges.length > 0 && (
+            <Pagination
+              totalItems={filteredColleges.length}
+              currentPage={currentPage}
+              pageSize={pageSize}
+              pageSizeOptions={[10, 20, 50, 100]}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
+          )}
         </div>
       </div>
 

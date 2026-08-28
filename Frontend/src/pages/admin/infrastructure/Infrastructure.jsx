@@ -4,6 +4,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useInfrastructure } from '../../../hooks/useInfrastructure';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
+import { Pagination } from '../../../components/ui/Pagination';
 import { FacilityFormModal } from './FacilityFormModal';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 
@@ -16,12 +17,16 @@ export default function Infrastructure() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingFacility, setEditingFacility] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const filteredFacilities = facilities.filter(fac => 
-    fac.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    fac.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    fac.building.toLowerCase().includes(searchTerm.toLowerCase())
+    (fac.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (fac.type || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (fac.building || fac.location || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const paginatedFacilities = filteredFacilities.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const handleOpenAdd = () => {
     setEditingFacility(null);
@@ -97,65 +102,77 @@ export default function Infrastructure() {
           <p className="text-slate-500 dark:text-slate-400">Click "Add Facility" to register classrooms, labs, and more.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredFacilities.map((fac) => (
-            <div key={fac.id} className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group relative flex flex-col">
-              
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-50 to-emerald-50 dark:from-primary-500/10 dark:to-emerald-500/10 flex items-center justify-center text-primary-500 border border-primary-100 dark:border-primary-500/20">
-                    <Building className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">{fac.name}</h3>
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{fac.type}</span>
-                  </div>
-                </div>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {paginatedFacilities.map((fac) => (
+              <div key={fac.id} className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group relative flex flex-col">
                 
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => handleOpenEdit(fac)} className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg">
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => handleDelete(fac.id)} className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-50 to-emerald-50 dark:from-primary-500/10 dark:to-emerald-500/10 flex items-center justify-center text-primary-500 border border-primary-100 dark:border-primary-500/20">
+                      <Building className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">{fac.name}</h3>
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{fac.type}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => handleOpenEdit(fac)} className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg">
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => handleDelete(fac.id)} className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 mb-6">
+                  <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                    <MapPin className="w-4 h-4 text-slate-400" />
+                    <span>{fac.building || fac.location || 'Main Campus'}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                    <Users className="w-4 h-4 text-slate-400" />
+                    <span>Capacity: <strong className="text-slate-900 dark:text-white">{fac.capacity}</strong></span>
+                  </div>
+                </div>
+
+                <div className="mt-auto pt-4 border-t border-slate-100 dark:border-white/5 flex items-center justify-between">
+                  {fac.status === 'operational' || fac.status === 'active' ? (
+                    <div className="flex items-center gap-1.5 text-sm font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-1 rounded-lg">
+                      <CheckCircle className="w-4 h-4" /> Operational
+                    </div>
+                  ) : fac.status === 'maintenance' ? (
+                    <div className="flex items-center gap-1.5 text-sm font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-3 py-1 rounded-lg">
+                      <Wrench className="w-4 h-4" /> Maintenance
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-sm font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 px-3 py-1 rounded-lg">
+                      <Building className="w-4 h-4" /> Closed
+                    </div>
+                  )}
+
+                  {fac.features && (
+                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                      {fac.features}
+                    </span>
+                  )}
                 </div>
               </div>
+            ))}
+          </div>
 
-              <div className="space-y-2 mb-6">
-                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <MapPin className="w-4 h-4 text-slate-400" />
-                  <span>{fac.building || 'Main Campus'}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <Users className="w-4 h-4 text-slate-400" />
-                  <span>Capacity: <strong className="text-slate-900 dark:text-white">{fac.capacity}</strong></span>
-                </div>
-              </div>
-
-              <div className="mt-auto pt-4 border-t border-slate-100 dark:border-white/5 flex items-center justify-between">
-                {fac.status === 'operational' ? (
-                  <div className="flex items-center gap-1.5 text-sm font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-1 rounded-lg">
-                    <CheckCircle className="w-4 h-4" /> Operational
-                  </div>
-                ) : fac.status === 'maintenance' ? (
-                  <div className="flex items-center gap-1.5 text-sm font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-3 py-1 rounded-lg">
-                    <Wrench className="w-4 h-4" /> Maintenance
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 text-sm font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 px-3 py-1 rounded-lg">
-                    <Building className="w-4 h-4" /> Closed
-                  </div>
-                )}
-
-                {fac.features && (
-                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                    {fac.features}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
+          <Pagination
+            totalItems={filteredFacilities.length}
+            currentPage={currentPage}
+            pageSize={pageSize}
+            pageSizeOptions={[10, 20, 50, 100]}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+            className="border border-slate-200/80 dark:border-white/10 rounded-2xl"
+          />
         </div>
       )}
 

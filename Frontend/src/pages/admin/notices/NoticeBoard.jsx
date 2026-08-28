@@ -5,6 +5,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useNotices } from '../../../hooks/useNotices';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
+import { Pagination } from '../../../components/ui/Pagination';
 import { NoticeFormModal } from './NoticeFormModal';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 
@@ -17,11 +18,15 @@ export default function NoticeBoard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingNotice, setEditingNotice] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const filteredNotices = notices.filter(notice => 
-    notice.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    notice.content.toLowerCase().includes(searchTerm.toLowerCase())
+    (notice.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (notice.content || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const paginatedNotices = filteredNotices.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const handleOpenAdd = () => {
     setEditingNotice(null);
@@ -112,44 +117,56 @@ export default function NoticeBoard() {
           <p className="text-slate-500 dark:text-slate-400">Click "Create Notice" to broadcast your first announcement.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredNotices.map((notice, idx) => (
-            <motion.div 
-              key={notice.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.05 }}
-              className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group relative flex flex-col"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-1 rounded-md border ${getPriorityColor(notice.priority)}`}>
-                  {getPriorityIcon(notice.priority)}
-                  {notice.priority}
-                </span>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => handleOpenEdit(notice)} className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg">
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => handleDelete(notice.id)} className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {paginatedNotices.map((notice, idx) => (
+              <motion.div 
+                key={notice.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.05 }}
+                className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group relative flex flex-col"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-1 rounded-md border ${getPriorityColor(notice.priority)}`}>
+                    {getPriorityIcon(notice.priority)}
+                    {notice.priority}
+                  </span>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => handleOpenEdit(notice)} className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg">
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => handleDelete(notice.id)} className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 line-clamp-2">{notice.title}</h3>
-              <p className="text-slate-500 dark:text-slate-400 text-sm mb-6 line-clamp-3 flex-1">{notice.content}</p>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 line-clamp-2">{notice.title}</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm mb-6 line-clamp-3 flex-1">{notice.content}</p>
 
-              <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-white/5">
-                <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                  <Clock className="w-3.5 h-3.5" />
-                  {notice.createdAt?.toDate ? new Date(notice.createdAt.toDate()).toLocaleDateString() : 'Just now'}
+                <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-white/5">
+                  <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                    <Clock className="w-3.5 h-3.5" />
+                    {notice.createdAt?.toDate ? new Date(notice.createdAt.toDate()).toLocaleDateString() : 'Just now'}
+                  </div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white px-2 py-1 bg-slate-100 dark:bg-white/5 rounded-md uppercase tracking-wide">
+                    {notice.targetAudience === 'all' ? 'Everyone' : notice.targetAudience}
+                  </div>
                 </div>
-                <div className="text-xs font-bold text-slate-900 dark:text-white px-2 py-1 bg-slate-100 dark:bg-white/5 rounded-md uppercase tracking-wide">
-                  {notice.targetAudience === 'all' ? 'Everyone' : notice.targetAudience}
-                </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            ))}
+          </div>
+
+          <Pagination
+            totalItems={filteredNotices.length}
+            currentPage={currentPage}
+            pageSize={pageSize}
+            pageSizeOptions={[10, 20, 50, 100]}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+            className="border border-slate-200/80 dark:border-white/10 rounded-2xl"
+          />
         </div>
       )}
 

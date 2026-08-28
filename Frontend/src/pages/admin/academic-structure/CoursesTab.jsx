@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
-import { useCourses } from '../../../hooks/useCourses';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
+import { Pagination } from '../../../components/ui/Pagination';
 import { Search, Plus, Trash2, Edit2, GraduationCap, ChevronLeft } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useConfirm } from '../../../contexts/ConfirmContext';
@@ -15,6 +14,8 @@ export default function CoursesTab({ departmentId, departmentName, onSelect, onC
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const confirm = useConfirm();
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
@@ -23,6 +24,8 @@ export default function CoursesTab({ departmentId, departmentName, onSelect, onC
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     c.code.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const paginatedCourses = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const handleOpenAdd = () => {
     setEditingCourse(null);
@@ -167,7 +170,7 @@ export default function CoursesTab({ departmentId, departmentName, onSelect, onC
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-white/10">
-                {filtered.map(course => (
+                {paginatedCourses.map(course => (
                   <tr key={course.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group">
                     <td className="py-4 px-6">
                       <div className="font-bold text-slate-900 dark:text-white">{course.name}</div>
@@ -196,6 +199,16 @@ export default function CoursesTab({ departmentId, departmentName, onSelect, onC
                 ))}
               </tbody>
             </table>
+            {filtered.length > 0 && (
+              <Pagination
+                totalItems={filtered.length}
+                currentPage={currentPage}
+                pageSize={pageSize}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+              />
+            )}
           </div>
         )}
       </div>

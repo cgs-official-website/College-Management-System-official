@@ -5,6 +5,7 @@ import { useCourses } from '../../../hooks/useCourses';
 import { useStaff } from '../../../hooks/useStaff';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
+import { Pagination } from '../../../components/ui/Pagination';
 import { CourseFormModal } from './CourseFormModal';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 
@@ -18,11 +19,15 @@ export default function CoursesList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const filteredCourses = courses.filter(course => 
     (course.name || course.courseName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (course.code || course.courseCode || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const paginatedCourses = filteredCourses.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const handleOpenAdd = () => {
     setEditingCourse(null);
@@ -98,70 +103,81 @@ export default function CoursesList() {
           <p className="text-slate-500 dark:text-slate-400">Add classes to start managing your college's academic structure.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredCourses.map((course, idx) => (
-            <div 
-              key={course.id}
-              className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group relative flex flex-col"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-50 to-primary-100 dark:from-primary-500/10 dark:to-primary-500/20 flex items-center justify-center text-primary-600 dark:text-primary-400">
-                    <BookOpen className="w-6 h-6" />
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {paginatedCourses.map((course, idx) => (
+              <div 
+                key={course.id}
+                className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group relative flex flex-col"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-50 to-primary-100 dark:from-primary-500/10 dark:to-primary-500/20 flex items-center justify-center text-primary-600 dark:text-primary-400">
+                      <BookOpen className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">{course.name || course.courseName}</h3>
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{course.code || course.courseCode}</span>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">{course.name || course.courseName}</h3>
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{course.code || course.courseCode}</span>
+                  
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => handleOpenEdit(course)} className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg">
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => handleDelete(course.id)} className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
-                
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => handleOpenEdit(course)} className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg">
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => handleDelete(course.id)} className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+
+                {course.sections && course.sections.length > 0 && (
+                  <div className="mb-4">
+                    <div className="flex flex-wrap gap-2">
+                      {course.sections.map(sec => (
+                        <span key={sec} className="px-2 py-1 bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 text-xs font-bold rounded-md">
+                          Section {sec}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {course.description && (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 line-clamp-2">{course.description}</p>
+                )}
+
+                {course.assignedTeacher && (
+                  <div className="mb-4 text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                    <Users className="w-4 h-4 text-indigo-400" />
+                    <span className="font-medium">Teacher: </span>
+                    {staff.find(s => s.id === course.assignedTeacher)?.firstName} {staff.find(s => s.id === course.assignedTeacher)?.lastName}
+                  </div>
+                )}
+
+                <div className="mt-auto pt-4 border-t border-slate-100 dark:border-white/5 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 font-medium">
+                    <Clock className="w-4 h-4 text-slate-400" />
+                    {course.duration}
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 font-medium px-3 py-1 bg-slate-50 dark:bg-white/5 rounded-lg">
+                    <Users className="w-4 h-4 text-primary-500" />
+                    <span className="font-bold text-slate-900 dark:text-white">Active</span>
+                  </div>
                 </div>
               </div>
+            ))}
+          </div>
 
-              {course.sections && course.sections.length > 0 && (
-                <div className="mb-4">
-                  <div className="flex flex-wrap gap-2">
-                    {course.sections.map(sec => (
-                      <span key={sec} className="px-2 py-1 bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 text-xs font-bold rounded-md">
-                        Section {sec}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {course.description && (
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 line-clamp-2">{course.description}</p>
-              )}
-
-              {course.assignedTeacher && (
-                <div className="mb-4 text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                  <Users className="w-4 h-4 text-indigo-400" />
-                  <span className="font-medium">Teacher: </span>
-                  {staff.find(s => s.id === course.assignedTeacher)?.firstName} {staff.find(s => s.id === course.assignedTeacher)?.lastName}
-                </div>
-              )}
-
-              <div className="mt-auto pt-4 border-t border-slate-100 dark:border-white/5 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 font-medium">
-                  <Clock className="w-4 h-4 text-slate-400" />
-                  {course.duration}
-                </div>
-                {/* Placeholder for total students enrolled in this course */}
-                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 font-medium px-3 py-1 bg-slate-50 dark:bg-white/5 rounded-lg">
-                  <Users className="w-4 h-4 text-primary-500" />
-                  <span className="font-bold text-slate-900 dark:text-white">Active</span>
-                </div>
-              </div>
-            </div>
-          ))}
+          <Pagination
+            totalItems={filteredCourses.length}
+            currentPage={currentPage}
+            pageSize={pageSize}
+            pageSizeOptions={[10, 20, 50, 100]}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+            className="border border-slate-200/80 dark:border-white/10 rounded-2xl"
+          />
         </div>
       )}
 

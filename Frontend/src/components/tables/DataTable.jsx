@@ -1,11 +1,33 @@
+import React, { useState, useEffect } from 'react';
+import { Pagination } from '../ui/Pagination';
+
 export function DataTable({ 
   columns, 
-  data, 
+  data = [], 
   isLoading,
-  emptyMessage = "No data found"
+  emptyMessage = "No data found",
+  pagination = true,
+  initialPageSize = 10,
+  pageSizeOptions = [10, 20, 50, 100]
 }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(initialPageSize);
+
+  // Reset to page 1 if data length shrinks or filters change
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil((data?.length || 0) / pageSize));
+    if (currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [data?.length, pageSize, currentPage]);
+
+  const totalItems = data?.length || 0;
+  const paginatedData = pagination 
+    ? data.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+    : data;
+
   return (
-    <div className="w-full overflow-hidden border border-slate-200 dark:border-white/10 rounded-2xl bg-white dark:bg-[#0A0F1C] shadow-sm">
+    <div className="w-full overflow-hidden border border-slate-200/80 dark:border-white/10 rounded-2xl bg-white dark:bg-[#0A0F1C] shadow-sm flex flex-col">
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm whitespace-nowrap">
           <thead className="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 font-medium">
@@ -29,14 +51,14 @@ export function DataTable({
                   </div>
                 </td>
               </tr>
-            ) : data.length === 0 ? (
+            ) : totalItems === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="px-6 py-12 text-center text-slate-500">
                   {emptyMessage}
                 </td>
               </tr>
             ) : (
-              data.map((row, rowIndex) => (
+              paginatedData.map((row, rowIndex) => (
                 <tr 
                   key={row.id || row.key || row.admissionNo || `row-${rowIndex}`} 
                   className="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors"
@@ -52,6 +74,18 @@ export function DataTable({
           </tbody>
         </table>
       </div>
+
+      {/* Embedded Pagination */}
+      {pagination && !isLoading && totalItems > 0 && (
+        <Pagination
+          totalItems={totalItems}
+          currentPage={currentPage}
+          pageSize={pageSize}
+          pageSizeOptions={pageSizeOptions}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+        />
+      )}
     </div>
   );
 }
