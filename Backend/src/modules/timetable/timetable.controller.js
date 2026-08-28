@@ -117,16 +117,28 @@ export const getTimetable = async (req, res) => {
 
   const formatted = slots.map(slot => {
     const dayName = typeof slot.dayOfWeek === 'number' ? DAY_MAP_TO_NAME[slot.dayOfWeek] || 'Monday' : slot.dayOfWeek;
-    const teacherFullName = slot.teacher?.user 
-      ? `${slot.teacher.user.firstName || ''} ${slot.teacher.user.lastName || ''}`.trim() || slot.teacher.user.email
-      : 'Faculty Member';
+    
+    let teacherFullName = slot.teacher?.user?.name;
+    if (!teacherFullName || teacherFullName.trim() === '') {
+      const email = slot.teacher?.user?.email || '';
+      if (email.includes('@')) {
+        const handle = email.split('@')[0];
+        teacherFullName = handle
+          .replace(/\./g, ' ')
+          .replace(/\b\w/g, c => c.toUpperCase());
+      } else {
+        teacherFullName = 'Faculty Instructor';
+      }
+    }
 
     return {
       id: slot.id,
       subject: slot.course?.name || 'Class Session',
       courseName: slot.course?.name || 'Academic Course',
+      courseCode: slot.course?.code || null,
       courseId: slot.courseId,
       teacherName: teacherFullName,
+      teacherEmail: slot.teacher?.user?.email || '',
       teacherId: slot.teacherId,
       dayOfWeek: dayName,
       startTime: slot.startTime || '09:00',
