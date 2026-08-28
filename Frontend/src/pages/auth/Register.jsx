@@ -23,6 +23,7 @@ import {
   Upload
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { api } from '../../services/api';
 
 
 
@@ -36,7 +37,13 @@ const Register = () => {
   const { register, handleSubmit, watch, formState: { errors }, setValue, trigger } = useForm({
     defaultValues: {
       role: initialRole,
-      collegeCode: defaultCollegeCode
+      collegeCode: defaultCollegeCode,
+      affiliationType: 'AUTONOMOUS',
+      aicteCode: '',
+      affiliationCode: '',
+      pan: '',
+      tan: '',
+      ugcCode: ''
     }
   });
   
@@ -112,11 +119,10 @@ const Register = () => {
       
       setFetchingCollege(true);
       try {
-        const response = await fetch(`http://localhost:5000/api/v1/colleges/slug/${collegeSlug}`);
-        const data = await response.json();
+        const response = await api.get(`/colleges/slug/${collegeSlug}`);
+        const collegeDoc = response.data?.data || response.data;
         
-        if (response.ok && data.data) {
-          const collegeDoc = data.data;
+        if (collegeDoc && collegeDoc.id) {
           setFetchedCollegeName(collegeDoc.name);
           setFetchedCollegeId(collegeDoc.id);
           setValue('collegeCode', collegeDoc.id);
