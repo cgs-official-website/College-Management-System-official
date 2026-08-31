@@ -13,15 +13,28 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
   const { courses } = useCourses();
   
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm({
-    defaultValues: initialData || {
+    defaultValues: initialData ? {
+      firstName: initialData.firstName ?? '',
+      lastName: initialData.lastName ?? '',
+      email: initialData.email ?? '',
+      phone: initialData.phone ?? '',
+      dob: initialData.dob ?? initialData.dateOfBirth ?? '',
+      gender: initialData.gender ?? '',
+      courseId: initialData.courseId ?? '',
+      sectionId: initialData.sectionId ?? '',
+      parentName: initialData.parentName ?? '',
+      parentPhone: initialData.parentPhone ?? '',
+      address: initialData.address ?? '',
+      residenceType: initialData.residenceType ?? 'Day Scholar'
+    } : {
       firstName: '',
       lastName: '',
       email: '',
       phone: '',
       dob: '',
       gender: '',
-      class: '',
-      section: '',
+      courseId: '',
+      sectionId: '',
       parentName: '',
       parentPhone: '',
       address: '',
@@ -31,20 +44,37 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
 
   useEffect(() => {
     if (isOpen) {
-      reset(initialData || {
-        firstName: '',
-        lastName: '',
-        email: '',
-        phone: '',
-        dob: '',
-        gender: '',
-        class: '',
-        section: '',
-        parentName: '',
-        parentPhone: '',
-        address: '',
-        residenceType: 'Day Scholar'
-      });
+      if (initialData) {
+        reset({
+          firstName: initialData.firstName ?? '',
+          lastName: initialData.lastName ?? '',
+          email: initialData.email ?? '',
+          phone: initialData.phone ?? '',
+          dob: initialData.dob ?? initialData.dateOfBirth ?? '',
+          gender: initialData.gender ?? '',
+          courseId: initialData.courseId ?? '',
+          sectionId: initialData.sectionId ?? '',
+          parentName: initialData.parentName ?? '',
+          parentPhone: initialData.parentPhone ?? '',
+          address: initialData.address ?? '',
+          residenceType: initialData.residenceType ?? 'Day Scholar'
+        });
+      } else {
+        reset({
+          firstName: '',
+          lastName: '',
+          email: '',
+          phone: '',
+          dob: '',
+          gender: '',
+          courseId: '',
+          sectionId: '',
+          parentName: '',
+          parentPhone: '',
+          address: '',
+          residenceType: 'Day Scholar'
+        });
+      }
     }
   }, [isOpen, initialData, reset]);
 

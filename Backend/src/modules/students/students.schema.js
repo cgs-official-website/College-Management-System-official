@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const createStudentSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().nullish().default(''),
+  lastName: z.string().nullish(),
   email: z.preprocess(
     (val) => (typeof val === 'string' ? val.trim() : (val === null || val === undefined ? '' : val)),
     z.string()
@@ -34,11 +34,12 @@ export const createStudentSchema = z.object({
     (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
     z.string().regex(/^[0-9]+$/, 'Phone number must contain only digits.').nullable().optional()
   ),
-  status: z.string().nullish().default('active'),
+  status: z.string().nullish(),
   address: z.string().nullish(),
   gender: z.string().nullish(),
+  dob: z.string().nullish(),
   dateOfBirth: z.string().nullish(),
-  residenceType: z.string().nullish().default('Day Scholar'),
+  residenceType: z.string().nullish(),
   hostelBlockId: z.string().uuid().nullish(),
   hostelRoom: z.string().nullish(),
 });
