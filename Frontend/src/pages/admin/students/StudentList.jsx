@@ -86,7 +86,9 @@ export default function StudentList() {
       cell: (row) => (
         <div>
           <p>{row.parentName || '-'}</p>
-          <p className="text-xs text-slate-500">{row.parentPhone}</p>
+          {row.parentPhone && (
+            <p className="text-xs text-slate-500">{row.parentPhone}</p>
+          )}
         </div>
       )
     },

@@ -62,7 +62,7 @@ export const getStudents = async (req, res) => {
     const fullName = `${fName || ''} ${lName || ''}`.trim() || s.user?.name || 'Student';
     const phone = s.studentMobile || s.emergencyContact || '';
     const parentPhone = s.parentMobile || '';
-    const parentName = s.fatherName || '';
+    const parentName = s.fatherName || s.motherName || custom.parentName || '';
     const address = s.address || '';
     const dob = custom.dob || custom.dateOfBirth || '';
     const gender = custom.gender || '';
@@ -158,7 +158,7 @@ export const getStudentById = async (req, res) => {
   const fullName = `${fName || ''} ${lName || ''}`.trim() || student.user?.name || 'Student';
   const phone = student.studentMobile || student.emergencyContact || '';
   const parentPhone = student.parentMobile || '';
-  const parentName = student.fatherName || '';
+  const parentName = student.fatherName || student.motherName || custom.parentName || '';
   const address = student.address || '';
   const dob = custom.dob || custom.dateOfBirth || '';
   const gender = custom.gender || '';
