@@ -171,6 +171,11 @@ export const registerAdmin = async (req, res) => {
       // Generate next sequential College Code (e.g. ZUNAC002, ZUNAC003, ...)
       const registrationNo = await getNextCollegeCode(tx);
 
+      // Sanitize affiliationType to valid Prisma enum or null
+      const validAffiliationTypes = ['AUTONOMOUS', 'UNIVERSITY'];
+      const affiliationType = validAffiliationTypes.includes(data.affiliationType) ? data.affiliationType : null;
+      const logoUrl = data.logoUrl || data.logoBase64 || null;
+
       // 1. Create College in PENDING state awaiting Super Admin approval
       const college = await tx.college.create({
         data: {
@@ -182,10 +187,10 @@ export const registerAdmin = async (req, res) => {
           aicteCode: data.aicteCode || null,
           ugcCode: data.ugcCode || data.ugcRecognition || null,
           affiliationCode: data.affiliationCode || null,
-          affiliationType: data.affiliationType || null,
+          affiliationType,
           pan: data.pan || null,
           tan: data.tan || null,
-          logoUrl: data.logoUrl || null
+          logoUrl
         }
       });
 

@@ -33,11 +33,18 @@ export function AuthProvider({ children }) {
       const response = await api.post('/auth/register', {
         adminEmail: email,
         password,
+        name: additionalData.name || undefined,
         collegeName: additionalData.collegeName,
         slug: additionalData.collegeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
-        aicteNumber: additionalData.aicteNumber || null,
-        ugcRecognition: additionalData.ugcRecognition || null,
-        affiliationCode: additionalData.affiliationCode || null
+        aicteNumber: additionalData.aicteNumber || undefined,
+        aicteCode: additionalData.aicteCode || undefined,
+        ugcRecognition: additionalData.ugcRecognition || undefined,
+        ugcCode: additionalData.ugcCode || undefined,
+        affiliationCode: additionalData.affiliationCode || undefined,
+        affiliationType: additionalData.affiliationType || undefined,
+        pan: additionalData.pan || undefined,
+        tan: additionalData.tan || undefined,
+        logoUrl: additionalData.logoBase64 || undefined
       });
 
       const { accessToken, refreshToken, user } = response.data?.data || response.data || {};

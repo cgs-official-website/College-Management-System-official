@@ -88,16 +88,23 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
               error={errors.lastName?.message}
             />
             <Input 
-              label="Email" 
+              label="Email Address *" 
               type="email"
-              {...register('email')}
+              placeholder="student@example.com"
+              {...register('email', { 
+                required: "Email Address is required.",
+                pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "Invalid email address" }
+              })}
+              error={errors.email?.message}
             />
             <Input 
               label="Phone Number" 
+              type="tel"
+              inputMode="numeric"
+              placeholder="e.g. 9876543210"
               {...register('phone', {
-                pattern: { value: /^[0-9]{10}$/, message: "Phone number must be 10 digits" }
+                pattern: { value: /^[0-9]+$/, message: "Phone number must contain only digits." }
               })}
-              maxLength={10}
               error={errors.phone?.message}
             />
             <Input 
@@ -160,11 +167,12 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
             />
             <Input 
               label="Parent Phone" 
+              type="tel"
+              inputMode="numeric"
+              placeholder="e.g. 9876543210"
               {...register('parentPhone', { 
-                required: "Parent phone is required",
-                pattern: { value: /^[0-9]{10}$/, message: "Phone number must be 10 digits" }
+                pattern: { value: /^[0-9]+$/, message: "Parent phone must contain only digits." }
               })}
-              maxLength={10}
               error={errors.parentPhone?.message}
             />
             <div className="md:col-span-2">

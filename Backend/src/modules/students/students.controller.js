@@ -176,68 +176,137 @@ export const createStudent = async (req, res) => {
     deptId = dept.id;
   }
 
-  const email = payload.email.toLowerCase();
-  const admissionNo = payload.admissionNo || payload.admissionNumber || `ADM-${Date.now().toString().slice(-6)}`;
-  const rollNo = payload.rollNo || payload.rollNumber || `R-${Date.now().toString().slice(-4)}`;
-  const defaultPassword = await bcrypt.hash('Student@123', 10);
+  const email = payload.email.toLowerCase().trim();
 
-  const student = await prisma.$transaction(async (tx) => {
-    // Check if user already exists
-    let user = await tx.user.findFirst({
-      where: { email, collegeId }
-    });
-
-    if (!user) {
-      user = await tx.user.create({
-        data: {
-          email,
-          collegeId,
-          role: 'student',
-          passwordHash: defaultPassword,
-          accountStatus: payload.status || 'active'
-        }
-      });
+  // Tenant-scoped pre-flight duplicate checks for clear 409 responses
+  const existingStudentByEmail = await prisma.student.findFirst({
+    where: {
+      collegeId,
+      user: { email }
     }
+  });
 
-    const newStudent = await tx.student.create({
-      data: {
+  if (existingStudentByEmail) {
+    return res.status(409).json({
+      success: false,
+      error: {
+        code: 'STUDENT_EMAIL_ALREADY_EXISTS',
+        message: `A student with email '${email}' already exists in this college.`
+      }
+    });
+  }
+
+  if (payload.admissionNo || payload.admissionNumber) {
+    const customAdmissionNo = (payload.admissionNo || payload.admissionNumber).trim();
+    const existingStudentByAdm = await prisma.student.findFirst({
+      where: {
         collegeId,
-        userId: user.id,
-        departmentId: deptId,
-        admissionNumber: admissionNo,
-        rollNumber: rollNo,
-        batchYear: payload.batchYear || `${new Date().getFullYear()}`,
-        bloodGroup: payload.bloodGroup,
-        emergencyContact: payload.emergencyContact || payload.phone || payload.parentPhone,
-        residenceType: payload.residenceType || 'Day Scholar',
-        ...(payload.hostelBlockId ? { hostelBlockId: payload.hostelBlockId } : {}),
-        ...(payload.hostelRoom ? { hostelRoom: payload.hostelRoom } : {}),
-        ...(payload.sectionId ? { sectionId: payload.sectionId } : {})
-      },
-      include: {
-        user: true,
-        department: true,
+        admissionNumber: customAdmissionNo
       }
     });
 
-    return newStudent;
-  });
+    if (existingStudentByAdm) {
+      return res.status(409).json({
+        success: false,
+        error: {
+          code: 'ADMISSION_NUMBER_ALREADY_EXISTS',
+          message: `Admission number '${customAdmissionNo}' already exists in this college.`
+        }
+      });
+    }
+  }
+
+  const admissionNo = (payload.admissionNo || payload.admissionNumber || `ADM-${Date.now().toString().slice(-6)}`).trim();
+  const rollNo = (payload.rollNo || payload.rollNumber || `R-${Date.now().toString().slice(-4)}`).trim();
+  const temporaryPassword = payload.password || 'Student@123';
+  const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+
+  let student;
+  try {
+    student = await prisma.$transaction(async (tx) => {
+      // Check if user already exists
+      let user = await tx.user.findFirst({
+        where: { email, collegeId }
+      });
+
+      if (user) {
+        // Check if this existing user is already linked to a student
+        const existingStudentProfile = await tx.student.findUnique({
+          where: { userId: user.id }
+        });
+        if (existingStudentProfile) {
+          const error = new Error(`A student with email '${email}' already exists in this college.`);
+          error.statusCode = 409;
+          error.code = 'STUDENT_EMAIL_ALREADY_EXISTS';
+          throw error;
+        }
+      } else {
+        user = await tx.user.create({
+          data: {
+            email,
+            collegeId,
+            role: 'student',
+            passwordHash,
+            accountStatus: payload.status || 'active'
+          }
+        });
+      }
+
+      const newStudent = await tx.student.create({
+        data: {
+          collegeId,
+          userId: user.id,
+          departmentId: deptId,
+          admissionNumber: admissionNo,
+          rollNumber: rollNo,
+          batchYear: payload.batchYear || `${new Date().getFullYear()}`,
+          bloodGroup: payload.bloodGroup,
+          emergencyContact: payload.emergencyContact || payload.phone || payload.parentPhone,
+          residenceType: payload.residenceType || 'Day Scholar',
+          ...(payload.hostelBlockId ? { hostelBlockId: payload.hostelBlockId } : {}),
+          ...(payload.hostelRoom ? { hostelRoom: payload.hostelRoom } : {}),
+          ...(payload.sectionId ? { sectionId: payload.sectionId } : {})
+        },
+        include: {
+          user: true,
+          department: true,
+        }
+      });
+
+      return newStudent;
+    });
+  } catch (err) {
+    if (err.code === 'P2002' || err.statusCode === 409) {
+      return res.status(409).json({
+        success: false,
+        error: {
+          code: err.code === 'P2002' ? 'UNIQUE_CONSTRAINT_VIOLATION' : (err.code || 'CONFLICT'),
+          message: err.message || 'A record with this identifier already exists in this college.'
+        }
+      });
+    }
+    throw err;
+  }
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} studentId=${student.id} actor=${actorId} Created student '${payload.firstName} ${payload.lastName || ''}'`);
 
-  // Send welcome email with login credentials
+  // Send welcome email with login credentials (isolated try/catch so mail glitch never turns 201 into 500)
   const loginUrl = `${process.env.FRONTEND_URL}/login`;
   
-  await sendDynamicMail({
-    to: email,
-    templateName: 'Student Welcome',
-    variables: {
-      name: `${payload.firstName} ${payload.lastName || ''}`.trim(),
-      email,
-      password: temporaryPassword,
-      loginUrl
-    }
-  });
+  try {
+    await sendDynamicMail({
+      to: email,
+      templateName: 'Student Welcome',
+      variables: {
+        name: `${payload.firstName} ${payload.lastName || ''}`.trim(),
+        email,
+        password: temporaryPassword,
+        loginUrl
+      }
+    });
+  } catch (mailError) {
+    logger.warn(`[warn] req=${req.id || ''} college=${collegeId} studentId=${student.id} Failed to send welcome email to ${email}: ${mailError.message}`);
+  }
 
   res.status(201).json({
     success: true,

@@ -11,29 +11,31 @@ export const loginSchema = z.object({
 
 export const registerAdminSchema = z.object({
   collegeName: z.string().trim().min(2, 'College name must be at least 2 characters'),
-  slug: z.string().trim().optional(),
+  slug: z.string().trim().optional().nullable(),
   adminEmail: z.string().trim().email('Please enter a valid email address').toLowerCase(),
   password: z.string().min(6, 'Password must be at least 6 characters'),
-  name: z.string().trim().optional(),
+  name: z.string().trim().optional().nullable(),
   aicteNumber: z.string().trim().optional().nullable(),
   ugcRecognition: z.string().trim().optional().nullable(),
-  affiliationCode: z.string().trim().regex(/^[A-Za-z0-9]{10,15}$/, 'Affiliation code must be 10-15 alphanumeric characters'),
-  aicteCode: z.string().trim().regex(/^[A-Za-z0-9]{15,20}$/, 'AICTE code must be 15-20 alphanumeric characters'),
-  pan: z.string().trim().toUpperCase().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Invalid PAN format'),
-  tan: z.string().trim().toUpperCase().regex(/^[A-Z]{4}[0-9]{5}[A-Z]{1}$/, 'Invalid TAN format'),
-  affiliationType: z.enum(['AUTONOMOUS', 'UNIVERSITY'], { required_error: 'Affiliation type is required' }),
-  ugcCode: z.string().trim().optional(),
+  affiliationCode: z.string().trim().optional().nullable().refine(val => !val || /^[A-Za-z0-9-]{3,30}$/.test(val), {
+    message: 'Affiliation code must be alphanumeric'
+  }),
+  aicteCode: z.string().trim().optional().nullable().refine(val => !val || /^[A-Za-z0-9-]{3,30}$/.test(val), {
+    message: 'AICTE code must be alphanumeric'
+  }),
+  pan: z.string().trim().toUpperCase().optional().nullable().refine(val => !val || /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(val), {
+    message: 'Invalid PAN format (e.g. ABCDE1234F)'
+  }),
+  tan: z.string().trim().toUpperCase().optional().nullable().refine(val => !val || /^[A-Z]{4}[0-9]{5}[A-Z]{1}$/.test(val), {
+    message: 'Invalid TAN format (e.g. ABCD12345E)'
+  }),
+  affiliationType: z.enum(['AUTONOMOUS', 'UNIVERSITY']).optional().nullable(),
+  ugcCode: z.string().trim().optional().nullable(),
   logoUrl: z.string().trim().optional().nullable(),
   logoBase64: z.string().trim().optional().nullable()
 }).superRefine((data, ctx) => {
-  if (data.affiliationType === 'UNIVERSITY') {
-    if (!data.ugcCode || data.ugcCode.trim() === '') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'UGC Code is required for affiliated universities',
-        path: ['ugcCode']
-      });
-    } else if (!/^[A-Za-z0-9]+$/.test(data.ugcCode)) {
+  if (data.affiliationType === 'UNIVERSITY' && data.ugcCode) {
+    if (!/^[A-Za-z0-9-]+$/.test(data.ugcCode.trim())) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'UGC Code must be alphanumeric',

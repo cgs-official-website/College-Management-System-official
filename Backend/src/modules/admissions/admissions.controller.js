@@ -5,8 +5,14 @@ const submitSchema = z.object({
   applicantName: z.string().optional(),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
+  email: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+    z.string().trim().email('Invalid email address').nullish()
+  ).transform(val => (val ? val.toLowerCase() : null)),
+  phone: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+    z.string().trim().nullish()
+  ),
   departmentId: z.string().uuid().optional(),
   courseId: z.string().uuid().optional(),
   courseName: z.string().optional(),
@@ -20,6 +26,21 @@ const submitSchema = z.object({
 const updateSchema = z.object({
   status: z.string().optional(),
   applicantName: z.string().optional(),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  phone: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+    z.string().trim().nullish()
+  ),
+  email: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+    z.string().trim().email('Invalid email address').nullable().optional()
+  ).transform(val => (val ? val.toLowerCase() : val)),
+  departmentId: z.string().uuid().optional(),
+  courseId: z.string().uuid().optional(),
+  courseName: z.string().optional(),
+  previousSchool: z.string().optional().nullable(),
+  residenceType: z.string().optional(),
   marksheetDetails: z.record(z.string(), z.any()).optional(),
 });
 
@@ -137,12 +158,52 @@ export const updateAdmission = async (req, res) => {
     return res.status(404).json({ success: false, error: { code: 'ADMISSION_NOT_FOUND', message: 'Application not found' } });
   }
 
+  // Safe runtime shape verification for marksheetDetails
+  const isObject = typeof admission.marksheetDetails === 'object' && admission.marksheetDetails !== null && !Array.isArray(admission.marksheetDetails);
+  const existingDetails = isObject ? { ...admission.marksheetDetails } : {};
+
+  let hasDetailsChange = false;
+  const mergedDetails = { ...existingDetails };
+
+  if (payload.marksheetDetails) {
+    Object.assign(mergedDetails, payload.marksheetDetails);
+    hasDetailsChange = true;
+  }
+
+  if (payload.phone !== undefined) {
+    mergedDetails.phone = payload.phone; // null if empty/whitespace, string if provided
+    hasDetailsChange = true;
+  }
+
+  if (payload.email !== undefined) {
+    mergedDetails.email = payload.email; // null if empty/cleared, string if provided
+    hasDetailsChange = true;
+  }
+
+  if (payload.previousSchool !== undefined) {
+    mergedDetails.previousSchool = payload.previousSchool;
+    hasDetailsChange = true;
+  }
+
+  if (payload.courseName !== undefined) {
+    mergedDetails.courseName = payload.courseName;
+    hasDetailsChange = true;
+  }
+
+  if (payload.courseId !== undefined) {
+    mergedDetails.courseId = payload.courseId;
+    hasDetailsChange = true;
+  }
+
+  const fullName = payload.applicantName || (payload.firstName || payload.lastName ? `${payload.firstName || ''} ${payload.lastName || ''}`.trim() : undefined);
+
   const updated = await prisma.admission.update({
     where: { id },
     data: {
       ...(payload.status ? { status: payload.status } : {}),
-      ...(payload.applicantName ? { applicantName: payload.applicantName } : {}),
-      ...(payload.marksheetDetails ? { marksheetDetails: payload.marksheetDetails } : {}),
+      ...(fullName ? { applicantName: fullName } : {}),
+      ...(payload.residenceType ? { residenceType: payload.residenceType } : {}),
+      ...(hasDetailsChange ? { marksheetDetails: mergedDetails } : {})
     }
   });
 

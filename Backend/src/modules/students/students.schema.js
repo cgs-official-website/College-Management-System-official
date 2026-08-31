@@ -3,7 +3,12 @@ import { z } from 'zod';
 export const createStudentSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().nullish().default(''),
-  email: z.string().email('Invalid email address'),
+  email: z.preprocess(
+    (val) => (typeof val === 'string' ? val.trim() : (val === null || val === undefined ? '' : val)),
+    z.string()
+      .min(1, 'Email Address is required.')
+      .email('Invalid email address')
+  ).transform(val => val.toLowerCase()),
   admissionNo: z.string().nullish(),
   admissionNumber: z.string().nullish(),
   rollNo: z.string().nullish(),
@@ -16,10 +21,19 @@ export const createStudentSchema = z.object({
   sectionId: z.string().uuid().nullish(),
   section: z.string().nullish(),
   parentName: z.string().nullish(),
-  parentPhone: z.string().nullish(),
-  phone: z.string().nullish(),
+  parentPhone: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+    z.string().regex(/^[0-9]+$/, 'Parent phone must contain only digits.').nullable().optional()
+  ),
+  phone: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+    z.string().regex(/^[0-9]+$/, 'Phone number must contain only digits.').nullable().optional()
+  ),
   bloodGroup: z.string().nullish(),
-  emergencyContact: z.string().nullish(),
+  emergencyContact: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+    z.string().regex(/^[0-9]+$/, 'Phone number must contain only digits.').nullable().optional()
+  ),
   status: z.string().nullish().default('active'),
   address: z.string().nullish(),
   gender: z.string().nullish(),
