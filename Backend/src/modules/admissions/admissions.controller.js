@@ -5,14 +5,14 @@ const submitSchema = z.object({
   applicantName: z.string().optional(),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
-  departmentId: z.string().uuid().optional(),
-  courseId: z.string().uuid().optional(),
-  courseName: z.string().optional(),
-  previousSchool: z.string().optional(),
+  email: z.string().trim().email('Invalid email address').optional().or(z.literal('')).nullable(),
+  phone: z.string().optional().nullable(),
+  departmentId: z.string().uuid().optional().nullable(),
+  courseId: z.string().uuid().optional().nullable(),
+  courseName: z.string().optional().nullable(),
+  previousSchool: z.string().optional().nullable(),
   marksheetDetails: z.record(z.string(), z.any()).optional().default({}),
-  createdFromLeadId: z.string().uuid().optional(),
+  createdFromLeadId: z.string().uuid().optional().nullable(),
   status: z.string().optional().default('Pending'),
   residenceType: z.string().optional().default('Day Scholar')
 });
@@ -20,6 +20,14 @@ const submitSchema = z.object({
 const updateSchema = z.object({
   status: z.string().optional(),
   applicantName: z.string().optional(),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  email: z.string().trim().email('Invalid email address').optional().or(z.literal('')).nullable(),
+  phone: z.string().optional().nullable(),
+  courseId: z.string().uuid().optional().nullable(),
+  courseName: z.string().optional().nullable(),
+  previousSchool: z.string().optional().nullable(),
+  residenceType: z.string().optional().nullable(),
   marksheetDetails: z.record(z.string(), z.any()).optional(),
 });
 
@@ -96,11 +104,11 @@ export const submitApplication = async (req, res) => {
 
   const marksheetDetails = {
     ...payload.marksheetDetails,
-    email: payload.email,
-    phone: payload.phone,
-    previousSchool: payload.previousSchool,
-    courseName: payload.courseName,
-    courseId: payload.courseId,
+    email: payload.email || '',
+    phone: payload.phone || '',
+    previousSchool: payload.previousSchool || '',
+    courseName: payload.courseName || '',
+    courseId: payload.courseId || null,
   };
 
   const admission = await prisma.admission.create({
@@ -137,12 +145,27 @@ export const updateAdmission = async (req, res) => {
     return res.status(404).json({ success: false, error: { code: 'ADMISSION_NOT_FOUND', message: 'Application not found' } });
   }
 
+  const currentDetails = typeof admission.marksheetDetails === 'object' && admission.marksheetDetails !== null ? admission.marksheetDetails : {};
+  const updatedMarksheetDetails = {
+    ...currentDetails,
+    ...(payload.marksheetDetails || {}),
+    ...(payload.email !== undefined ? { email: payload.email || '' } : {}),
+    ...(payload.phone !== undefined ? { phone: payload.phone || '' } : {}),
+    ...(payload.courseId !== undefined ? { courseId: payload.courseId || null } : {}),
+    ...(payload.courseName !== undefined ? { courseName: payload.courseName || '' } : {}),
+    ...(payload.previousSchool !== undefined ? { previousSchool: payload.previousSchool || '' } : {}),
+  };
+
+  const computedApplicantName = payload.applicantName 
+    || (payload.firstName || payload.lastName ? `${payload.firstName || ''} ${payload.lastName || ''}`.trim() : undefined);
+
   const updated = await prisma.admission.update({
     where: { id },
     data: {
       ...(payload.status ? { status: payload.status } : {}),
-      ...(payload.applicantName ? { applicantName: payload.applicantName } : {}),
-      ...(payload.marksheetDetails ? { marksheetDetails: payload.marksheetDetails } : {}),
+      ...(computedApplicantName ? { applicantName: computedApplicantName } : {}),
+      ...(payload.residenceType ? { residenceType: payload.residenceType } : {}),
+      marksheetDetails: updatedMarksheetDetails,
     }
   });
 

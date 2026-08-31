@@ -8,43 +8,32 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useCourses } from '../../../hooks/useCourses';
 import { useSections } from '../../../hooks/useSections';
 
+const getInitialValues = (initialData) => ({
+  firstName: initialData?.firstName || '',
+  lastName: initialData?.lastName || '',
+  email: initialData?.email || '',
+  phone: initialData?.phone || initialData?.studentMobile || '',
+  dob: initialData?.dob || (initialData?.dateOfBirth ? (typeof initialData.dateOfBirth === 'string' ? initialData.dateOfBirth.split('T')[0] : new Date(initialData.dateOfBirth).toISOString().split('T')[0]) : ''),
+  gender: initialData?.gender || '',
+  courseId: initialData?.courseId || '',
+  sectionId: initialData?.sectionId || '',
+  parentName: initialData?.parentName || initialData?.fatherName || '',
+  parentPhone: initialData?.parentPhone || initialData?.parentMobile || '',
+  address: initialData?.address || '',
+  residenceType: initialData?.residenceType || 'Day Scholar'
+});
+
 export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading }) {
   const { userData } = useAuth();
   const { courses } = useCourses();
   
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm({
-    defaultValues: initialData || {
-      firstName: '',
-      lastName: '',
-      email: '',
-      phone: '',
-      dob: '',
-      gender: '',
-      class: '',
-      section: '',
-      parentName: '',
-      parentPhone: '',
-      address: '',
-      residenceType: 'Day Scholar'
-    }
+    defaultValues: getInitialValues(initialData)
   });
 
   useEffect(() => {
     if (isOpen) {
-      reset(initialData || {
-        firstName: '',
-        lastName: '',
-        email: '',
-        phone: '',
-        dob: '',
-        gender: '',
-        class: '',
-        section: '',
-        parentName: '',
-        parentPhone: '',
-        address: '',
-        residenceType: 'Day Scholar'
-      });
+      reset(getInitialValues(initialData));
     }
   }, [isOpen, initialData, reset]);
 
@@ -54,7 +43,7 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
   const onFormSubmit = (data) => {
     // Strip null/undefined values to avoid Zod validation errors
     const sanitized = Object.fromEntries(
-      Object.entries(data).filter(([_, v]) => v !== null && v !== undefined && v !== '')
+      Object.entries(data).filter(([_, v]) => v !== null && v !== undefined)
     );
     const finalData = {
       ...sanitized,
@@ -90,13 +79,25 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
             <Input 
               label="Email" 
               type="email"
-              {...register('email')}
+              placeholder="student@example.com"
+              {...register('email', { 
+                required: "Email is required",
+                pattern: { 
+                  value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i, 
+                  message: "Invalid email address" 
+                }
+              })}
+              error={errors.email?.message}
             />
             <Input 
               label="Phone Number" 
+              placeholder="e.g. 9876543210"
               {...register('phone', {
-                pattern: { value: /^[0-9]{10}$/, message: "Phone number must be 10 digits" }
+                pattern: { value: /^[0-9]{10}$/, message: "Phone number must be exactly 10 digits" }
               })}
+              onInput={(e) => {
+                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10);
+              }}
               maxLength={10}
               error={errors.phone?.message}
             />
@@ -110,6 +111,7 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
               {...register('gender', { required: "Gender is required" })}
               error={errors.gender?.message}
               options={[
+                { value: '', label: 'Select Gender' },
                 { value: 'male', label: 'Male' },
                 { value: 'female', label: 'Female' },
                 { value: 'other', label: 'Other' }
@@ -160,10 +162,14 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
             />
             <Input 
               label="Parent Phone" 
+              placeholder="e.g. 9876543210"
               {...register('parentPhone', { 
                 required: "Parent phone is required",
-                pattern: { value: /^[0-9]{10}$/, message: "Phone number must be 10 digits" }
+                pattern: { value: /^[0-9]{10}$/, message: "Phone number must be exactly 10 digits" }
               })}
+              onInput={(e) => {
+                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10);
+              }}
               maxLength={10}
               error={errors.parentPhone?.message}
             />

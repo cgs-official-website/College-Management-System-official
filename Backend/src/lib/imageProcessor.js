@@ -1,4 +1,18 @@
-import sharp from 'sharp';
+let sharpInstance = undefined;
+
+async function getSharp() {
+  if (sharpInstance !== undefined) {
+    // return sharpInstance;
+  }
+  try {
+    const mod = await import('sharp');
+    sharpInstance = mod.default || mod;
+  } catch (err) {
+    // Sharp native binary unavailable or blocked by OS policy
+    sharpInstance = null;
+  }
+  return sharpInstance;
+}
 
 const MAX_SIZE_MB = parseInt(process.env.MAX_PROFILE_IMAGE_SIZE_MB || '2', 10);
 export const MAX_PROFILE_IMAGE_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
@@ -53,7 +67,8 @@ export function detectImageMimeType(buffer) {
 
 /**
  * Validates and processes image buffer for Student profile storage.
- * Resizes to max 500x500 maintaining aspect ratio and encodes to WebP Base64.
+ * Resizes to max 500x500 maintaining aspect ratio and encodes to WebP Base64 if sharp is available,
+ * otherwise validates format/size and stores as-is in base64.
  * 
  * @param {Buffer} buffer - Raw image buffer
  * @returns {Promise<{ profileImageData: string, profileImageMimeType: string, sizeBytes: number }>}
@@ -80,31 +95,39 @@ export async function processStudentProfileImageBuffer(buffer) {
     throw error;
   }
 
-  try {
-    // 3. Process with sharp: validate, resize (max 500x500), optimize as WebP
-    const pipeline = sharp(buffer, { failOn: 'error' })
-      .resize({
-        width: 500,
-        height: 500,
-        fit: 'inside',
-        withoutEnlargement: true
-      })
-      .webp({ quality: 85, effort: 4 });
+  const sharp = await getSharp();
 
-    const processedBuffer = await pipeline.toBuffer();
-    const profileImageData = processedBuffer.toString('base64');
-    const profileImageMimeType = 'image/webp';
+  if (sharp) {
+    try {
+      // 3. Process with sharp: validate, resize (max 500x500), optimize as WebP
+      const pipeline = sharp(buffer, { failOn: 'error' })
+        .resize({
+          width: 500,
+          height: 500,
+          fit: 'inside',
+          withoutEnlargement: true
+        })
+        .webp({ quality: 85, effort: 4 });
 
-    return {
-      profileImageData,
-      profileImageMimeType,
-      sizeBytes: processedBuffer.length
-    };
-  } catch (err) {
-    const error = new Error('Image processing failed or file is corrupted');
-    error.status = 400;
-    throw error;
+      const processedBuffer = await pipeline.toBuffer();
+      return {
+        profileImageData: processedBuffer.toString('base64'),
+        profileImageMimeType: 'image/webp',
+        sizeBytes: processedBuffer.length
+      };
+    } catch (err) {
+      const error = new Error('Image processing failed or file is corrupted');
+      error.status = 400;
+      throw error;
+    }
   }
+
+  // Fallback when sharp native addon is unavailable: return validated raw image buffer
+  return {
+    profileImageData: buffer.toString('base64'),
+    profileImageMimeType: detectedMime,
+    sizeBytes: buffer.length
+  };
 }
 
 /**

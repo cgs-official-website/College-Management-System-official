@@ -35,7 +35,8 @@ export const getStaff = async (req, res) => {
       name,
       firstName: parts[0] || 'Staff',
       lastName: parts.slice(1).join(' ') || '',
-      email: t.user?.email || '',
+      email: t.user?.email || t.emailId || '',
+      phone: t.mobileNumber || '',
       department: t.department?.name || 'General',
       departmentId: t.departmentId,
       designation: t.designation,
@@ -90,7 +91,7 @@ export const createStaff = async (req, res) => {
     deptId = dept.id;
   }
 
-  const email = payload.email.toLowerCase();
+  const email = payload.email.toLowerCase().trim();
   const defaultPassword = await bcrypt.hash('Staff@123', 10);
 
   const teacher = await prisma.$transaction(async (tx) => {
@@ -119,6 +120,8 @@ export const createStaff = async (req, res) => {
         designation: payload.designation,
         joiningDate: payload.joiningDate ? new Date(payload.joiningDate) : new Date(),
         salaryGrade: payload.salaryGrade || 'Grade A',
+        mobileNumber: payload.phone || null,
+        emailId: email,
       },
       include: {
         user: true,
@@ -132,7 +135,7 @@ export const createStaff = async (req, res) => {
   logger.info(`[info] req=${req.id || ''} college=${collegeId} teacherId=${teacher.id} actor=${actorId} Created staff '${payload.name}'`);
 
   // Send Welcome Email asynchronously
-  const loginUrl = `${process.env.FRONTEND_URL}/login`;
+  const loginUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login`;
   
   await sendDynamicMail({
     to: email,
@@ -143,6 +146,8 @@ export const createStaff = async (req, res) => {
       password: 'Staff@123',
       loginUrl
     }
+  }).catch((err) => {
+    logger.warn(`[warn] Failed to send staff welcome email: ${err.message}`);
   });
 
   res.status(201).json({
@@ -151,6 +156,7 @@ export const createStaff = async (req, res) => {
       id: teacher.id,
       name: payload.name,
       email: teacher.user?.email,
+      phone: teacher.mobileNumber,
       department: teacher.department?.name,
       designation: teacher.designation,
       joiningDate: teacher.joiningDate,
@@ -225,6 +231,7 @@ export const updateStaff = async (req, res) => {
         ...(payload.salaryGrade ? { salaryGrade: payload.salaryGrade } : {}),
         ...(payload.joiningDate ? { joiningDate: new Date(payload.joiningDate) } : {}),
         ...(payload.departmentId ? { departmentId: payload.departmentId } : {}),
+        ...(payload.phone !== undefined ? { mobileNumber: payload.phone || null } : {}),
       },
       include: {
         user: true,

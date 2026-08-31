@@ -91,6 +91,9 @@ export function AdmissionFormModal({ isOpen, onClose, onSubmit, initialData = nu
             {...register('phone', {
               pattern: { value: /^[0-9]{10}$/, message: "Phone number must be exactly 10 digits" }
             })}
+            onInput={(e) => {
+              e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10);
+            }}
             maxLength={10}
             error={errors.phone?.message}
           />

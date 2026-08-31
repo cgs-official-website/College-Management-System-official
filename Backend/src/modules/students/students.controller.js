@@ -26,6 +26,7 @@ export const getStudents = async (req, res) => {
         select: {
           id: true,
           email: true,
+          name: true,
           role: true,
           customRoleId: true,
           customRole: { select: { id: true, name: true } },
@@ -33,6 +34,7 @@ export const getStudents = async (req, res) => {
         }
       },
       department: true,
+      course: true,
       section: true,
       hostelBlock: true,
     },
@@ -40,11 +42,24 @@ export const getStudents = async (req, res) => {
   });
 
   const formatted = students.map(s => {
-    // Determine firstName/lastName from user email or stored names
-    const emailPrefix = s.user?.email ? s.user.email.split('@')[0] : 'Student';
-    const parts = emailPrefix.split('.');
-    const fName = parts[0] ? parts[0].charAt(0).toUpperCase() + parts[0].slice(1) : 'Student';
-    const lName = parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : '';
+    let fName = 'Student';
+    let lName = '';
+    if (s.user?.name) {
+      const nameParts = s.user.name.trim().split(' ');
+      fName = nameParts[0] || 'Student';
+      lName = nameParts.slice(1).join(' ') || '';
+    } else if (s.user?.email) {
+      const emailPrefix = s.user.email.split('@')[0];
+      const parts = emailPrefix.split('.');
+      fName = parts[0] ? parts[0].charAt(0).toUpperCase() + parts[0].slice(1) : 'Student';
+      lName = parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : '';
+    }
+
+    const parentName = s.fatherName || s.motherName || '';
+    const parentPhone = s.parentMobile || '';
+    const phone = s.studentMobile || s.emergencyContact || '';
+    const dob = s.customFields && typeof s.customFields === 'object' ? s.customFields.dob || '' : '';
+    const gender = s.customFields && typeof s.customFields === 'object' ? s.customFields.gender || '' : '';
 
     return {
       id: s.id,
@@ -54,11 +69,21 @@ export const getStudents = async (req, res) => {
       firstName: fName,
       lastName: lName,
       name: `${fName} ${lName}`.trim(),
-      email: s.user?.email || '',
+      email: s.user?.email || s.emailId || '',
+      phone,
+      dob,
+      dateOfBirth: dob,
+      gender,
       department: s.department?.name || '',
       departmentId: s.departmentId,
-      class: s.department?.name || '',
+      courseId: s.courseId || s.section?.courseId || null,
+      courseName: s.course?.name || s.department?.name || '',
+      class: s.course?.name || s.department?.name || '',
+      sectionId: s.sectionId || null,
       section: s.section?.name || '',
+      parentName,
+      parentPhone,
+      address: s.address || '',
       batchYear: s.batchYear,
       bloodGroup: s.bloodGroup,
       emergencyContact: s.emergencyContact,
@@ -90,6 +115,7 @@ export const getStudentById = async (req, res) => {
         select: {
           id: true,
           email: true,
+          name: true,
           role: true,
           customRoleId: true,
           customRole: { select: { id: true, name: true } },
@@ -97,6 +123,7 @@ export const getStudentById = async (req, res) => {
         }
       },
       department: true,
+      course: true,
       section: true,
       hostelBlock: true,
     }
@@ -106,10 +133,24 @@ export const getStudentById = async (req, res) => {
     return res.status(404).json({ success: false, error: { code: 'STUDENT_NOT_FOUND', message: 'Student not found' } });
   }
 
-  const emailPrefix = student.user?.email ? student.user.email.split('@')[0] : 'Student';
-  const parts = emailPrefix.split('.');
-  const fName = parts[0] ? parts[0].charAt(0).toUpperCase() + parts[0].slice(1) : 'Student';
-  const lName = parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : '';
+  let fName = 'Student';
+  let lName = '';
+  if (student.user?.name) {
+    const nameParts = student.user.name.trim().split(' ');
+    fName = nameParts[0] || 'Student';
+    lName = nameParts.slice(1).join(' ') || '';
+  } else if (student.user?.email) {
+    const emailPrefix = student.user.email.split('@')[0];
+    const parts = emailPrefix.split('.');
+    fName = parts[0] ? parts[0].charAt(0).toUpperCase() + parts[0].slice(1) : 'Student';
+    lName = parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : '';
+  }
+
+  const parentName = student.fatherName || student.motherName || '';
+  const parentPhone = student.parentMobile || '';
+  const phone = student.studentMobile || student.emergencyContact || '';
+  const dob = student.customFields && typeof student.customFields === 'object' ? student.customFields.dob || '' : '';
+  const gender = student.customFields && typeof student.customFields === 'object' ? student.customFields.gender || '' : '';
 
   res.json({
     success: true,
@@ -121,11 +162,21 @@ export const getStudentById = async (req, res) => {
       firstName: fName,
       lastName: lName,
       name: `${fName} ${lName}`.trim(),
-      email: student.user?.email || '',
+      email: student.user?.email || student.emailId || '',
+      phone,
+      dob,
+      dateOfBirth: dob,
+      gender,
       department: student.department?.name || '',
       departmentId: student.departmentId,
-      class: student.department?.name || '',
+      courseId: student.courseId || student.section?.courseId || null,
+      courseName: student.course?.name || student.department?.name || '',
+      class: student.course?.name || student.department?.name || '',
+      sectionId: student.sectionId || null,
       section: student.section?.name || '',
+      parentName,
+      parentPhone,
+      address: student.address || '',
       batchYear: student.batchYear,
       bloodGroup: student.bloodGroup,
       emergencyContact: student.emergencyContact,
@@ -167,7 +218,7 @@ export const createStudent = async (req, res) => {
     if (!dept) {
       dept = await prisma.department.create({
         data: {
-          name: payload.department || payload.class || 'General Studies',
+          name: payload.department || payload.class || payload.courseName || 'General Studies',
           code: 'GEN',
           collegeId
         }
@@ -176,47 +227,78 @@ export const createStudent = async (req, res) => {
     deptId = dept.id;
   }
 
-  const email = payload.email.toLowerCase();
-  const admissionNo = payload.admissionNo || payload.admissionNumber || `ADM-${Date.now().toString().slice(-6)}`;
-  const rollNo = payload.rollNo || payload.rollNumber || `R-${Date.now().toString().slice(-4)}`;
+  const email = payload.email.toLowerCase().trim();
+  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+  const admissionNo = payload.admissionNo || payload.admissionNumber || `ADM-${Date.now().toString().slice(-4)}${randomSuffix}`;
+  const rollNo = payload.rollNo || payload.rollNumber || `R-${Date.now().toString().slice(-4)}${randomSuffix}`;
   const defaultPassword = await bcrypt.hash('Student@123', 10);
+  const fullName = `${payload.firstName} ${payload.lastName || ''}`.trim() || 'Student';
 
   const student = await prisma.$transaction(async (tx) => {
     // Check if user already exists
     let user = await tx.user.findFirst({
-      where: { email, collegeId }
+      where: { email, collegeId },
+      include: { studentProfile: true }
     });
+
+    if (user && user.studentProfile) {
+      const err = new Error(`A student with email '${email}' already exists in this college.`);
+      err.statusCode = 409;
+      err.code = 'STUDENT_ALREADY_EXISTS';
+      throw err;
+    }
 
     if (!user) {
       user = await tx.user.create({
         data: {
           email,
+          name: fullName,
           collegeId,
           role: 'student',
           passwordHash: defaultPassword,
           accountStatus: payload.status || 'active'
         }
       });
+    } else {
+      await tx.user.update({
+        where: { id: user.id },
+        data: { name: fullName }
+      });
     }
+
+    const customFields = {
+      ...(payload.customFields && typeof payload.customFields === 'object' ? payload.customFields : {}),
+      ...(payload.gender ? { gender: payload.gender } : {}),
+      ...(payload.dob || payload.dateOfBirth ? { dob: payload.dob || payload.dateOfBirth } : {})
+    };
 
     const newStudent = await tx.student.create({
       data: {
         collegeId,
         userId: user.id,
         departmentId: deptId,
+        courseId: payload.courseId || null,
+        sectionId: payload.sectionId || null,
         admissionNumber: admissionNo,
         rollNumber: rollNo,
         batchYear: payload.batchYear || `${new Date().getFullYear()}`,
-        bloodGroup: payload.bloodGroup,
-        emergencyContact: payload.emergencyContact || payload.phone || payload.parentPhone,
+        bloodGroup: payload.bloodGroup || null,
+        emergencyContact: payload.emergencyContact || payload.phone || payload.parentPhone || null,
         residenceType: payload.residenceType || 'Day Scholar',
+        fatherName: payload.parentName || payload.fatherName || null,
+        parentMobile: payload.parentPhone || payload.parentMobile || null,
+        studentMobile: payload.phone || payload.studentMobile || null,
+        emailId: email,
+        customFields: Object.keys(customFields).length > 0 ? customFields : null,
+        address: payload.address || null,
         ...(payload.hostelBlockId ? { hostelBlockId: payload.hostelBlockId } : {}),
         ...(payload.hostelRoom ? { hostelRoom: payload.hostelRoom } : {}),
-        ...(payload.sectionId ? { sectionId: payload.sectionId } : {})
       },
       include: {
         user: true,
         department: true,
+        course: true,
+        section: true,
       }
     });
 
@@ -226,17 +308,19 @@ export const createStudent = async (req, res) => {
   logger.info(`[info] req=${req.id || ''} college=${collegeId} studentId=${student.id} actor=${actorId} Created student '${payload.firstName} ${payload.lastName || ''}'`);
 
   // Send welcome email with login credentials
-  const loginUrl = `${process.env.FRONTEND_URL}/login`;
+  const loginUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login`;
   
   await sendDynamicMail({
     to: email,
     templateName: 'Student Welcome',
     variables: {
-      name: `${payload.firstName} ${payload.lastName || ''}`.trim(),
+      name: fullName,
       email,
-      password: temporaryPassword,
+      password: 'Student@123',
       loginUrl
     }
+  }).catch((err) => {
+    logger.warn(`[warn] Failed to send student welcome email: ${err.message}`);
   });
 
   res.status(201).json({
@@ -244,7 +328,7 @@ export const createStudent = async (req, res) => {
     data: {
       id: student.id,
       admissionNo: student.admissionNumber,
-      name: `${payload.firstName} ${payload.lastName || ''}`.trim(),
+      name: fullName,
       email: student.user?.email,
       department: student.department?.name,
       status: student.user?.accountStatus,
@@ -271,10 +355,16 @@ export const updateStudent = async (req, res) => {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
-    if (payload.status && student.userId) {
+    const userUpdateData = {};
+    if (payload.status) userUpdateData.accountStatus = payload.status;
+    if (payload.firstName || payload.lastName) {
+      userUpdateData.name = `${payload.firstName || ''} ${payload.lastName || ''}`.trim();
+    }
+
+    if (Object.keys(userUpdateData).length > 0 && student.userId) {
       await tx.user.update({
         where: { id: student.userId },
-        data: { accountStatus: payload.status }
+        data: userUpdateData
       });
     }
 
@@ -288,6 +378,14 @@ export const updateStudent = async (req, res) => {
       }
     }
 
+    const currentCustomFields = student.customFields && typeof student.customFields === 'object' ? student.customFields : {};
+    const updatedCustomFields = {
+      ...currentCustomFields,
+      ...(payload.customFields && typeof payload.customFields === 'object' ? payload.customFields : {}),
+      ...(payload.gender !== undefined ? { gender: payload.gender || null } : {}),
+      ...(payload.dob !== undefined || payload.dateOfBirth !== undefined ? { dob: payload.dob || payload.dateOfBirth || null } : {})
+    };
+
     const s = await tx.student.update({
       where: { id },
       data: {
@@ -300,11 +398,19 @@ export const updateStudent = async (req, res) => {
         ...(payload.hostelBlockId !== undefined ? { hostelBlockId: payload.hostelBlockId || null } : {}),
         ...(payload.hostelRoom !== undefined ? { hostelRoom: payload.hostelRoom || null } : {}),
         ...(deptId ? { departmentId: deptId } : {}),
-        ...(payload.sectionId !== undefined ? { sectionId: payload.sectionId || null } : {})
+        ...(payload.courseId !== undefined ? { courseId: payload.courseId || null } : {}),
+        ...(payload.sectionId !== undefined ? { sectionId: payload.sectionId || null } : {}),
+        ...(payload.parentName !== undefined || payload.fatherName !== undefined ? { fatherName: payload.parentName || payload.fatherName || null } : {}),
+        ...(payload.parentPhone !== undefined || payload.parentMobile !== undefined ? { parentMobile: payload.parentPhone || payload.parentMobile || null } : {}),
+        ...(payload.phone !== undefined || payload.studentMobile !== undefined ? { studentMobile: payload.phone || payload.studentMobile || null } : {}),
+        customFields: Object.keys(updatedCustomFields).length > 0 ? updatedCustomFields : null,
+        ...(payload.address !== undefined ? { address: payload.address || null } : {}),
       },
       include: {
         user: true,
-        department: true
+        department: true,
+        course: true,
+        section: true,
       }
     });
 

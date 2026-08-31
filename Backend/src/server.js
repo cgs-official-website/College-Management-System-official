@@ -203,16 +203,51 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-const server = app.listen(PORT, () => {
-  logger.info(`[info] Zuna ERP Backend running on port ${PORT}`);
+const startServer = (retries = 5, delay = 600) => {
+  const server = app.listen(PORT, () => {
+    logger.info(`[info] Zuna ERP Backend running on port ${PORT}`);
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE' && retries > 0) {
+      logger.warn(`[warn] Port ${PORT} in use, retrying in ${delay}ms... (${retries} retries left)`);
+      setTimeout(() => {
+        startServer(retries - 1, delay);
+      }, delay);
+    } else if (err.code === 'EADDRINUSE') {
+      logger.error(`[fatal] Port ${PORT} is already in use by another process. Exiting.`);
+      process.exit(1);
+    } else {
+      logger.error(`[fatal] Server error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+  // Graceful shutdown
+  const shutdown = async (signal) => {
+    logger.info(`[info] ${signal} received. Closing HTTP server...`);
+    server.close(async () => {
+      try { await prisma.$disconnect(); } catch (_) {}
+      try { redis.disconnect(); } catch (_) {}
+      if (signal === 'SIGUSR2') {
+        process.kill(process.pid, 'SIGUSR2');
+      } else {
+        process.exit(0);
+      }
+    });
+  };
+
+  process.once('SIGUSR2', () => shutdown('SIGUSR2'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+};
+
+startServer();
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error(`[error] Unhandled Rejection: ${reason?.stack || reason}`);
 });
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  logger.info('[info] SIGTERM received. Shutting down gracefully...');
-  server.close(async () => {
-    await prisma.$disconnect();
-    redis.disconnect();
-    process.exit(0);
-  });
+process.on('uncaughtException', (err) => {
+  logger.error(`[fatal] Uncaught Exception: ${err.stack || err}`);
 });
