@@ -132,8 +132,9 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
               type="tel"
               inputMode="numeric"
               placeholder="e.g. 9876543210"
+              maxLength={10}
               {...register('phone', {
-                pattern: { value: /^[0-9]+$/, message: "Phone number must contain only digits." }
+                validate: (val) => !val || /^[0-9]{10}$/.test(val) || "Phone number must be exactly 10 digits."
               })}
               error={errors.phone?.message}
             />
@@ -200,8 +201,9 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
               type="tel"
               inputMode="numeric"
               placeholder="e.g. 9876543210"
+              maxLength={10}
               {...register('parentPhone', { 
-                pattern: { value: /^[0-9]+$/, message: "Parent phone must contain only digits." }
+                validate: (val) => !val || /^[0-9]{10}$/.test(val) || "Parent phone must be exactly 10 digits."
               })}
               error={errors.parentPhone?.message}
             />

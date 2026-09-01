@@ -23,11 +23,11 @@ export const createStudentSchema = z.object({
   parentName: z.string().nullish(),
   parentPhone: z.preprocess(
     (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
-    z.string().regex(/^[0-9]+$/, 'Parent phone must contain only digits.').nullable().optional()
+    z.string().regex(/^[0-9]{10}$/, 'Parent phone must be exactly 10 digits.').nullable().optional()
   ),
   phone: z.preprocess(
     (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
-    z.string().regex(/^[0-9]+$/, 'Phone number must contain only digits.').nullable().optional()
+    z.string().regex(/^[0-9]{10}$/, 'Phone number must be exactly 10 digits.').nullable().optional()
   ),
   bloodGroup: z.string().nullish(),
   emergencyContact: z.preprocess(
