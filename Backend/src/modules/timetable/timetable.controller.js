@@ -153,9 +153,28 @@ export const scheduleSlot = async (req, res) => {
     ? (DAY_NAME_TO_INT[payload.dayOfWeek] !== undefined ? DAY_NAME_TO_INT[payload.dayOfWeek] : 1)
     : Number(payload.dayOfWeek);
 
-  // If a specific course with name was requested, find or create
-  let targetCourseId = payload.courseId || defaults.courseId;
-  if (!payload.courseId && payload.subject) {
+  // If a specific course was requested, validate ownership
+  let targetCourseId = defaults.courseId;
+  if (payload.courseId) {
+    const course = await prisma.course.findFirst({
+      where: {
+        id: payload.courseId,
+        collegeId
+      }
+    });
+
+    if (!course) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_COURSE',
+          message: 'Course not found or does not belong to this college'
+        }
+      });
+    }
+
+    targetCourseId = course.id;
+  } else if (payload.subject) {
     let existingCourse = await prisma.course.findFirst({
       where: { collegeId, name: payload.subject }
     });
@@ -200,6 +219,7 @@ export const scheduleSlot = async (req, res) => {
       id: slot.id,
       subject: slot.course?.name || payload.subject,
       courseName: slot.course?.name || payload.courseName,
+      courseId: slot.courseId,
       teacherName: payload.teacherName,
       dayOfWeek: payload.dayOfWeek,
       startTime: slot.startTime,
@@ -225,6 +245,26 @@ export const updateSlot = async (req, res) => {
   }
 
   const updateData = {};
+  if (payload.courseId) {
+    const course = await prisma.course.findFirst({
+      where: {
+        id: payload.courseId,
+        collegeId
+      }
+    });
+
+    if (!course) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_COURSE',
+          message: 'Course not found or does not belong to this college'
+        }
+      });
+    }
+
+    updateData.courseId = course.id;
+  }
   if (payload.startTime) updateData.startTime = payload.startTime;
   if (payload.endTime) updateData.endTime = payload.endTime;
   if (payload.room) updateData.room = payload.room;

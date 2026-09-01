@@ -10,7 +10,11 @@ import { useAuth } from '../../../contexts/AuthContext';
 
 export function TimetableFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading }) {
   const { userData } = useAuth();
-  const { courses } = useCourses(userData?.collegeId);
+  const {
+    courses = [],
+    isLoading: isCoursesLoading,
+    error: coursesError
+  } = useCourses();
   const { staff } = useStaff(userData?.collegeId);
   
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
@@ -51,10 +55,21 @@ export function TimetableFormModal({ isOpen, onClose, onSubmit, initialData = nu
     onSubmit(finalData);
   };
 
-  const courseOptions = courses.map(c => ({
-    value: c.id,
-    label: c.name
+  const courseOptions = courses.map((course) => ({
+    value: course.id,
+    label: course.code
+      ? `${course.name} (${course.code})`
+      : (course.name || 'Unnamed Course')
   }));
+
+  const coursePlaceholder =
+    isCoursesLoading
+      ? "Loading courses..."
+      : coursesError
+        ? "Error loading courses"
+        : courses.length === 0
+          ? "No courses/programs available"
+          : "Select course / program...";
 
   const teacherOptions = staff.filter(s => s.role === 'teacher' || s.role === 'hod').map(s => ({
     value: s.id,
@@ -79,9 +94,10 @@ export function TimetableFormModal({ isOpen, onClose, onSubmit, initialData = nu
           />
           <Select 
             label="Course / Program" 
+            placeholder={coursePlaceholder}
             {...register('courseId', { required: "Course is required" })}
-            error={errors.courseId?.message}
-            options={[{ value: '', label: 'Select course...' }, ...courseOptions]}
+            error={errors.courseId?.message || (coursesError ? 'Failed to load courses' : undefined)}
+            options={[{ value: '', label: coursePlaceholder }, ...courseOptions]}
           />
         </div>
 
