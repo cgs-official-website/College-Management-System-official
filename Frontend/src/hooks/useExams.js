@@ -2,12 +2,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/apiClient';
 import toast from 'react-hot-toast';
 
-export function useExams(collegeId) {
+export function useExams(collegeId, filters = {}) {
   const queryClient = useQueryClient();
+  const courseId = typeof filters === 'string' ? filters : filters?.courseId;
 
   const { data: response = {}, isLoading, error, refetch } = useQuery({
-    queryKey: ['exams', collegeId],
-    queryFn: () => api.get('/exams'),
+    queryKey: ['exams', collegeId, courseId || 'ALL'],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (courseId && courseId !== 'ALL') {
+        params.append('courseId', courseId);
+      }
+      const queryString = params.toString();
+      return api.get(`/exams${queryString ? `?${queryString}` : ''}`);
+    },
     enabled: !!collegeId,
   });
 

@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { Plus, Search, Calendar, MapPin, Clock, BookOpen, Edit, Trash2, Award } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useExams } from '../../../hooks/useExams';
+import { useCourses } from '../../../hooks/useCourses';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
+import { Select } from '../../../components/ui/Select';
 import { ExamFormModal } from './ExamFormModal';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 
@@ -11,7 +13,10 @@ export default function Exams() {
   const confirm = useConfirm();
   const { userData } = useAuth();
   const collegeId = userData?.collegeId || 'default_college_id';
-  const { exams, isLoading, addExam, updateExam, deleteExam, isAdding, isUpdating } = useExams(collegeId);
+  
+  const [selectedCourse, setSelectedCourse] = useState('ALL');
+  const { courses = [], isLoading: isCoursesLoading, error: coursesError } = useCourses();
+  const { exams, isLoading, addExam, updateExam, deleteExam, isAdding, isUpdating } = useExams(collegeId, { courseId: selectedCourse });
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -19,12 +24,23 @@ export default function Exams() {
   const [activeTab, setActiveTab] = useState('schedules'); 
 
   const filteredExams = exams.filter(exam => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return true;
     const title = (exam.title || exam.name || '').toLowerCase();
     const subject = (exam.subject || '').toLowerCase();
     const course = (exam.courseName || '').toLowerCase();
-    const q = searchTerm.toLowerCase();
     return title.includes(q) || subject.includes(q) || course.includes(q);
   });
+
+  const courseOptions = [
+    { value: 'ALL', label: 'All Courses / Departments' },
+    ...courses.map((course) => ({
+      value: course.id,
+      label: course.code
+        ? `${course.name} (${course.code})`
+        : (course.name || 'Unnamed Course')
+    }))
+  ];
 
   const handleOpenAdd = () => {
     setEditingExam(null);
@@ -80,7 +96,7 @@ export default function Exams() {
       </div>
 
       {/* Tabs & Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between bg-white dark:bg-[#0A0F1C] p-4 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm">
+      <div className="flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center bg-white dark:bg-[#0A0F1C] p-4 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm">
         
         <div className="flex bg-slate-100 dark:bg-white/5 p-1 rounded-xl w-max">
           <button 
@@ -97,16 +113,27 @@ export default function Exams() {
           </button>
         </div>
 
-        <div className="relative flex-1 max-w-sm">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-slate-400" />
+        <div className="flex flex-col sm:flex-row gap-3 flex-1 max-w-xl justify-end">
+          <div className="w-full sm:w-64">
+            <Select 
+              value={selectedCourse}
+              onChange={(e) => setSelectedCourse(e.target.value)}
+              options={isCoursesLoading ? [{ value: 'ALL', label: 'Loading courses...' }] : courseOptions}
+              disabled={isCoursesLoading}
+              className="mb-0"
+            />
           </div>
-          <Input 
-            placeholder="Search exams by subject or name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 mb-0"
-          />
+          <div className="relative flex-1">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-slate-400" />
+            </div>
+            <Input 
+              placeholder="Search exams by subject or name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 mb-0"
+            />
+          </div>
         </div>
       </div>
 
@@ -198,12 +225,16 @@ export default function Exams() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5 text-sm">
-                {exams.length === 0 ? (
+                {filteredExams.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-slate-400">No examination records found.</td>
+                    <td colSpan={5} className="py-8 text-center text-slate-400">
+                      {selectedCourse && selectedCourse !== 'ALL' 
+                        ? "No examination records found for the selected course."
+                        : "No examination records found."}
+                    </td>
                   </tr>
                 ) : (
-                  exams.map((ex) => (
+                  filteredExams.map((ex) => (
                     <tr key={ex.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">{ex.name || ex.title}</td>
                       <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">{ex.courseName}</td>

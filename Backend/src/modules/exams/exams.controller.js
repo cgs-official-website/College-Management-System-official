@@ -37,8 +37,15 @@ async function ensureDefaultCourse(collegeId, courseName) {
 
 export const getExams = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const { courseId } = req.query;
+
+  const where = { collegeId };
+  if (courseId && courseId !== 'ALL') {
+    where.courseId = courseId;
+  }
+
   const exams = await prisma.exam.findMany({
-    where: { collegeId },
+    where,
     include: {
       course: true,
       marks: {
@@ -74,7 +81,7 @@ export const getExams = async (req, res) => {
       marks: exam.marks.map(m => ({
         id: m.id,
         studentId: m.studentId,
-        studentName: `${m.student?.user?.firstName || ''} ${m.student?.user?.lastName || ''}`.trim() || 'Student',
+        studentName: m.student?.user?.name || m.student?.user?.email || 'Student',
         rollNumber: m.student?.rollNumber || m.student?.admissionNumber || 'N/A',
         obtainedMarks: m.obtainedMarks,
         remarks: m.remarks
@@ -93,12 +100,34 @@ export const createExam = async (req, res) => {
   const actorId = req.user?.id || req.user?.userId;
   const payload = createExamSchema.parse(req.body);
 
-  const courseId = payload.courseId || await ensureDefaultCourse(collegeId, payload.courseName || payload.subject);
+  let targetCourseId = null;
+  if (payload.courseId) {
+    const course = await prisma.course.findFirst({
+      where: {
+        id: payload.courseId,
+        collegeId
+      }
+    });
+
+    if (!course) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_COURSE',
+          message: 'Course not found or does not belong to this college'
+        }
+      });
+    }
+
+    targetCourseId = course.id;
+  } else {
+    targetCourseId = await ensureDefaultCourse(collegeId, payload.courseName || payload.subject);
+  }
 
   const exam = await prisma.exam.create({
     data: {
       collegeId,
-      courseId,
+      courseId: targetCourseId,
       name: payload.name || payload.subject || 'Examination',
       date: payload.date ? new Date(payload.date) : new Date(),
       maxMarks: Number(payload.maxMarks) || 100,
@@ -118,6 +147,7 @@ export const createExam = async (req, res) => {
       name: exam.name,
       subject: exam.course?.name || exam.name,
       courseName: exam.course?.name || 'General Program',
+      courseId: exam.courseId,
       date: exam.date.toISOString().split('T')[0],
       maxMarks: exam.maxMarks,
       type: exam.type,
@@ -141,6 +171,26 @@ export const updateExam = async (req, res) => {
   }
 
   const updateData = {};
+  if (payload.courseId) {
+    const course = await prisma.course.findFirst({
+      where: {
+        id: payload.courseId,
+        collegeId
+      }
+    });
+
+    if (!course) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_COURSE',
+          message: 'Course not found or does not belong to this college'
+        }
+      });
+    }
+
+    updateData.courseId = course.id;
+  }
   if (payload.name) updateData.name = payload.name;
   if (payload.maxMarks !== undefined) updateData.maxMarks = Number(payload.maxMarks);
   if (payload.type) updateData.type = payload.type;
@@ -154,7 +204,21 @@ export const updateExam = async (req, res) => {
   });
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} examId=${id} actor=${actorId} Updated exam details`);
-  res.json({ success: true, data: updated });
+  res.json({
+    success: true,
+    data: {
+      id: updated.id,
+      title: updated.name,
+      name: updated.name,
+      subject: updated.course?.name || updated.name,
+      courseName: updated.course?.name || 'General Program',
+      courseId: updated.courseId,
+      date: updated.date ? new Date(updated.date).toISOString().split('T')[0] : null,
+      maxMarks: updated.maxMarks,
+      type: updated.type,
+      status: updated.status
+    }
+  });
 };
 
 export const deleteExam = async (req, res) => {
@@ -292,7 +356,7 @@ export const getExamResults = async (req, res) => {
   const formatted = marks.map(m => ({
     id: m.id,
     studentId: m.studentId,
-    studentName: `${m.student?.user?.firstName || ''} ${m.student?.user?.lastName || ''}`.trim() || 'Student',
+    studentName: m.student?.user?.name || m.student?.user?.email || 'Student',
     rollNumber: m.student?.rollNumber || m.student?.admissionNumber || 'N/A',
     obtainedMarks: m.obtainedMarks,
     maxMarks: m.exam?.maxMarks || 100,

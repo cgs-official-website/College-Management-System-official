@@ -15,7 +15,11 @@ export function TimetableFormModal({ isOpen, onClose, onSubmit, initialData = nu
     isLoading: isCoursesLoading,
     error: coursesError
   } = useCourses();
-  const { staff } = useStaff(userData?.collegeId);
+  const {
+    staff = [],
+    isLoading: isStaffLoading,
+    error: staffError
+  } = useStaff(userData?.collegeId);
   
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     defaultValues: initialData || {
@@ -50,7 +54,9 @@ export function TimetableFormModal({ isOpen, onClose, onSubmit, initialData = nu
     const finalData = {
       ...data,
       courseName: selectedCourse ? selectedCourse.name : 'Unknown Course',
-      teacherName: selectedTeacher ? `${selectedTeacher.firstName} ${selectedTeacher.lastName}` : 'TBA'
+      teacherName: selectedTeacher
+        ? (selectedTeacher.name || `${selectedTeacher.firstName || ''} ${selectedTeacher.lastName || ''}`.trim() || selectedTeacher.email || 'TBA')
+        : 'TBA'
     };
     onSubmit(finalData);
   };
@@ -71,10 +77,23 @@ export function TimetableFormModal({ isOpen, onClose, onSubmit, initialData = nu
           ? "No courses/programs available"
           : "Select course / program...";
 
-  const teacherOptions = staff.filter(s => s.role === 'teacher' || s.role === 'hod').map(s => ({
-    value: s.id,
-    label: `${s.firstName} ${s.lastName} (${s.department})`
+  const teacherOptions = staff.map((teacher) => ({
+    value: teacher.id,
+    label:
+      teacher.name ||
+      `${teacher.firstName || ''} ${teacher.lastName || ''}`.trim() ||
+      teacher.email ||
+      'Unnamed Teacher'
   }));
+
+  const teacherPlaceholder =
+    isStaffLoading
+      ? "Loading teachers..."
+      : staffError
+        ? "Error loading teachers"
+        : staff.length === 0
+          ? "No teachers available"
+          : "Select teacher...";
 
   return (
     <Modal 
@@ -104,8 +123,10 @@ export function TimetableFormModal({ isOpen, onClose, onSubmit, initialData = nu
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Select 
             label="Assign Teacher" 
+            placeholder={teacherPlaceholder}
             {...register('teacherId')}
-            options={[{ value: '', label: 'Select teacher...' }, ...teacherOptions]}
+            error={errors.teacherId?.message || (staffError ? 'Failed to load teachers' : undefined)}
+            options={[{ value: '', label: teacherPlaceholder }, ...teacherOptions]}
           />
           <Input 
             label="Room / Lab" 

@@ -117,9 +117,14 @@ export const getTimetable = async (req, res) => {
 
   const formatted = slots.map(slot => {
     const dayName = typeof slot.dayOfWeek === 'number' ? DAY_MAP_TO_NAME[slot.dayOfWeek] || 'Monday' : slot.dayOfWeek;
-    const teacherFullName = slot.teacher?.user 
-      ? `${slot.teacher.user.firstName || ''} ${slot.teacher.user.lastName || ''}`.trim() || slot.teacher.user.email
-      : 'Faculty Member';
+    const teacherFullName = slot.teacher?.user?.name
+      || (() => {
+        const emailPrefix = slot.teacher?.user?.email ? slot.teacher.user.email.split('@')[0] : 'Staff';
+        const parts = emailPrefix.split('.');
+        return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+      })()
+      || slot.teacher?.user?.email
+      || 'Faculty Member';
 
     return {
       id: slot.id,
@@ -193,13 +198,36 @@ export const scheduleSlot = async (req, res) => {
     targetCourseId = existingCourse.id;
   }
 
+  // If a specific teacher was requested, validate ownership
+  let targetTeacherId = defaults.teacherId;
+  if (payload.teacherId) {
+    const teacher = await prisma.teacher.findFirst({
+      where: {
+        id: payload.teacherId,
+        collegeId
+      }
+    });
+
+    if (!teacher) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_TEACHER',
+          message: 'Teacher not found or does not belong to this college'
+        }
+      });
+    }
+
+    targetTeacherId = teacher.id;
+  }
+
   const slot = await prisma.timetableSlot.create({
     data: {
       collegeId,
       departmentId: defaults.deptId,
       courseId: targetCourseId,
       sectionId: defaults.sectionId,
-      teacherId: payload.teacherId || defaults.teacherId,
+      teacherId: targetTeacherId,
       dayOfWeek: dayInt,
       startTime: payload.startTime,
       endTime: payload.endTime,
@@ -213,6 +241,16 @@ export const scheduleSlot = async (req, res) => {
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} slotId=${slot.id} actor=${actorId} Scheduled class '${payload.subject}' on ${payload.dayOfWeek}`);
   
+  const createdTeacherFullName = slot.teacher?.user?.name
+    || (() => {
+      const emailPrefix = slot.teacher?.user?.email ? slot.teacher.user.email.split('@')[0] : 'Staff';
+      const parts = emailPrefix.split('.');
+      return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+    })()
+    || slot.teacher?.user?.email
+    || payload.teacherName
+    || 'Faculty Member';
+
   res.status(201).json({
     success: true,
     data: {
@@ -220,7 +258,8 @@ export const scheduleSlot = async (req, res) => {
       subject: slot.course?.name || payload.subject,
       courseName: slot.course?.name || payload.courseName,
       courseId: slot.courseId,
-      teacherName: payload.teacherName,
+      teacherName: createdTeacherFullName,
+      teacherId: slot.teacherId,
       dayOfWeek: payload.dayOfWeek,
       startTime: slot.startTime,
       endTime: slot.endTime,
@@ -265,6 +304,26 @@ export const updateSlot = async (req, res) => {
 
     updateData.courseId = course.id;
   }
+  if (payload.teacherId) {
+    const teacher = await prisma.teacher.findFirst({
+      where: {
+        id: payload.teacherId,
+        collegeId
+      }
+    });
+
+    if (!teacher) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_TEACHER',
+          message: 'Teacher not found or does not belong to this college'
+        }
+      });
+    }
+
+    updateData.teacherId = teacher.id;
+  }
   if (payload.startTime) updateData.startTime = payload.startTime;
   if (payload.endTime) updateData.endTime = payload.endTime;
   if (payload.room) updateData.room = payload.room;
@@ -281,7 +340,32 @@ export const updateSlot = async (req, res) => {
   });
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} slotId=${id} actor=${actorId} Updated timetable slot`);
-  res.json({ success: true, data: updated });
+  
+  const updatedTeacherFullName = updated.teacher?.user?.name
+    || (() => {
+      const emailPrefix = updated.teacher?.user?.email ? updated.teacher.user.email.split('@')[0] : 'Staff';
+      const parts = emailPrefix.split('.');
+      return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+    })()
+    || updated.teacher?.user?.email
+    || 'Faculty Member';
+
+  res.json({
+    success: true,
+    data: {
+      id: updated.id,
+      subject: updated.course?.name || 'Class Session',
+      courseName: updated.course?.name || 'Academic Course',
+      courseId: updated.courseId,
+      teacherName: updatedTeacherFullName,
+      teacherId: updated.teacherId,
+      dayOfWeek: typeof updated.dayOfWeek === 'number' ? DAY_MAP_TO_NAME[updated.dayOfWeek] || 'Monday' : updated.dayOfWeek,
+      startTime: updated.startTime,
+      endTime: updated.endTime,
+      room: updated.room,
+      status: 'approved'
+    }
+  });
 };
 
 export const deleteSlot = async (req, res) => {
