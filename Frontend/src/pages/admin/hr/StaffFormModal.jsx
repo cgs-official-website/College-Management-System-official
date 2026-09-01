@@ -115,8 +115,17 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
             />
             <Input 
               label="Phone Number" 
-              placeholder="+1 234 567 8900"
-              {...register('phone')}
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
+              placeholder="e.g. 9876543210"
+              {...register('phone', {
+                pattern: {
+                  value: /^[0-9]{10}$/,
+                  message: "Phone number must be exactly 10 digits."
+                }
+              })}
+              error={errors.phone?.message}
             />
           </div>
         </div>

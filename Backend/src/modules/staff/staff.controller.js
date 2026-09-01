@@ -13,6 +13,7 @@ export const getStaff = async (req, res) => {
       user: {
         select: {
           id: true,
+          name: true,
           email: true,
           role: true,
           customRoleId: true,
@@ -26,15 +27,20 @@ export const getStaff = async (req, res) => {
   });
 
   const formattedStaff = staff.map(t => {
-    const emailPrefix = t.user?.email ? t.user.email.split('@')[0] : 'Staff';
-    const parts = emailPrefix.split('.');
-    const name = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+    const name = t.user?.name || (() => {
+      const emailPrefix = t.user?.email ? t.user.email.split('@')[0] : 'Staff';
+      const parts = emailPrefix.split('.');
+      return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+    })();
+    const nameParts = name.split(' ');
+    const firstName = nameParts[0] || 'Staff';
+    const lastName = nameParts.slice(1).join(' ') || '';
 
     return {
       id: t.id,
       name,
-      firstName: parts[0] || 'Staff',
-      lastName: parts.slice(1).join(' ') || '',
+      firstName,
+      lastName,
       email: t.user?.email || '',
       department: t.department?.name || 'General',
       departmentId: t.departmentId,
@@ -46,6 +52,7 @@ export const getStaff = async (req, res) => {
       customRole: t.user?.customRole?.name || null,
       customRoleId: t.user?.customRoleId || null,
       status: t.user?.accountStatus || 'active',
+      phone: t.mobileNumber || '',
       createdAt: t.createdAt,
     };
   });
@@ -102,12 +109,18 @@ export const createStaff = async (req, res) => {
       user = await tx.user.create({
         data: {
           email,
+          ...(payload.name ? { name: payload.name } : {}),
           collegeId,
           role: payload.role || 'teacher',
           customRoleId: payload.customRoleId || null,
           passwordHash: defaultPassword,
           accountStatus: 'pending_setup'
         }
+      });
+    } else if (payload.name && !user.name) {
+      user = await tx.user.update({
+        where: { id: user.id },
+        data: { name: payload.name }
       });
     }
 
@@ -119,6 +132,7 @@ export const createStaff = async (req, res) => {
         designation: payload.designation,
         joiningDate: payload.joiningDate ? new Date(payload.joiningDate) : new Date(),
         salaryGrade: payload.salaryGrade || 'Grade A',
+        ...(payload.phone !== undefined ? { mobileNumber: payload.phone || null } : {}),
       },
       include: {
         user: true,
@@ -151,6 +165,7 @@ export const createStaff = async (req, res) => {
       id: teacher.id,
       name: payload.name,
       email: teacher.user?.email,
+      phone: teacher.mobileNumber || '',
       department: teacher.department?.name,
       designation: teacher.designation,
       joiningDate: teacher.joiningDate,
@@ -207,10 +222,11 @@ export const updateStaff = async (req, res) => {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
-    if ((payload.role || payload.customRoleId !== undefined || payload.status) && teacher.userId) {
+    if ((payload.name || payload.role || payload.customRoleId !== undefined || payload.status) && teacher.userId) {
       await tx.user.update({
         where: { id: teacher.userId },
         data: {
+          ...(payload.name ? { name: payload.name } : {}),
           ...(payload.role ? { role: payload.role } : {}),
           ...(payload.customRoleId !== undefined ? { customRoleId: payload.customRoleId } : {}),
           ...(payload.status ? { accountStatus: payload.status } : {})
@@ -225,6 +241,7 @@ export const updateStaff = async (req, res) => {
         ...(payload.salaryGrade ? { salaryGrade: payload.salaryGrade } : {}),
         ...(payload.joiningDate ? { joiningDate: new Date(payload.joiningDate) } : {}),
         ...(payload.departmentId ? { departmentId: payload.departmentId } : {}),
+        ...(payload.phone !== undefined ? { mobileNumber: payload.phone || null } : {}),
       },
       include: {
         user: true,
@@ -236,7 +253,13 @@ export const updateStaff = async (req, res) => {
   });
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} teacherId=${id} actor=${actorId} Updated staff`);
-  res.json({ success: true, data: updated });
+  res.json({
+    success: true,
+    data: {
+      ...updated,
+      phone: updated.mobileNumber || ''
+    }
+  });
 };
 
 export const deleteStaff = async (req, res) => {

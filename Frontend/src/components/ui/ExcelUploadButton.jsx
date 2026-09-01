@@ -67,6 +67,35 @@ export function ExcelUploadButton({
       const ws = XLSX.utils.json_to_sheet([sampleRow]);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Template');
+
+      if (fields && fields.length > 0) {
+        const instructionsData = [
+          {
+            'Column Name': '--- BULK IMPORT INSTRUCTIONS ---',
+            'Requirement': '',
+            'Data Type': '',
+            'Description': 'Please review the column specifications below before preparing your import file.',
+            'Example': ''
+          },
+          ...fields.map(f => ({
+            'Column Name': f.name + (f.required ? '*' : ''),
+            'Requirement': f.required ? 'REQUIRED' : 'OPTIONAL',
+            'Data Type': f.type || 'String',
+            'Description': f.description || '',
+            'Example': f.example || ''
+          })),
+          {
+            'Column Name': '--- RULES & NOTES ---',
+            'Requirement': '',
+            'Data Type': '',
+            'Description': '1. Do not delete or rename header columns in row 1 of the Template sheet. 2. Fields marked with an asterisk (*) are required. 3. Existing sections with the same name under the same course will update capacity. 4. If the specified course code is not found, it will be automatically created.',
+            'Example': ''
+          }
+        ];
+        const wsInstructions = XLSX.utils.json_to_sheet(instructionsData);
+        XLSX.utils.book_append_sheet(wb, wsInstructions, 'Instructions');
+      }
+
       XLSX.writeFile(wb, sampleFileName);
       toast.success('Template downloaded successfully!');
     } catch (err) {

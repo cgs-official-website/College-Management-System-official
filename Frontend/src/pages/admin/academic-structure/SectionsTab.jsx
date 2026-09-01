@@ -10,6 +10,30 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useStaff } from '../../../hooks/useStaff';
 import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
 
+const SECTION_IMPORT_FIELDS = [
+  {
+    name: 'Section_Name',
+    required: true,
+    type: 'String',
+    description: 'Class or Section Name (e.g. Section A, Year 1 - Sec B)',
+    example: 'Section A'
+  },
+  {
+    name: 'Course_Code',
+    required: true,
+    type: 'String',
+    description: 'Program / Course Code (e.g. BTCS, CS101, B.E CSE)',
+    example: 'CS101'
+  },
+  {
+    name: 'Capacity',
+    required: false,
+    type: 'Integer',
+    description: 'Maximum student seating capacity for this section (default: 30)',
+    example: '60'
+  }
+];
+
 export default function SectionsTab({ courseId, courseName, onClearFilter }) {
   const { userData } = useAuth();
   const { sections, isLoading, createSection, updateSection, deleteSection, bulkImport } = useSections(courseId);
@@ -85,7 +109,14 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
           />
         </div>
         <div className="flex gap-2">
-          <ExcelUploadButton onUpload={bulkImport.mutateAsync} isLoading={bulkImport.isPending} />
+          <ExcelUploadButton 
+            onUpload={bulkImport.mutateAsync} 
+            isLoading={bulkImport.isPending} 
+            title="Import Classes / Sections"
+            label="Bulk Import"
+            sampleFileName="classes_sections_template.xlsx"
+            fields={SECTION_IMPORT_FIELDS}
+          />
           <Button onClick={handleOpenAdd}>
             <Plus className="w-4 h-4 mr-2" /> Add Class
           </Button>
@@ -136,7 +167,7 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
                   className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white h-32"
                 >
                   {staff?.map(t => (
-                    <option key={t.id} value={t.id}>{t.user?.name || t.user?.email || 'Teacher'}</option>
+                    <option key={t.id} value={t.id}>{t.name || t.user?.name || t.user?.email || t.email || 'Teacher'}</option>
                   ))}
                 </select>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Hold Ctrl (Windows) or Cmd (Mac) to select multiple.</p>
@@ -195,7 +226,7 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
                         {section.teachers && section.teachers.length > 0 ? (
                           section.teachers.map(t => (
                             <span key={t.id} className="inline-block px-2 py-1 text-xs font-medium bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 rounded-md">
-                              {t.user?.name || t.user?.email}
+                              {t.user?.name || t.name || (t.user?.email ? t.user.email.split('@')[0] : '') || t.email || 'Teacher'}
                             </span>
                           ))
                         ) : (

@@ -55,7 +55,7 @@ export function StaffDetailsModal({ isOpen, onClose, staff }) {
               <Phone className="w-4 h-4" /> Phone Number
             </div>
             <p className="font-medium text-slate-900 dark:text-white">
-              {staff.phone || 'N/A'}
+              {staff.phone || staff.mobileNumber || 'N/A'}
             </p>
           </div>
 

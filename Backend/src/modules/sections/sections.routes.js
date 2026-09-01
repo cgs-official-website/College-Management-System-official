@@ -90,9 +90,9 @@ router.post('/bulk', async (req, res) => {
 
     for (const row of data) {
       try {
-        const name = row['Section_Name']?.toString().trim();
-        const capacity = parseInt(row['Capacity']) || 30;
-        const courseCode = row['Course_Code']?.toString().trim();
+        const name = (row['Section_Name'] || row['Section_Name*'])?.toString().trim();
+        const capacity = parseInt(row['Capacity'] || row['Capacity*'], 10) || 30;
+        const courseCode = (row['Course_Code'] || row['Course_Code*'])?.toString().trim();
 
         if (!name || !courseCode) {
           failed++;
