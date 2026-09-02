@@ -142,7 +142,7 @@ export default function NoticeBoard() {
               <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-white/5">
                 <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
                   <Clock className="w-3.5 h-3.5" />
-                  {notice.createdAt?.toDate ? new Date(notice.createdAt.toDate()).toLocaleDateString() : 'Just now'}
+                  {notice.createdAt?.toDate ? new Date(notice.createdAt.toDate()).toLocaleDateString() : (notice.createdAt ? new Date(notice.createdAt).toLocaleDateString() : 'Just now')}
                 </div>
                 <div className="text-xs font-bold text-slate-900 dark:text-white px-2 py-1 bg-slate-100 dark:bg-white/5 rounded-md uppercase tracking-wide">
                   {notice.targetAudience === 'all' ? 'Everyone' : notice.targetAudience}

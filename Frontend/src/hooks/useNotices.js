@@ -13,7 +13,10 @@ export function useNotices(collegeId) {
     setIsLoading(true);
     try {
       const response = await api.get('/notices');
-      setNotices(response.data || []);
+      const list = Array.isArray(response?.data)
+        ? response.data
+        : (Array.isArray(response) ? response : []);
+      setNotices(list);
     } catch (error) {
       console.error("Error fetching notices:", error);
       toast.error("Failed to load notices");
@@ -34,7 +37,7 @@ export function useNotices(collegeId) {
       await fetchNotices();
     } catch (error) {
       console.error("Error adding notice:", error);
-      toast.error("Failed to publish notice.");
+      toast.error(error?.message || "Failed to publish notice.");
       throw error;
     } finally {
       setIsAdding(false);
@@ -45,11 +48,11 @@ export function useNotices(collegeId) {
     setIsUpdating(true);
     try {
       await api.put(`/notices/${id}`, data);
-      toast.success("Notice updated successfully!");
+      toast.success("Notice updated successfully.");
       await fetchNotices();
     } catch (error) {
       console.error("Error updating notice:", error);
-      toast.error("Failed to update notice.");
+      toast.error(error?.message || "Failed to update notice.");
       throw error;
     } finally {
       setIsUpdating(false);
