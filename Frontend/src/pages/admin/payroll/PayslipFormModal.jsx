@@ -7,8 +7,9 @@ import { useStaff } from '../../../hooks/useStaff';
 import { useAuth } from '../../../contexts/AuthContext';
 
 export function PayslipFormModal({ isOpen, onClose, onSubmit, isLoading }) {
-  const { userData } = useAuth();
-  const { staff } = useStaff(userData?.collegeId);
+  const { userData, currentUser } = useAuth();
+  const collegeId = userData?.collegeId || currentUser?.collegeId;
+  const { staff } = useStaff(collegeId);
   
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
@@ -62,14 +63,28 @@ export function PayslipFormModal({ isOpen, onClose, onSubmit, isLoading }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!formData.staffId) return;
     onSubmit({
       ...formData,
       month: Number(formData.month),
       year: Number(formData.year),
+      basicPay: Number(formData.basicPay) || 0,
+      hra: Number(formData.hra) || 0,
+      da: Number(formData.da) || 0,
+      specialAllowance: Number(formData.specialAllowance) || 0,
+      pf: Number(formData.pf) || 0,
+      esi: Number(formData.esi) || 0,
+      pt: Number(formData.pt) || 0,
+      tds: Number(formData.tds) || 0,
+      otherDeductions: Number(formData.otherDeductions) || 0,
     });
   };
 
-  const staffOptions = (staff || []).map(s => ({ value: s.userId, label: s.name || s.email }));
+  const staffOptions = (staff || []).map(s => {
+    const val = s.userId || s.id;
+    const displayName = s.name ? `${s.name} (${s.email || 'Staff'})` : (s.email || s.id);
+    return { value: val, label: displayName };
+  });
   const monthOptions = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: new Date(0, i).toLocaleString('default', { month: 'long' }) }));
 
   return (
@@ -83,6 +98,7 @@ export function PayslipFormModal({ isOpen, onClose, onSubmit, isLoading }) {
             value={formData.staffId}
             onChange={handleChange}
             options={staffOptions}
+            placeholder="Select Staff Member"
             required
           />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

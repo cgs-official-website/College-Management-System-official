@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../../../contexts/AuthContext';
 import { usePayrolls, useCreatePayslip, useBulkImportPayrolls, useUpdatePayrollStatus } from '../../../hooks/usePayroll';
 import { Loader2, IndianRupee, CheckCircle, Plus } from 'lucide-react';
@@ -17,9 +18,9 @@ export default function PayrollDashboard() {
   const [year, setYear] = useState(currentYear);
   const [statusFilter, setStatusFilter] = useState('');
 
-  const canRead = userRole === 'superadmin' || userRole === 'admin' || permissions.payroll?.canRead;
-  const canCreate = userRole === 'superadmin' || userRole === 'admin' || permissions.payroll?.canCreate;
-  const canUpdate = userRole === 'superadmin' || userRole === 'admin' || permissions.payroll?.canUpdate;
+  const canRead = userRole === 'superadmin' || userRole === 'admin' || permissions?.payroll?.canRead;
+  const canCreate = userRole === 'superadmin' || userRole === 'admin' || permissions?.payroll?.canCreate;
+  const canUpdate = userRole === 'superadmin' || userRole === 'admin' || permissions?.payroll?.canUpdate;
 
   const { data: payrolls, isLoading, isError } = usePayrolls({ month, year, status: statusFilter });
   const { mutateAsync: createPayslip, isPending: isCreating } = useCreatePayslip();
@@ -27,21 +28,44 @@ export default function PayrollDashboard() {
   const updateStatusMutation = useUpdatePayrollStatus();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  const payrollList = Array.isArray(payrolls)
+    ? payrolls
+    : (Array.isArray(payrolls?.data) ? payrolls.data : []);
+
   if (!canRead) {
     return <div className="p-6 text-center text-red-500">You do not have permission to view Payroll.</div>;
   }
 
   const handleCreateSubmit = async (data) => {
-    await createPayslip(data);
-    setIsModalOpen(false);
+    try {
+      await createPayslip(data);
+      toast.success('Payslip created successfully!');
+      if (data.month) setMonth(Number(data.month));
+      if (data.year) setYear(Number(data.year));
+      setIsModalOpen(false);
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || err.message || 'Failed to create payslip';
+      toast.error(errorMsg);
+    }
   };
 
   const handleBulkImport = async (data) => {
-    await bulkImport(data);
+    try {
+      const res = await bulkImport(data);
+      toast.success(res?.message || 'Bulk imported payslips successfully!');
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to bulk import payslips');
+    }
   };
 
   const handleMarkPaid = (id) => {
-    updateStatusMutation.mutate({ id, data: { status: 'Paid', paymentMethod: 'Bank Transfer' } });
+    updateStatusMutation.mutate(
+      { id, data: { status: 'Paid', paymentMethod: 'Bank Transfer' } },
+      {
+        onSuccess: () => toast.success('Payroll marked as paid!'),
+        onError: (err) => toast.error(err.response?.data?.message || err.message || 'Failed to update status')
+      }
+    );
   };
 
   return (
@@ -132,16 +156,16 @@ export default function PayrollDashboard() {
               </tr>
             </thead>
             <tbody>
-              {payrolls?.length === 0 && (
+              {payrollList.length === 0 && (
                 <tr>
                   <td colSpan="7" className="p-8 text-center text-gray-500">No payroll records found for this period.</td>
                 </tr>
               )}
-              {payrolls?.map((payroll) => (
+              {payrollList.map((payroll) => (
                 <tr key={payroll.id} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
                   <td className="p-4">
-                    <div className="font-medium text-gray-900">{payroll.staff.name || 'Unnamed Staff'}</div>
-                    <div className="text-sm text-gray-500">{payroll.staff.email}</div>
+                    <div className="font-medium text-gray-900">{payroll.staff?.name || 'Unnamed Staff'}</div>
+                    <div className="text-sm text-gray-500">{payroll.staff?.email || ''}</div>
                   </td>
                   <td className="p-4">₹{(payroll.basicPay || 0).toFixed(2)}</td>
                   <td className="p-4 text-emerald-600">₹{(payroll.grossPay || 0).toFixed(2)}</td>

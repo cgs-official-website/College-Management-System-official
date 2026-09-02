@@ -6,12 +6,52 @@ export const createPayslip = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const data = createPayslipSchema.parse(req.body);
   
-  // Verify staff exists and is active
-  const staff = await prisma.user.findFirst({
-    where: { id: data.staffId, collegeId, accountStatus: 'active' }
+  // Verify staff exists and is active / valid
+  let targetUserId = data.staffId;
+  let staff = await prisma.user.findFirst({
+    where: {
+      id: targetUserId,
+      collegeId,
+      accountStatus: { notIn: ['suspended', 'inactive', 'deleted'] }
+    }
   });
+
+  // If not found by User ID, check if data.staffId is a Teacher ID
+  if (!staff) {
+    const teacher = await prisma.teacher.findFirst({
+      where: {
+        id: data.staffId,
+        collegeId,
+        deletedAt: null
+      },
+      include: { user: true }
+    });
+    if (teacher?.user && !['suspended', 'inactive', 'deleted'].includes(teacher.user.accountStatus)) {
+      staff = teacher.user;
+      targetUserId = teacher.user.id;
+    }
+  }
+
   if (!staff) {
     return res.status(404).json({ success: false, message: 'Active staff member not found.' });
+  }
+
+  // Check if payslip already exists for this staff, month, and year
+  const existing = await prisma.payroll.findUnique({
+    where: {
+      staffId_month_year: {
+        staffId: targetUserId,
+        month: data.month,
+        year: data.year
+      }
+    }
+  });
+
+  if (existing) {
+    return res.status(400).json({
+      success: false,
+      message: `Payslip for ${data.month}/${data.year} already exists for this staff member.`
+    });
   }
 
   // Calculate totals (double check server side)
@@ -22,7 +62,7 @@ export const createPayslip = async (req, res) => {
   const payslip = await prisma.payroll.create({
     data: {
       collegeId,
-      staffId: data.staffId,
+      staffId: targetUserId,
       month: data.month,
       year: data.year,
       basicPay: data.basicPay,
@@ -37,10 +77,15 @@ export const createPayslip = async (req, res) => {
       otherDeductions: data.otherDeductions,
       netPay,
       status: 'Pending'
+    },
+    include: {
+      staff: {
+        select: { id: true, name: true, email: true }
+      }
     }
   });
 
-  logger.info(`[info] req=${req.id || ''} college=${collegeId} actor=${req.user?.id} Created manual payslip for ${data.month}/${data.year}. Staff: ${data.staffId}`);
+  logger.info(`[info] req=${req.id || ''} college=${collegeId} actor=${req.user?.id} Created manual payslip for ${data.month}/${data.year}. Staff: ${targetUserId}`);
   res.status(201).json({ success: true, message: 'Payslip created successfully.', data: payslip });
 };
 
@@ -54,9 +99,25 @@ export const bulkImportPayrolls = async (req, res) => {
 
   for (const [index, data] of payrollsData.entries()) {
     try {
-      const staff = await prisma.user.findFirst({
-        where: { id: data.staffId, collegeId, accountStatus: 'active' }
+      let targetUserId = data.staffId;
+      let staff = await prisma.user.findFirst({
+        where: {
+          id: targetUserId,
+          collegeId,
+          accountStatus: { notIn: ['suspended', 'inactive', 'deleted'] }
+        }
       });
+
+      if (!staff) {
+        const teacher = await prisma.teacher.findFirst({
+          where: { id: data.staffId, collegeId, deletedAt: null },
+          include: { user: true }
+        });
+        if (teacher?.user && !['suspended', 'inactive', 'deleted'].includes(teacher.user.accountStatus)) {
+          staff = teacher.user;
+          targetUserId = teacher.user.id;
+        }
+      }
       
       if (!staff) {
         errorMessages.push(`Row ${index + 1}: Staff ID ${data.staffId} not found or inactive.`);
@@ -67,7 +128,7 @@ export const bulkImportPayrolls = async (req, res) => {
       const existing = await prisma.payroll.findUnique({
         where: {
           staffId_month_year: {
-            staffId: data.staffId,
+            staffId: targetUserId,
             month: data.month,
             year: data.year
           }
@@ -87,7 +148,7 @@ export const bulkImportPayrolls = async (req, res) => {
       await prisma.payroll.create({
         data: {
           collegeId,
-          staffId: data.staffId,
+          staffId: targetUserId,
           month: data.month,
           year: data.year,
           basicPay: data.basicPay,
@@ -138,7 +199,22 @@ export const getPayrolls = async (req, res) => {
     orderBy: { createdAt: 'desc' }
   });
 
-  res.json({ success: true, data: payrolls });
+  const formattedPayrolls = payrolls.map(p => {
+    const staffName = p.staff?.name || (p.staff?.email ? p.staff.email.split('@')[0] : 'Staff');
+    const allowances = (p.hra || 0) + (p.da || 0) + (p.specialAllowance || 0);
+    const deductions = (p.pf || 0) + (p.esi || 0) + (p.pt || 0) + (p.tds || 0) + (p.otherDeductions || 0);
+    return {
+      ...p,
+      allowances,
+      deductions,
+      staff: {
+        ...p.staff,
+        name: staffName
+      }
+    };
+  });
+
+  res.json({ success: true, data: formattedPayrolls });
 };
 
 export const updatePayrollStatus = async (req, res) => {
@@ -203,5 +279,11 @@ export const getStaffPayslips = async (req, res) => {
     ]
   });
 
-  res.json({ success: true, data: payrolls });
+  const formattedPayrolls = payrolls.map(p => ({
+    ...p,
+    allowances: (p.hra || 0) + (p.da || 0) + (p.specialAllowance || 0),
+    deductions: (p.pf || 0) + (p.esi || 0) + (p.pt || 0) + (p.tds || 0) + (p.otherDeductions || 0)
+  }));
+
+  res.json({ success: true, data: formattedPayrolls });
 };
