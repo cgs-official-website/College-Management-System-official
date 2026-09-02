@@ -3,7 +3,14 @@ import { attendanceReportQuerySchema } from './attendance.validator.js';
 
 export const getAttendanceReport = async (req, res) => {
   try {
-    const collegeId = req.user.collegeId;
+    const collegeId = req.user?.collegeId || req.tenant?.collegeId;
+
+    if (!collegeId) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'MISSING_COLLEGE_ID', message: 'College ID is required' }
+      });
+    }
 
     const validationResult = attendanceReportQuerySchema.safeParse(req.query);
     if (!validationResult.success) {
@@ -16,13 +23,14 @@ export const getAttendanceReport = async (req, res) => {
 
     const { startDate, endDate, departmentId, classId, groupBy } = validationResult.data;
     const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+
     const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
 
     // Build base where clause scoped to collegeId and date range
     const whereClause = {
-      student: {
-        collegeId: collegeId,
-      },
+      collegeId: collegeId,
       date: {
         gte: start,
         lte: end,
@@ -30,24 +38,27 @@ export const getAttendanceReport = async (req, res) => {
     };
 
     if (departmentId) {
-      whereClause.student.departmentId = departmentId;
-    }
-    if (classId) {
-      whereClause.classId = classId;
+      whereClause.student = {
+        departmentId: departmentId,
+      };
     }
 
-    // Since we need complex grouping (day truncations) and distinct student counts per group,
-    // and we don't want to risk schema mismatch with $queryRaw (e.g. table names vs Prisma virtuals),
-    // we fetch the scoped records and aggregate in JS. For typical report timeframes, this is efficient.
+    if (classId) {
+      whereClause.courseId = classId;
+    }
+
     const attendanceRecords = await prisma.attendance.findMany({
       where: whereClause,
       include: {
         student: {
           include: {
             department: true,
+            section: true,
+            course: true,
           }
         },
-        class: true,
+        course: true,
+        teacher: true,
       },
       orderBy: {
         date: 'asc'
@@ -64,10 +75,10 @@ export const getAttendanceReport = async (req, res) => {
     attendanceRecords.forEach(record => {
       totalStudentsSet.add(record.studentId);
 
-      const status = record.status;
-      if (status === 'PRESENT') overallPresent++;
-      else if (status === 'ABSENT') overallAbsent++;
-      else if (status === 'LATE') overallLate++;
+      const status = (record.status || '').toLowerCase();
+      if (status === 'present') overallPresent++;
+      else if (status === 'absent') overallAbsent++;
+      else if (status === 'late') overallLate++;
 
       // Process Trend Data (Group by Day)
       const dateString = record.date.toISOString().split('T')[0];
@@ -76,9 +87,9 @@ export const getAttendanceReport = async (req, res) => {
       }
       const trendDay = trendMap.get(dateString);
       trendDay.totalRecords++;
-      if (status === 'PRESENT') trendDay.presentCount++;
-      else if (status === 'ABSENT') trendDay.absentCount++;
-      else if (status === 'LATE') trendDay.lateCount++;
+      if (status === 'present') trendDay.presentCount++;
+      else if (status === 'absent') trendDay.absentCount++;
+      else if (status === 'late') trendDay.lateCount++;
 
       // Process Grouped Results
       let groupKey = '';
@@ -88,12 +99,12 @@ export const getAttendanceReport = async (req, res) => {
         groupKey = dateString;
         groupName = dateString;
       } else if (groupBy === 'class') {
-        groupKey = record.classId;
-        groupName = record.class?.name || record.classId;
+        groupKey = record.courseId || record.student?.sectionId || 'Unknown';
+        groupName = record.course?.name || record.student?.section?.name || 'General Class';
       } else if (groupBy === 'department') {
-        const dId = record.student?.departmentId || 'Unknown';
+        const dId = record.student?.departmentId || record.course?.departmentId || 'Unknown';
         groupKey = dId;
-        groupName = record.student?.department?.name || dId;
+        groupName = record.student?.department?.name || record.course?.department?.name || 'General Department';
       }
 
       if (!groupMap.has(groupKey)) {
@@ -109,9 +120,9 @@ export const getAttendanceReport = async (req, res) => {
 
       const groupData = groupMap.get(groupKey);
       groupData.studentIds.add(record.studentId);
-      if (status === 'PRESENT') groupData.presentCount++;
-      else if (status === 'ABSENT') groupData.absentCount++;
-      else if (status === 'LATE') groupData.lateCount++;
+      if (status === 'present') groupData.presentCount++;
+      else if (status === 'absent') groupData.absentCount++;
+      else if (status === 'late') groupData.lateCount++;
     });
 
     // Calculate Summary
@@ -172,5 +183,3 @@ export const getAttendanceReport = async (req, res) => {
     });
   }
 };
-
-

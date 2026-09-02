@@ -185,6 +185,9 @@ app.use('/api/v1/builder', builderRoutes);
 app.use('/api/v1/dynamic', dynamicRoutes);
 app.use('/api/v1/email-templates', emailTemplatesRoutes);
 app.use('/api/v1/landing-page', landingPageRoutes);
+import reportsRoutes from './modules/reports/reports.routes.js';
+app.use('/api/v1/reports', reportsRoutes);
+app.use('/api/reports', reportsRoutes);
 
 // Sentry error handler if initialized
 Sentry.setupExpressErrorHandler(app);

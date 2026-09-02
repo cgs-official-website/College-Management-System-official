@@ -32,6 +32,10 @@ export default function Reports() {
     groupBy: 'class'
   });
 
+  const trendData = attendanceData?.data?.trendData || attendanceData?.trendData || [];
+  const summary = attendanceData?.data?.summary || attendanceData?.summary || {};
+  const hasExportableAttendance = trendData.length > 0;
+
   const [isExporting, setIsExporting] = useState(null);
 
   // Helper function to export array of objects to CSV
@@ -79,7 +83,7 @@ export default function Reports() {
       Class: s.class,
       Section: s.section,
       Gender: s.gender,
-      JoinDate: s.createdAt?.toDate ? new Date(s.createdAt.toDate()).toLocaleDateString() : 'N/A'
+      JoinDate: s.createdAt?.toDate ? new Date(s.createdAt.toDate()).toLocaleDateString() : (s.createdAt ? new Date(s.createdAt).toLocaleDateString() : 'N/A')
     }));
     exportToCSV(exportData, 'Student_Demographics_Report');
   };
@@ -116,7 +120,7 @@ export default function Reports() {
 
   const generateAttendanceReport = () => {
     setIsExporting('attendance');
-    const exportData = attendanceData?.data?.trendData?.map(day => ({
+    const exportData = trendData.map(day => ({
       Date: day.date,
       PresentCount: day.presentCount,
       AbsentCount: day.absentCount,
@@ -286,7 +290,7 @@ export default function Reports() {
             variant="outline" 
             onClick={generateAttendanceReport} 
             isLoading={isExporting === 'attendance'} 
-            disabled={loadingAttendance || !attendanceData?.data?.trendData}
+            disabled={loadingAttendance || !hasExportableAttendance}
           >
             <Download className="w-4 h-4 mr-2" />
             Export
@@ -298,8 +302,8 @@ export default function Reports() {
           </div>
         ) : (
           <AttendanceReportChart 
-            trendData={attendanceData?.data?.trendData} 
-            summary={attendanceData?.data?.summary} 
+            trendData={trendData} 
+            summary={summary} 
           />
         )}
       </div>
