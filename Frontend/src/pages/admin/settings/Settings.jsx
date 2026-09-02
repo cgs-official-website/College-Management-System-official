@@ -47,21 +47,22 @@ export default function Settings() {
 
   useEffect(() => {
     if (collegeData) {
+      const col = collegeData.data || collegeData;
       reset({
-        name: collegeData.name || '',
-        contactEmail: collegeData.contactEmail || '',
-        contactPhone: collegeData.contactPhone || '',
-        address: collegeData.address || '',
-        website: collegeData.website || '',
-        academicYear: collegeData.academicYear || '',
-        affiliationCode: collegeData.affiliationCode || '',
-        aicteNumber: collegeData.aicteNumber || '',
-        ugcCode: collegeData.ugcCode || ''
+        name: col.name || '',
+        contactEmail: col.contactEmail || '',
+        contactPhone: col.contactPhone || '',
+        address: col.address || '',
+        website: col.website || '',
+        academicYear: col.academicYear || '',
+        affiliationCode: col.affiliationCode || '',
+        aicteNumber: col.aicteNumber || '',
+        ugcCode: col.ugcCode || ''
       });
-      if (collegeData.logoUrl) {
-        setLogoBase64(collegeData.logoUrl);
-      } else if (collegeData.logoBase64) {
-        setLogoBase64(collegeData.logoBase64);
+      if (col.logoUrl) {
+        setLogoBase64(col.logoUrl);
+      } else if (col.logoBase64) {
+        setLogoBase64(col.logoBase64);
       }
     }
   }, [collegeData, reset]);
@@ -70,15 +71,19 @@ export default function Settings() {
     mutationFn: async (data) => {
       const updateData = { ...data, logoUrl: logoBase64 };
       const response = await api.put(`/colleges/${collegeId}`, updateData);
-      return response.data;
+      return response?.data || response;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['college', collegeId] });
-      updateUserData({ collegeName: data.name, collegeLogo: data.logoUrl });
+      const collegeObj = data?.data || data;
+      if (collegeObj?.name) {
+        updateUserData({ collegeName: collegeObj.name, collegeLogo: collegeObj.logoUrl });
+      }
       toast.success("College profile updated successfully!");
     },
-    onError: () => {
-      toast.error("Failed to update profile.");
+    onError: (err) => {
+      const errorMsg = err?.response?.data?.error?.message || err?.response?.data?.message || err?.message || "Failed to update profile.";
+      toast.error(errorMsg);
     }
   });
 
@@ -167,6 +172,7 @@ export default function Settings() {
                 <div className="col-span-1 md:col-span-2">
                   <Input label="Address" {...register('address')} />
                 </div>
+                <Input label="Website" {...register('website')} placeholder="https://example.edu" />
                 <Input label="Current Academic Year" {...register('academicYear')} placeholder="e.g. 2024-2025" />
                 <Input label="Affiliation Code" {...register('affiliationCode')} />
                 <Input label="AICTE Number" {...register('aicteNumber')} />

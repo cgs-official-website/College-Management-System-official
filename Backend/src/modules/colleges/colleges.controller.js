@@ -1,6 +1,6 @@
 import { prisma } from '../../server.js';
 import bcrypt from 'bcryptjs';
-import { onboardCollegeSchema, updateCollegeStatusSchema } from './colleges.schema.js';
+import { onboardCollegeSchema, updateCollegeStatusSchema, updateCollegeSchema } from './colleges.schema.js';
 
 export const getAllColleges = async (req, res) => {
   try {
@@ -47,6 +47,9 @@ export const onboardCollege = async (req, res) => {
           registrationNo,
           status: 'pending',
           address: fullAddress || null,
+          contactEmail: collegeData.email || null,
+          contactPhone: collegeData.phone || null,
+          website: collegeData.websiteUrl || null,
           affiliationCode: collegeData.affiliationCode || null,
           aicteNumber: collegeData.aicteNumber || null,
           ugcCode: collegeData.ugcRecognition || null,
@@ -151,36 +154,60 @@ export const deleteCollege = async (req, res) => {
 export const getCollege = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Security check: Only allow superadmin or college admin managing their college
+    if (req.user?.role !== 'superadmin' && req.user?.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Requires admin or superadmin role' }
+      });
+    }
+
+    if (req.user?.role !== 'superadmin' && req.user?.collegeId !== id) {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Unauthorized college access' }
+      });
+    }
+
     const college = await prisma.college.findUnique({
       where: { id }
     });
-    if (!college) return res.status(404).json({ error: { message: 'College not found' } });
-    res.json({ data: college });
+    if (!college) return res.status(404).json({ success: false, error: { message: 'College not found' } });
+    res.json({ success: true, data: college });
   } catch (error) {
-    res.status(400).json({ error: { message: error.message } });
+    res.status(400).json({ success: false, error: { message: error.message } });
   }
 };
 
 export const updateCollege = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, address, academicYear, affiliationCode, aicteNumber, logoUrl, ugcCode } = req.body;
-    
+
+    // Security check: Only allow superadmin or college admin managing their college
+    if (req.user?.role !== 'superadmin' && req.user?.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Requires admin or superadmin role' }
+      });
+    }
+
+    if (req.user?.role !== 'superadmin' && req.user?.collegeId !== id) {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Unauthorized college access' }
+      });
+    }
+
+    const validatedData = updateCollegeSchema.parse(req.body);
+
     const college = await prisma.college.update({
       where: { id },
-      data: {
-        name,
-        address,
-        academicYear,
-        affiliationCode,
-        aicteNumber,
-        logoUrl,
-        ugcCode
-      }
+      data: validatedData
     });
-    
-    res.json({ data: college });
+
+    res.json({ success: true, data: college });
   } catch (error) {
-    res.status(400).json({ error: { message: error.message } });
+    res.status(400).json({ success: false, error: { message: error.message } });
   }
 };

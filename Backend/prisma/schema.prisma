@@ -23,6 +23,9 @@ model College {
   pan                 String?
   tan                 String?
   affiliationType     AffiliationType?
+  contactEmail        String?
+  contactPhone        String?
+  website             String?
   id                  String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   admissions          Admission[]
   assignments         Assignment[]

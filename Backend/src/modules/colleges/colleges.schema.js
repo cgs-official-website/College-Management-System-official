@@ -32,3 +32,26 @@ export const onboardCollegeSchema = z.object({
 export const updateCollegeStatusSchema = z.object({
   status: z.enum(['active', 'pending', 'suspended'])
 });
+
+export const updateCollegeSchema = z.object({
+  name: z.string().min(1, 'College name is required').optional(),
+  contactEmail: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+    z.string().email('Invalid contact email address').nullable().optional()
+  ),
+  contactPhone: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+    z.string()
+      .regex(/^[0-9]{10}$/, 'Contact phone must be exactly 10 digits.')
+      .nullable()
+      .optional()
+  ),
+  address: z.string().nullable().optional(),
+  website: z.string().nullable().optional(),
+  academicYear: z.string().nullable().optional(),
+  affiliationCode: z.string().nullable().optional(),
+  aicteNumber: z.string().nullable().optional(),
+  logoUrl: z.string().nullable().optional(),
+  ugcCode: z.string().nullable().optional(),
+});
+
