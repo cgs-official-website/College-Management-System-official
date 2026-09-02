@@ -1,6 +1,7 @@
 import { prisma, logger } from '../../server.js';
 import bcrypt from 'bcryptjs';
 import { assignUserRoleSchema } from '../roles/roles.schema.js';
+import { changePasswordSchema } from './users.schema.js';
 
 export const getUsers = async (req, res) => {
   const { role, collegeId: queryCollegeId } = req.query;
@@ -196,4 +197,49 @@ export const updateProfile = async (req, res) => {
   }
 
   res.json({ success: true, message: 'Profile updated' });
+};
+
+export const changePassword = async (req, res) => {
+  const userId = req.user?.userId || req.user?.id;
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
+
+  const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId }
+  });
+
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      error: { code: 'USER_NOT_FOUND', message: 'User not found' }
+    });
+  }
+
+  const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!isMatch) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_CURRENT_PASSWORD', message: 'Current password is incorrect.' }
+    });
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash }
+  });
+
+  logger.info(`[info] req=${req.id || ''} userId=${userId} Password updated successfully`);
+
+  return res.json({
+    success: true,
+    message: 'Password updated successfully.'
+  });
 };

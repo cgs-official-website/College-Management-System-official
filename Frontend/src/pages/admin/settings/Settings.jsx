@@ -19,6 +19,7 @@ export default function Settings() {
   
   const [showPassword, setShowPassword] = useState(false);
   const [passwordData, setPasswordData] = useState({ current: '', new: '', confirm: '' });
+  const [passwordErrors, setPasswordErrors] = useState({});
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     defaultValues: {
@@ -86,6 +87,59 @@ export default function Settings() {
       toast.error(errorMsg);
     }
   });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async (payload) => {
+      const response = await api.put('/users/change-password', payload);
+      return response?.data || response;
+    },
+    onSuccess: (res) => {
+      toast.success(res?.message || 'Password updated successfully.');
+      setPasswordData({ current: '', new: '', confirm: '' });
+      setPasswordErrors({});
+    },
+    onError: (err) => {
+      const errorMsg = err?.data?.error?.message || err?.response?.data?.error?.message || err?.message || 'Unable to update password. Please try again.';
+      toast.error(errorMsg);
+    }
+  });
+
+  const handlePasswordSubmit = (e) => {
+    e.preventDefault();
+    const errs = {};
+    if (!passwordData.current) {
+      errs.current = 'Current password is required';
+    }
+    if (!passwordData.new) {
+      errs.new = 'New password is required';
+    } else if (passwordData.new.length < 6) {
+      errs.new = 'Password must be at least 6 characters';
+    }
+    if (!passwordData.confirm) {
+      errs.confirm = 'Confirm password is required';
+    } else if (passwordData.new !== passwordData.confirm) {
+      errs.confirm = 'New password and confirm password do not match';
+    }
+
+    if (Object.keys(errs).length > 0) {
+      setPasswordErrors(errs);
+      if (errs.confirm && passwordData.new && passwordData.confirm && passwordData.new !== passwordData.confirm) {
+        toast.error('New password and confirm password do not match');
+      } else if (errs.new && passwordData.new && passwordData.new.length < 6) {
+        toast.error('Password must be at least 6 characters');
+      } else {
+        toast.error('Please fill in all required password fields');
+      }
+      return;
+    }
+
+    setPasswordErrors({});
+    changePasswordMutation.mutate({
+      currentPassword: passwordData.current,
+      newPassword: passwordData.new,
+      confirmPassword: passwordData.confirm
+    });
+  };
 
   const onProfileSubmit = (data) => {
     updateProfileMutation.mutate(data);
@@ -189,20 +243,54 @@ export default function Settings() {
           {activeTab === 'security' && (
             <div className="space-y-6">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white border-b border-slate-200 dark:border-white/10 pb-4">Change Password</h3>
-              <div className="space-y-4 max-w-md">
-                {/* Simplified for demo purposes */}
-                <div className="relative">
-                  <Input label="Current Password" type={showPassword ? "text" : "password"} value={passwordData.current} onChange={(e) => setPasswordData({ ...passwordData, current: e.target.value })} />
-                </div>
-                <Input label="New Password" type={showPassword ? "text" : "password"} value={passwordData.new} onChange={(e) => setPasswordData({ ...passwordData, new: e.target.value })} />
-                <div className="relative">
-                  <Input label="Confirm New Password" type={showPassword ? "text" : "password"} value={passwordData.confirm} onChange={(e) => setPasswordData({ ...passwordData, confirm: e.target.value })} />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-9 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-                <Button className="mt-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl">Update Password</Button>
-              </div>
+              <form onSubmit={handlePasswordSubmit} className="space-y-4 max-w-md">
+                <Input
+                  label="Current Password"
+                  type={showPassword ? "text" : "password"}
+                  value={passwordData.current}
+                  onChange={(e) => {
+                    setPasswordData({ ...passwordData, current: e.target.value });
+                    if (passwordErrors.current) setPasswordErrors(prev => ({ ...prev, current: null }));
+                  }}
+                  error={passwordErrors.current}
+                  rightElement={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  }
+                />
+                <Input
+                  label="New Password"
+                  type={showPassword ? "text" : "password"}
+                  value={passwordData.new}
+                  onChange={(e) => {
+                    setPasswordData({ ...passwordData, new: e.target.value });
+                    if (passwordErrors.new) setPasswordErrors(prev => ({ ...prev, new: null }));
+                  }}
+                  error={passwordErrors.new}
+                />
+                <Input
+                  label="Confirm New Password"
+                  type={showPassword ? "text" : "password"}
+                  value={passwordData.confirm}
+                  onChange={(e) => {
+                    setPasswordData({ ...passwordData, confirm: e.target.value });
+                    if (passwordErrors.confirm) setPasswordErrors(prev => ({ ...prev, confirm: null }));
+                  }}
+                  error={passwordErrors.confirm}
+                />
+                <Button
+                  type="submit"
+                  isLoading={changePasswordMutation.isPending}
+                  className="mt-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl"
+                >
+                  {changePasswordMutation.isPending ? 'Updating...' : 'Update Password'}
+                </Button>
+              </form>
             </div>
           )}
         </div>
