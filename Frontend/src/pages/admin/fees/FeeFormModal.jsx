@@ -35,21 +35,33 @@ export function FeeFormModal({ isOpen, onClose, onSubmit, initialData = null, is
     }
   }, [isOpen, initialData, reset]);
 
+  const getStudentLabel = (s) => {
+    const fullName = s.name || `${s.firstName || ''} ${s.lastName || ''}`.trim() || s.email || 'Student';
+    const classInfo = s.class ? ` (Class ${s.class}${s.section ? `-${s.section}` : ''})` : '';
+    return `${fullName}${classInfo}`;
+  };
+
   const onFormSubmit = (data) => {
-    // Attach the student's name for easier display later
     const selectedStudent = students.find(s => s.id === data.studentId);
+    const fullName = selectedStudent
+      ? (selectedStudent.name || `${selectedStudent.firstName || ''} ${selectedStudent.lastName || ''}`.trim() || 'Student')
+      : 'Student';
+    const classInfo = selectedStudent?.class
+      ? `${selectedStudent.class}${selectedStudent.section ? `-${selectedStudent.section}` : ''}`
+      : '';
+
     const finalData = {
       ...data,
       amount: Number(data.amount),
-      studentName: selectedStudent ? `${selectedStudent.firstName} ${selectedStudent.lastName}` : 'Unknown Student',
-      studentClass: selectedStudent ? `${selectedStudent.class}-${selectedStudent.section}` : ''
+      studentName: fullName,
+      studentClass: classInfo
     };
     onSubmit(finalData);
   };
 
   const studentOptions = students.map(s => ({
     value: s.id,
-    label: `${s.firstName} ${s.lastName} (Class ${s.class}-${s.section})`
+    label: getStudentLabel(s)
   }));
 
   return (
