@@ -1,26 +1,28 @@
 import express from 'express';
 import { authenticate } from '../../middleware/authenticate.js';
+import { resolveTenant } from '../../middleware/resolveTenant.js';
 import { prisma } from '../../server.js';
 import { z } from 'zod';
 
 const router = express.Router();
 
 const departmentSchema = z.object({
-  name: z.string().min(2, "Department name must be at least 2 characters"),
-  code: z.string().min(2, "Department code must be at least 2 characters"),
-  hodUserId: z.string().uuid().optional().nullable()
+  name: z.string().min(2, "Department name must be at least 2 characters").trim(),
+  code: z.string().min(2, "Department code must be at least 2 characters").trim(),
+  hodUserId: z.string().uuid("Invalid HOD User ID").optional().nullable().or(z.literal(''))
 });
 
-// All routes require authentication
+// All routes require authentication and standard tenant resolution
 router.use(authenticate);
+router.use(resolveTenant);
 
-// Middleware to enforce collegeId scoping
-router.use((req, res, next) => {
-  if (!req.tenant || !req.tenant.collegeId) {
-    return res.status(403).json({ error: 'Tenant context missing' });
+// Helper function to extract user-friendly error message
+const formatErrorMessage = (error, fallback = 'An unexpected error occurred') => {
+  if (error instanceof z.ZodError) {
+    return error.issues?.[0]?.message || 'Validation failed';
   }
-  next();
-});
+  return error?.message || fallback;
+};
 
 // Get all departments for the college
 router.get('/', async (req, res) => {
@@ -31,7 +33,7 @@ router.get('/', async (req, res) => {
     });
     res.json({ data: departments });
   } catch (error) {
-    res.status(500).json({ error: { message: error.message } });
+    res.status(500).json({ error: { message: formatErrorMessage(error, 'Failed to fetch departments') } });
   }
 });
 
@@ -39,31 +41,47 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const data = departmentSchema.parse(req.body);
-    
-    // Check if code already exists in this college
-    const existing = await prisma.department.findFirst({
+    const code = data.code.trim().toUpperCase();
+    const name = data.name.trim();
+    const hodUserId = data.hodUserId && data.hodUserId !== '' ? data.hodUserId : null;
+    const collegeId = req.tenant.collegeId;
+
+    // Check if code already exists in this college (case-insensitive)
+    const existingCode = await prisma.department.findFirst({
       where: { 
-        collegeId: req.tenant.collegeId,
-        code: data.code
+        collegeId,
+        code: { equals: code, mode: 'insensitive' }
       }
     });
 
-    if (existing) {
-      return res.status(400).json({ error: { message: 'Department code already exists' } });
+    if (existingCode) {
+      return res.status(400).json({ error: { message: `Department code "${code}" already exists` } });
+    }
+
+    // Check if department name already exists in this college (case-insensitive)
+    const existingName = await prisma.department.findFirst({
+      where: { 
+        collegeId,
+        name: { equals: name, mode: 'insensitive' }
+      }
+    });
+
+    if (existingName) {
+      return res.status(400).json({ error: { message: `Department "${name}" already exists` } });
     }
 
     const department = await prisma.department.create({
       data: {
-        name: data.name,
-        code: data.code,
-        hodUserId: data.hodUserId || null,
-        collegeId: req.tenant.collegeId
+        name,
+        code,
+        hodUserId,
+        collegeId
       }
     });
 
     res.status(201).json({ data: department });
   } catch (error) {
-    res.status(400).json({ error: { message: error.message } });
+    res.status(400).json({ error: { message: formatErrorMessage(error, 'Failed to create department') } });
   }
 });
 
@@ -81,18 +99,20 @@ router.post('/bulk', async (req, res) => {
 
     for (const row of data) {
       try {
-        const name = row['Department_Name']?.toString().trim();
-        const code = row['Department_Code']?.toString().trim();
+        const name = (row['Department_Name'] || row['Department Name'] || row['name'])?.toString().trim();
+        const rawCode = (row['Department_Code'] || row['Department Code'] || row['code'])?.toString().trim();
 
-        if (!name || !code) {
+        if (!name || !rawCode) {
           failed++;
           continue;
         }
 
+        const code = rawCode.toUpperCase();
+
         const existing = await prisma.department.findFirst({
           where: {
             collegeId,
-            code
+            code: { equals: code, mode: 'insensitive' }
           }
         });
 
@@ -114,7 +134,7 @@ router.post('/bulk', async (req, res) => {
     
     return res.json({ data: { successful, failed } });
   } catch (error) {
-    res.status(500).json({ error: { message: error.message } });
+    res.status(500).json({ error: { message: formatErrorMessage(error, 'Failed to bulk import departments') } });
   }
 });
 
@@ -123,28 +143,58 @@ router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const data = departmentSchema.parse(req.body);
+    const code = data.code.trim().toUpperCase();
+    const name = data.name.trim();
+    const hodUserId = data.hodUserId && data.hodUserId !== '' ? data.hodUserId : null;
+    const collegeId = req.tenant.collegeId;
 
     // Verify ownership
     const existing = await prisma.department.findFirst({
-      where: { id, collegeId: req.tenant.collegeId }
+      where: { id, collegeId }
     });
 
     if (!existing) {
       return res.status(404).json({ error: { message: 'Department not found' } });
     }
 
+    // Check for duplicate code on other departments
+    const duplicateCode = await prisma.department.findFirst({
+      where: {
+        collegeId,
+        code: { equals: code, mode: 'insensitive' },
+        id: { not: id }
+      }
+    });
+
+    if (duplicateCode) {
+      return res.status(400).json({ error: { message: `Department code "${code}" is already in use by another department` } });
+    }
+
+    // Check for duplicate name on other departments
+    const duplicateName = await prisma.department.findFirst({
+      where: {
+        collegeId,
+        name: { equals: name, mode: 'insensitive' },
+        id: { not: id }
+      }
+    });
+
+    if (duplicateName) {
+      return res.status(400).json({ error: { message: `Department "${name}" is already in use by another department` } });
+    }
+
     const department = await prisma.department.update({
       where: { id },
       data: {
-        name: data.name,
-        code: data.code,
-        hodUserId: data.hodUserId || null,
+        name,
+        code,
+        hodUserId,
       }
     });
 
     res.json({ data: department });
   } catch (error) {
-    res.status(400).json({ error: { message: error.message } });
+    res.status(400).json({ error: { message: formatErrorMessage(error, 'Failed to update department') } });
   }
 });
 
@@ -152,14 +202,31 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const collegeId = req.tenant.collegeId;
 
     // Verify ownership
     const existing = await prisma.department.findFirst({
-      where: { id, collegeId: req.tenant.collegeId }
+      where: { id, collegeId }
     });
 
     if (!existing) {
       return res.status(404).json({ error: { message: 'Department not found' } });
+    }
+
+    // Check if courses are attached
+    const courseCount = await prisma.course.count({ where: { departmentId: id } });
+    if (courseCount > 0) {
+      return res.status(400).json({ 
+        error: { message: `Cannot delete department: ${courseCount} course(s) are attached to it. Please reassign or delete the courses first.` } 
+      });
+    }
+
+    // Check if students are attached
+    const studentCount = await prisma.student.count({ where: { departmentId: id } });
+    if (studentCount > 0) {
+      return res.status(400).json({ 
+        error: { message: `Cannot delete department: ${studentCount} student(s) are attached to it.` } 
+      });
     }
 
     // Attempt to delete
@@ -167,7 +234,7 @@ router.delete('/:id', async (req, res) => {
 
     res.json({ data: { success: true } });
   } catch (error) {
-    res.status(400).json({ error: { message: error.message } });
+    res.status(400).json({ error: { message: formatErrorMessage(error, 'Failed to delete department') } });
   }
 });
 

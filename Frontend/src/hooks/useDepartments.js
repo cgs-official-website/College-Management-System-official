@@ -19,7 +19,11 @@ export const useDepartments = () => {
       return response.data;
     },
     onSuccess: () => {
+      toast.success('Department created successfully!');
       queryClient.invalidateQueries({ queryKey: ['departments'] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to create department');
     }
   });
 
@@ -29,7 +33,11 @@ export const useDepartments = () => {
       return response.data;
     },
     onSuccess: () => {
+      toast.success('Department updated successfully!');
       queryClient.invalidateQueries({ queryKey: ['departments'] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to update department');
     }
   });
 
@@ -39,7 +47,11 @@ export const useDepartments = () => {
       return response.data;
     },
     onSuccess: () => {
+      toast.success('Department deleted successfully!');
       queryClient.invalidateQueries({ queryKey: ['departments'] });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to delete department');
     }
   });
 

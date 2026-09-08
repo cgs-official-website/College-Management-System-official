@@ -17,9 +17,15 @@ export default function DepartmentsTab({ onSelect }) {
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
 
   const filtered = departments.filter(d => 
-    d.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    d.code.toLowerCase().includes(searchTerm.toLowerCase())
+    (d.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (d.code || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleCloseForm = () => {
+    setIsFormOpen(false);
+    setEditingDept(null);
+    reset({ name: '', code: '' });
+  };
 
   const handleOpenAdd = () => {
     setEditingDept(null);
@@ -34,17 +40,30 @@ export default function DepartmentsTab({ onSelect }) {
   };
 
   const onSubmit = async (data) => {
-    if (editingDept) {
-      await updateDepartment.mutateAsync({ id: editingDept.id, data });
-    } else {
-      await createDepartment.mutateAsync(data);
+    try {
+      const payload = {
+        name: data.name?.trim(),
+        code: data.code?.trim().toUpperCase(),
+      };
+
+      if (editingDept) {
+        await updateDepartment.mutateAsync({ id: editingDept.id, data: payload });
+      } else {
+        await createDepartment.mutateAsync(payload);
+      }
+      handleCloseForm();
+    } catch {
+      // Error is surfaced via mutation onError toast
     }
-    setIsFormOpen(false);
   };
 
   const handleDelete = async (id) => {
-    if (await confirm({ message: "Are you sure you want to delete this department? This might fail if it has active courses attached." })) {
-      await deleteDepartment.mutateAsync(id);
+    if (await confirm({ message: "Are you sure you want to delete this department? This will fail if active courses or students are attached." })) {
+      try {
+        await deleteDepartment.mutateAsync(id);
+      } catch {
+        // Error is surfaced via mutation onError toast
+      }
     }
   };
 
@@ -89,7 +108,7 @@ export default function DepartmentsTab({ onSelect }) {
               />
             </div>
             <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={handleCloseForm}>Cancel</Button>
               <Button type="submit" isLoading={createDepartment.isPending || updateDepartment.isPending}>
                 Save Department
               </Button>
