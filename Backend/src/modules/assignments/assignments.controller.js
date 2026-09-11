@@ -1,4 +1,4 @@
-import { prisma } from '../../server.js';
+import { prisma } from '../../lib/prisma.js';
 import { z } from 'zod';
 
 const createAssignmentSchema = z.object({

@@ -848,11 +848,12 @@ export const uploadStudentProfileImage = async (req, res) => {
     const collegeId = req.student.collegeId;
 
     let buffer = null;
+    const uploadedFile = req.file || (Array.isArray(req.files) ? req.files[0] : null);
 
-    if (req.file && req.file.buffer) {
-      buffer = req.file.buffer;
-    } else if (req.body?.profileImage || req.body?.image || req.body?.data) {
-      const payload = req.body.profileImage || req.body.image || req.body;
+    if (uploadedFile && uploadedFile.buffer) {
+      buffer = uploadedFile.buffer;
+    } else if (req.body?.profileImage || req.body?.image || req.body?.data || req.body?.profileImageData) {
+      const payload = req.body.profileImage || req.body.image || req.body.profileImageData || req.body.data || req.body;
       buffer = extractBufferFromBase64Payload(payload);
     } else {
       return res.status(400).json({

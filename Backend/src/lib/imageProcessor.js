@@ -2,7 +2,7 @@ let sharpInstance = undefined;
 
 async function getSharp() {
   if (sharpInstance !== undefined) {
-    // return sharpInstance;
+    return sharpInstance;
   }
   try {
     const mod = await import('sharp');
@@ -145,28 +145,32 @@ export function extractBufferFromBase64Payload(input) {
   let base64String = '';
 
   if (typeof input === 'string') {
-    // Check if Data URI: data:image/...;base64,...
-    const matches = input.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    if (matches && matches[2]) {
-      base64String = matches[2];
+    if (input.includes(';base64,')) {
+      base64String = input.split(';base64,')[1];
     } else {
       base64String = input;
     }
-  } else if (typeof input === 'object' && input.data) {
-    base64String = input.data;
-  } else {
+  } else if (typeof input === 'object' && input !== null) {
+    const raw = input.data || input.base64 || input.image || input.profileImage || input.profileImageData || '';
+    if (typeof raw === 'string') {
+      if (raw.includes(';base64,')) {
+        base64String = raw.split(';base64,')[1];
+      } else {
+        base64String = raw;
+      }
+    }
+  }
+
+  if (!base64String) {
     const error = new Error('Invalid image payload structure');
     error.status = 400;
     throw error;
   }
 
-  // Basic Base64 validation
-  const cleanBase64 = base64String.trim();
-  const base64Regex = /^[A-Za-z0-9+/=]+$/;
-  if (!cleanBase64 || cleanBase64.length % 4 !== 0 || !base64Regex.test(cleanBase64)) {
-    const error = new Error('Malformed Base64 image data');
-    error.status = 400;
-    throw error;
+  // Clean whitespace, convert URL-safe base64, and pad if needed
+  let cleanBase64 = base64String.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
+  while (cleanBase64.length % 4 !== 0) {
+    cleanBase64 += '=';
   }
 
   try {

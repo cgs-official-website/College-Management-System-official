@@ -285,10 +285,11 @@ export const useUploadStudentProfileImage = () => {
       if (fileOrFormData instanceof File) {
         payload = new FormData();
         payload.append('profileImage', fileOrFormData);
-        headers['Content-Type'] = 'multipart/form-data';
       }
 
-      const response = await api.post('/student/profile/image', payload, { headers });
+      const response = await api.post('/student/profile/image', payload, {
+        headers: payload instanceof FormData ? {} : headers
+      });
       return response.data;
     },
     onSuccess: () => {

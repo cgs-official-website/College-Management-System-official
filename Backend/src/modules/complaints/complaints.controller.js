@@ -1,4 +1,4 @@
-import { prisma } from '../../server.js';
+import { prisma } from '../../lib/prisma.js';
 
 export const getItems = async (req, res) => {
   try {

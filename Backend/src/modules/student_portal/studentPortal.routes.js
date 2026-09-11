@@ -45,8 +45,8 @@ router.use(authenticate, resolveStudent);
 router.get('/me', catchAsync(getStudentProfile));
 router.get('/profile', catchAsync(getStudentProfile));
 router.get('/profile/image', catchAsync(getStudentProfileImage));
-router.post('/profile/image', upload.single('profileImage'), catchAsync(uploadStudentProfileImage));
-router.put('/profile/image', upload.single('profileImage'), catchAsync(uploadStudentProfileImage));
+router.post('/profile/image', upload.any(), catchAsync(uploadStudentProfileImage));
+router.put('/profile/image', upload.any(), catchAsync(uploadStudentProfileImage));
 router.delete('/profile/image', catchAsync(deleteStudentProfileImage));
 
 router.get('/dashboard', catchAsync(getStudentDashboard));

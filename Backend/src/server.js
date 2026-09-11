@@ -1,13 +1,9 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import pino from 'pino';
-import { PrismaClient } from '@prisma/client';
 import { redis } from './lib/cache.js';
 import * as Sentry from '@sentry/node';
 import helmet from 'helmet';
-import pg from 'pg';
-import { PrismaPg } from '@prisma/adapter-pg';
 
 // ---------------------------------------------------------
 // STARTUP ENVIRONMENT VALIDATION
@@ -15,13 +11,8 @@ import { PrismaPg } from '@prisma/adapter-pg';
 const REQUIRED_ENV_VARS = ['DATABASE_URL', 'JWT_SECRET'];
 const missingVars = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
 
-export const logger = pino({
-  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
-  transport: process.env.NODE_ENV === 'production' ? undefined : {
-    target: 'pino-pretty',
-    options: { colorize: true }
-  }
-});
+import { logger } from './lib/logger.js';
+export { logger } from './lib/logger.js';
 
 if (missingVars.length > 0) {
   logger.error(`[fatal] Missing required environment variables: ${missingVars.join(', ')}. Shutting down.`);
@@ -36,11 +27,8 @@ if (!process.env.SENTRY_DSN) {
   logger.warn('[warn] SENTRY_DSN not provided. Sentry telemetry disabled in this environment.');
 }
 
-const connectionString = process.env.DATABASE_URL;
-const pool = new pg.Pool({ connectionString });
-const adapter = new PrismaPg(pool);
-
-export const prisma = new PrismaClient({ adapter });
+import { prisma } from './lib/prisma.js';
+export { prisma };
 
 const app = express();
 

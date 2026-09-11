@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { redis, redisKeys } from '../lib/cache.js';
-import { prisma, logger } from '../server.js';
+import { prisma } from '../lib/prisma.js';
+import { logger } from '../lib/logger.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 
