@@ -5,12 +5,17 @@ import { prisma, logger } from '../server.js';
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 
 export const authenticate = async (req, res, next) => {
+  let token = null;
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Missing or invalid authorization token' } });
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (req.query?.token) {
+    token = req.query.token;
   }
 
-  const token = authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Missing or invalid authorization token' } });
+  }
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);

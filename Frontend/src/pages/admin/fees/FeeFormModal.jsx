@@ -41,6 +41,7 @@ export function FeeFormModal({ isOpen, onClose, onSubmit, initialData = null, is
     const finalData = {
       ...data,
       amount: Number(data.amount),
+      amountDue: Number(data.amount),
       studentName: selectedStudent ? `${selectedStudent.firstName} ${selectedStudent.lastName}` : 'Unknown Student',
       studentClass: selectedStudent ? `${selectedStudent.class}-${selectedStudent.section}` : ''
     };

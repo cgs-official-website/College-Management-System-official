@@ -22,7 +22,7 @@ export const getFees = async (req, res) => {
           id: true,
           rollNumber: true,
           admissionNumber: true,
-          user: { select: { email: true } }
+          user: { select: { name: true, email: true } }
         }
       },
       feeStructure: true,
@@ -30,32 +30,74 @@ export const getFees = async (req, res) => {
     orderBy: { createdAt: 'desc' }
   });
 
-  res.json({ success: true, data: fees });
+  const formatted = fees.map(f => ({
+    ...f,
+    amount: f.amountDue,
+    feeType: f.feeStructure?.name || 'Tuition Fee',
+    studentName: f.student?.user?.name || `Student ${f.student?.admissionNumber || ''}`.trim()
+  }));
+
+  res.json({ success: true, data: formatted });
 };
 
 export const createFee = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const actorId = req.user?.id || req.user?.userId;
-  const { studentId, feeStructureId, amountDue } = req.body;
+  const { studentId, feeStructureId, amountDue, amount, feeType, status, amountPaid } = req.body;
+
+  const dueAmount = Number(amountDue !== undefined ? amountDue : (amount !== undefined ? amount : 0));
+
+  let finalFeeStructureId = feeStructureId;
+  if (!finalFeeStructureId) {
+    let fs = await prisma.feeStructure.findFirst({
+      where: { collegeId }
+    });
+    if (!fs) {
+      fs = await prisma.feeStructure.create({
+        data: {
+          collegeId,
+          semester: 1,
+          totalAmount: dueAmount || 50000,
+          dueDate: new Date(Date.now() + 30 * 24 * 3600 * 1000)
+        }
+      });
+    }
+    finalFeeStructureId = fs.id;
+  }
+
+  const initialStatus = status || 'pending';
+  const initialPaid = amountPaid !== undefined ? Number(amountPaid) : (initialStatus === 'paid' ? dueAmount : 0);
 
   const fee = await prisma.fee.create({
     data: {
       collegeId,
       studentId,
-      feeStructureId,
-      amountDue: Number(amountDue),
+      feeStructureId: finalFeeStructureId,
+      amountDue: dueAmount,
+      amountPaid: initialPaid,
+      status: initialStatus
+    },
+    include: {
+      feeStructure: true
     }
   });
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} feeId=${fee.id} actor=${actorId} Created fee record`);
-  res.status(201).json({ success: true, data: fee });
+  res.status(201).json({
+    success: true,
+    data: {
+      ...fee,
+      amount: fee.amountDue,
+      feeType: fee.feeStructure?.name || 'Tuition Fee'
+    }
+  });
 };
 
 export const updateFee = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const actorId = req.user?.id || req.user?.userId;
   const { id } = req.params;
-  const { status, amountPaid } = req.body;
+  const { status, amountPaid, amount, amountDue } = req.body;
 
   const existing = await prisma.fee.findFirst({
     where: { id, collegeId }
@@ -65,16 +107,36 @@ export const updateFee = async (req, res) => {
     return res.status(404).json({ success: false, error: { code: 'FEE_NOT_FOUND', message: 'Fee record not found' } });
   }
 
+  const updateData = {};
+  if (status) updateData.status = status;
+  if (amountDue !== undefined) {
+    updateData.amountDue = Number(amountDue);
+  } else if (amount !== undefined) {
+    updateData.amountDue = Number(amount);
+  }
+  if (amountPaid !== undefined) {
+    updateData.amountPaid = Number(amountPaid);
+  } else if (status === 'paid') {
+    updateData.amountPaid = updateData.amountDue !== undefined ? updateData.amountDue : existing.amountDue;
+  }
+
   const fee = await prisma.fee.update({
     where: { id },
-    data: {
-      ...(status && { status }),
-      ...(amountPaid !== undefined && { amountPaid: Number(amountPaid) })
+    data: updateData,
+    include: {
+      feeStructure: true
     }
   });
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} feeId=${id} actor=${actorId} Updated fee record`);
-  res.json({ success: true, data: fee });
+  res.json({
+    success: true,
+    data: {
+      ...fee,
+      amount: fee.amountDue,
+      feeType: fee.feeStructure?.name || 'Tuition Fee'
+    }
+  });
 };
 
 export const deleteFee = async (req, res) => {

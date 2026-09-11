@@ -667,3 +667,101 @@ export const toggleRegistrationLink = async (req, res) => {
     message: `Student registration link has been ${isActive ? 'enabled' : 'disabled'}.`
   });
 };
+
+export const getAllStudentDocuments = async (req, res) => {
+  try {
+    const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+    if (!collegeId) {
+      return res.status(400).json({ success: false, error: { message: 'College ID is required' } });
+    }
+
+    const students = await prisma.student.findMany({
+      where: { collegeId },
+      select: {
+        id: true,
+        admissionNumber: true,
+        rollNumber: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
+        department: {
+          select: {
+            id: true,
+            name: true,
+            code: true
+          }
+        },
+        section: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        customFields: true
+      }
+    });
+
+    const allDocs = [];
+
+    // Also fetch any institutional documents
+    const institutionalDocs = await prisma.documentVault.findMany({
+      where: { collegeId }
+    });
+
+    for (const instDoc of institutionalDocs) {
+      allDocs.push({
+        id: instDoc.id,
+        studentId: null,
+        studentName: 'Institutional / All Students',
+        studentEmail: '',
+        admissionNumber: 'UNIVERSAL',
+        rollNumber: '',
+        department: 'Institutional Vault',
+        section: '',
+        fileName: instDoc.fileName,
+        documentType: 'Institutional Certificate',
+        fileUrl: '#',
+        fileSize: 'Verified',
+        isPersonal: false,
+        uploadedAt: new Date().toISOString()
+      });
+    }
+
+    for (const student of students) {
+      const customFields = typeof student.customFields === 'object' && student.customFields !== null
+        ? student.customFields
+        : {};
+      const docs = Array.isArray(customFields.documents) ? customFields.documents : [];
+
+      for (const doc of docs) {
+        allDocs.push({
+          id: doc.id,
+          studentId: student.id,
+          studentName: student.user?.name || 'Student',
+          studentEmail: student.user?.email || '',
+          admissionNumber: student.admissionNumber || 'N/A',
+          rollNumber: student.rollNumber || '',
+          department: student.department?.name || 'Academic',
+          section: student.section?.name || '',
+          fileName: doc.fileName || 'Document',
+          documentType: doc.documentType || 'Personal Document',
+          fileUrl: doc.fileUrl,
+          fileSize: doc.fileSize || 'N/A',
+          isPersonal: true,
+          uploadedAt: doc.uploadedAt || student.createdAt
+        });
+      }
+    }
+
+    allDocs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+
+    res.json({ success: true, data: allDocs });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};

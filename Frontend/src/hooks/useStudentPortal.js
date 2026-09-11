@@ -6,7 +6,7 @@ export const useStudentProfile = () => {
     queryKey: ['student', 'profile'],
     queryFn: async () => {
       const response = await api.get('/student/profile');
-      return response.data;
+      return response;
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -17,7 +17,7 @@ export const useStudentDashboard = () => {
     queryKey: ['student', 'dashboard'],
     queryFn: async () => {
       const response = await api.get('/student/dashboard');
-      return response.data;
+      return response;
     },
     staleTime: 2 * 60 * 1000,
   });
@@ -28,7 +28,7 @@ export const useStudentCourses = () => {
     queryKey: ['student', 'courses'],
     queryFn: async () => {
       const response = await api.get('/student/courses');
-      return response.data;
+      return response;
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -41,7 +41,7 @@ export const useStudentAssignments = () => {
     queryKey: ['student', 'assignments'],
     queryFn: async () => {
       const response = await api.get('/student/assignments');
-      return response.data;
+      return response;
     },
     staleTime: 2 * 60 * 1000,
   });
@@ -69,7 +69,7 @@ export const useStudentAttendance = () => {
     queryKey: ['student', 'attendance'],
     queryFn: async () => {
       const response = await api.get('/student/attendance');
-      return response.data;
+      return response;
     },
     staleTime: 2 * 60 * 1000,
   });
@@ -82,7 +82,7 @@ export const useStudentLeaveRequests = () => {
     queryKey: ['student', 'leave-requests'],
     queryFn: async () => {
       const response = await api.get('/student/leave-requests');
-      return response.data;
+      return response;
     },
     staleTime: 2 * 60 * 1000,
   });
@@ -109,7 +109,7 @@ export const useStudentTimetable = () => {
     queryKey: ['student', 'timetable'],
     queryFn: async () => {
       const response = await api.get('/student/timetable');
-      return response.data;
+      return response;
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -120,7 +120,7 @@ export const useStudentExams = () => {
     queryKey: ['student', 'exams'],
     queryFn: async () => {
       const response = await api.get('/student/exams');
-      return response.data;
+      return response;
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -131,7 +131,7 @@ export const useStudentResults = () => {
     queryKey: ['student', 'results'],
     queryFn: async () => {
       const response = await api.get('/student/results');
-      return response.data;
+      return response;
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -142,7 +142,7 @@ export const useStudentFees = () => {
     queryKey: ['student', 'fees'],
     queryFn: async () => {
       const response = await api.get('/student/fees');
-      return response.data;
+      return response;
     },
     staleTime: 2 * 60 * 1000,
   });
@@ -153,7 +153,7 @@ export const useStudentNotices = () => {
     queryKey: ['student', 'notices'],
     queryFn: async () => {
       const response = await api.get('/student/notices');
-      return response.data;
+      return response;
     },
     staleTime: 2 * 60 * 1000,
   });
@@ -167,7 +167,7 @@ export const useStudentLibrary = (search = '', category = '') => {
       if (search) params.append('search', search);
       if (category) params.append('category', category);
       const response = await api.get(`/student/library?${params.toString()}`);
-      return response.data;
+      return response;
     },
     staleTime: 3 * 60 * 1000,
   });
@@ -178,7 +178,7 @@ export const useStudentPlacements = () => {
     queryKey: ['student', 'placements'],
     queryFn: async () => {
       const response = await api.get('/student/placements');
-      return response.data;
+      return response;
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -191,7 +191,7 @@ export const useStudentComplaints = () => {
     queryKey: ['student', 'complaints'],
     queryFn: async () => {
       const response = await api.get('/student/complaints');
-      return response.data;
+      return response;
     },
     staleTime: 1 * 60 * 1000,
   });
@@ -218,7 +218,7 @@ export const useStudentHostel = () => {
     queryKey: ['student', 'hostel'],
     queryFn: async () => {
       const response = await api.get('/student/hostel');
-      return response.data;
+      return response;
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -229,7 +229,7 @@ export const useStudentTransport = () => {
     queryKey: ['student', 'transport'],
     queryFn: async () => {
       const response = await api.get('/student/transport');
-      return response.data;
+      return response;
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -240,9 +240,37 @@ export const useStudentDocuments = () => {
     queryKey: ['student', 'documents'],
     queryFn: async () => {
       const response = await api.get('/student/documents');
-      return response.data;
+      return response;
     },
     staleTime: 5 * 60 * 1000,
+  });
+};
+
+export const useUploadStudentDocument = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload) => {
+      const response = await api.post('/student/documents', payload);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['student', 'documents'] });
+    }
+  });
+};
+
+export const useDeleteStudentDocument = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id) => {
+      const response = await api.delete(`/student/documents/${id}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['student', 'documents'] });
+    }
   });
 };
 

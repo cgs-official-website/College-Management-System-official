@@ -71,3 +71,8 @@ CMS File Format/
 
 # Root files
 /package-lock.json
+
+# Test outputs
+.playwright-mcp/
+**/test-results/
+test-results/

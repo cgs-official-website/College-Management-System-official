@@ -174,18 +174,49 @@ export const updateProfile = async (req, res) => {
   }
 
   const { firstName, lastName, phone, designation } = req.body;
-  if (firstName || lastName || phone !== undefined) {
+
+  if (phone !== undefined && phone !== null && phone !== '') {
+    const cleanPhone = String(phone).replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_PHONE', message: 'Mobile Phone Number must be exactly 10 digits' }
+      });
+    }
+  }
+
+  if (firstName || lastName) {
     const fullName = `${firstName || ''} ${lastName || ''}`.trim() || user.name;
     await prisma.user.update({
       where: { id: userId },
       data: { 
-        name: fullName,
-        phone: phone 
+        name: fullName
       }
     });
   }
 
-  if (designation && user.role === 'teacher' || user.role === 'hod') {
+  if (phone !== undefined) {
+    const cleanPhone = phone ? String(phone).replace(/\D/g, '') : null;
+    if (user.role === 'student') {
+      const studentProfile = await prisma.student.findFirst({ where: { userId } });
+      if (studentProfile) {
+        await prisma.student.update({
+          where: { id: studentProfile.id },
+          data: { studentMobile: cleanPhone }
+        });
+      }
+    } else if (user.role === 'teacher' || user.role === 'hod') {
+      const teacherProfile = await prisma.teacher.findFirst({ where: { userId } });
+      if (teacherProfile) {
+        await prisma.teacher.update({
+          where: { id: teacherProfile.id },
+          data: { mobileNumber: cleanPhone }
+        });
+      }
+    }
+  }
+
+  if (designation && (user.role === 'teacher' || user.role === 'hod')) {
     const teacherProfile = await prisma.teacher.findFirst({ where: { userId } });
     if (teacherProfile) {
       await prisma.teacher.update({

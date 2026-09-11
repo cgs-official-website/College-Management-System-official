@@ -186,12 +186,27 @@ export const scheduleSlot = async (req, res) => {
     targetCourseId = existingCourse.id;
   }
 
+  let targetDeptId = defaults.deptId;
+  let targetSectionId = defaults.sectionId;
+  if (targetCourseId) {
+    const courseObj = await prisma.course.findUnique({
+      where: { id: targetCourseId },
+      include: { sections: true }
+    });
+    if (courseObj) {
+      if (courseObj.departmentId) targetDeptId = courseObj.departmentId;
+      if (courseObj.sections && courseObj.sections.length > 0) {
+        targetSectionId = courseObj.sections[0].id;
+      }
+    }
+  }
+
   const slot = await prisma.timetableSlot.create({
     data: {
       collegeId,
-      departmentId: defaults.deptId,
+      departmentId: targetDeptId,
       courseId: targetCourseId,
-      sectionId: defaults.sectionId,
+      sectionId: targetSectionId,
       teacherId: payload.teacherId || defaults.teacherId,
       dayOfWeek: dayInt,
       startTime: payload.startTime,

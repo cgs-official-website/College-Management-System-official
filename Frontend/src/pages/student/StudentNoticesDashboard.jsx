@@ -5,7 +5,8 @@ import { useStudentNotices } from '../../hooks/useStudentPortal';
 
 const StudentNoticesDashboard = () => {
   const { data: noticesData, isLoading } = useStudentNotices();
-  const notices = noticesData?.data || [];
+  const rawNotices = noticesData?.data ?? noticesData;
+  const notices = Array.isArray(rawNotices) ? rawNotices : [];
 
   if (isLoading) {
     return (

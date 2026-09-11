@@ -27,6 +27,20 @@ export const useComplaints = () => {
     }
   });
 
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, ...data }) => {
+      const response = await api.patch(`/complaints/${id}`, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['complaints']);
+      toast.success('Complaint status updated successfully');
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.error?.message || 'Failed to update complaint');
+    }
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id) => {
       await api.delete(`/complaints/${id}`);
@@ -45,6 +59,7 @@ export const useComplaints = () => {
     isLoading: query.isLoading,
     isError: query.isError,
     createItem: createMutation.mutateAsync,
+    updateItem: updateMutation.mutateAsync,
     deleteItem: deleteMutation.mutateAsync
   };
 };

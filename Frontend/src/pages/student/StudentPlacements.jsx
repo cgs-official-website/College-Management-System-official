@@ -5,7 +5,8 @@ import { useStudentPlacements } from '../../hooks/useStudentPortal';
 
 const StudentPlacements = () => {
   const { data: placementsData, isLoading } = useStudentPlacements();
-  const drives = placementsData?.data || [];
+  const rawDrives = placementsData?.data ?? placementsData;
+  const drives = Array.isArray(rawDrives) ? rawDrives : [];
 
   const totalDrives = drives.length;
   const upcomingDrives = drives.filter(d => d.status === 'upcoming').length;

@@ -12,7 +12,8 @@ import {
   bulkImportStudents,
   getRegistrationLink,
   regenerateRegistrationLink,
-  toggleRegistrationLink
+  toggleRegistrationLink,
+  getAllStudentDocuments
 } from './students.controller.js';
 
 const router = Router();
@@ -23,6 +24,9 @@ router.use(authenticate, resolveTenant);
 router.get('/registration-link', requirePermission('students', 'read'), catchAsync(getRegistrationLink));
 router.post('/registration-link/regenerate', requirePermission('students', 'update'), catchAsync(regenerateRegistrationLink));
 router.patch('/registration-link/toggle', requirePermission('students', 'update'), catchAsync(toggleRegistrationLink));
+
+// Student documents for Admin
+router.get('/all-documents', requirePermission('students', 'read'), catchAsync(getAllStudentDocuments));
 
 router.get('/', requirePermission('students', 'read'), catchAsync(getStudents));
 router.get('/:id', requirePermission('students', 'read'), catchAsync(getStudentById));

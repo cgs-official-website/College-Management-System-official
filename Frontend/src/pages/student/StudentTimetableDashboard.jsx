@@ -16,8 +16,9 @@ const StudentTimetableDashboard = () => {
   const { data: timetableData, isLoading } = useStudentTimetable();
   const [activeDay, setActiveDay] = useState(new Date().getDay() || 1); // default to today (or Mon if Sun)
 
-  const slots = timetableData?.data || [];
-  const currentDaySlots = slots.filter(s => s.dayOfWeek === activeDay);
+  const rawSlots = timetableData?.data ?? timetableData;
+  const slots = Array.isArray(rawSlots) ? rawSlots : [];
+  const currentDaySlots = slots.filter(s => Number(s.dayOfWeek) === Number(activeDay) || s.dayOfWeek === activeDay);
 
   if (isLoading) {
     return (

@@ -27,7 +27,9 @@ import {
   createStudentComplaint,
   getStudentHostel,
   getStudentTransport,
-  getStudentDocuments
+  getStudentDocuments,
+  uploadStudentPersonalDocument,
+  deleteStudentPersonalDocument
 } from './studentPortal.controller.js';
 
 const upload = multer({
@@ -66,5 +68,7 @@ router.post('/complaints', catchAsync(createStudentComplaint));
 router.get('/hostel', catchAsync(getStudentHostel));
 router.get('/transport', catchAsync(getStudentTransport));
 router.get('/documents', catchAsync(getStudentDocuments));
+router.post('/documents', catchAsync(uploadStudentPersonalDocument));
+router.delete('/documents/:id', catchAsync(deleteStudentPersonalDocument));
 
 export default router;

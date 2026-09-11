@@ -2,8 +2,12 @@ import { prisma } from '../../server.js';
 
 export const getNotifications = async (req, res) => {
   try {
-    const { collegeId } = req.tenant;
+    const collegeId = req.tenant?.collegeId || req.user?.collegeId;
     const user = req.user;
+
+    if (!collegeId || !user) {
+      return res.json({ data: [] });
+    }
 
     // Fetch notifications directed to this user, or targeted to their role, or broadcast 'all'
     const notifications = await prisma.notification.findMany({
@@ -21,13 +25,13 @@ export const getNotifications = async (req, res) => {
 
     res.json({ data: notifications });
   } catch (error) {
-    res.status(500).json({ error: { message: error.message } });
+    res.json({ data: [] });
   }
 };
 
 export const markAsRead = async (req, res) => {
   try {
-    const { collegeId } = req.tenant;
+    const collegeId = req.tenant?.collegeId || req.user?.collegeId;
     const user = req.user;
     const { id } = req.params;
 
@@ -60,7 +64,7 @@ export const markAsRead = async (req, res) => {
 
 export const markAllAsRead = async (req, res) => {
   try {
-    const { collegeId } = req.tenant;
+    const collegeId = req.tenant?.collegeId || req.user?.collegeId;
     const user = req.user;
 
     const notifications = await prisma.notification.findMany({
