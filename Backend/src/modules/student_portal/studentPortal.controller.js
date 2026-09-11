@@ -111,7 +111,10 @@ export const getStudentDashboard = async (req, res) => {
 
     // 6. Recent Notices
     const recentNotices = await prisma.notice.findMany({
-      where: { collegeId },
+      where: {
+        collegeId,
+        targetAudience: { in: ['all', 'students'] }
+      },
       orderBy: { createdAt: 'desc' },
       take: 5
     });
@@ -340,22 +343,71 @@ export const createStudentLeaveRequest = async (req, res) => {
 export const getStudentTimetable = async (req, res) => {
   try {
     const student = req.student;
-    const slots = await prisma.timetableSlot.findMany({
-      where: {
-        collegeId: student.collegeId,
-        ...(student.sectionId ? { sectionId: student.sectionId } : {})
-      },
-      include: {
-        course: true,
-        section: true,
-        teacher: {
-          include: {
-            user: { select: { name: true } }
+    let slots = [];
+
+    // 1. Try section-specific timetable if student is assigned to a section
+    if (student.sectionId) {
+      slots = await prisma.timetableSlot.findMany({
+        where: {
+          collegeId: student.collegeId,
+          sectionId: student.sectionId
+        },
+        include: {
+          course: true,
+          section: true,
+          teacher: {
+            include: {
+              user: { select: { name: true } }
+            }
           }
-        }
-      },
-      orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }]
-    });
+        },
+        orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }]
+      });
+    }
+
+    // 2. Fallback: Query by department or course if no section-specific slots found
+    if (!slots || slots.length === 0) {
+      slots = await prisma.timetableSlot.findMany({
+        where: {
+          collegeId: student.collegeId,
+          ...(student.departmentId || student.courseId
+            ? {
+                OR: [
+                  ...(student.departmentId ? [{ departmentId: student.departmentId }, { course: { departmentId: student.departmentId } }] : []),
+                  ...(student.courseId ? [{ courseId: student.courseId }] : [])
+                ]
+              }
+            : {})
+        },
+        include: {
+          course: true,
+          section: true,
+          teacher: {
+            include: {
+              user: { select: { name: true } }
+            }
+          }
+        },
+        orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }]
+      });
+    }
+
+    // 3. Fallback: General college timetable slots
+    if (!slots || slots.length === 0) {
+      slots = await prisma.timetableSlot.findMany({
+        where: { collegeId: student.collegeId },
+        include: {
+          course: true,
+          section: true,
+          teacher: {
+            include: {
+              user: { select: { name: true } }
+            }
+          }
+        },
+        orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }]
+      });
+    }
 
     res.json({ success: true, data: slots });
   } catch (error) {
@@ -432,16 +484,20 @@ export const getStudentFees = async (req, res) => {
     const student = req.student;
     const fees = await prisma.fee.findMany({
       where: {
-        studentId: student.id
+        OR: [
+          { studentId: student.id },
+          { student: { userId: student.userId } }
+        ]
       },
       include: {
         feeStructure: true,
         transactions: true
-      }
+      },
+      orderBy: { createdAt: 'desc' }
     });
 
-    const totalAmount = fees.reduce((acc, f) => acc + (f.amountDue || 0), 0);
-    const paidAmount = fees.reduce((acc, f) => acc + (f.amountPaid || (f.status === 'paid' ? f.amountDue : 0)), 0);
+    const totalAmount = fees.reduce((acc, f) => acc + (Number(f.amountDue) || 0), 0);
+    const paidAmount = fees.reduce((acc, f) => acc + (Number(f.amountPaid) || (f.status === 'paid' ? Number(f.amountDue) : 0)), 0);
     const pendingAmount = Math.max(0, totalAmount - paidAmount);
 
     res.json({
@@ -463,7 +519,8 @@ export const getStudentNotices = async (req, res) => {
     const student = req.student;
     const notices = await prisma.notice.findMany({
       where: {
-        collegeId: student.collegeId
+        collegeId: student.collegeId,
+        targetAudience: { in: ['all', 'students'] }
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -638,11 +695,117 @@ export const getStudentTransport = async (req, res) => {
 export const getStudentDocuments = async (req, res) => {
   try {
     const student = req.student;
-    const docs = await prisma.documentVault.findMany({
+    
+    // 1. Institutional vault documents
+    const institutionalDocs = await prisma.documentVault.findMany({
       where: { collegeId: student.collegeId }
     });
 
-    res.json({ success: true, data: docs });
+    // 2. Student's uploaded personal documents from customFields
+    const currentRecord = await prisma.student.findUnique({
+      where: { id: student.id },
+      select: { customFields: true, createdAt: true }
+    });
+
+    const customFields = typeof currentRecord?.customFields === 'object' && currentRecord.customFields !== null 
+      ? currentRecord.customFields 
+      : {};
+    const personalDocs = Array.isArray(customFields.documents) ? customFields.documents : [];
+
+    const formattedInstitutional = institutionalDocs.map(d => ({
+      id: d.id,
+      fileName: d.fileName,
+      documentType: 'Institutional Certificate',
+      fileUrl: '#',
+      fileSize: 'Verified',
+      isPersonal: false,
+      uploadedAt: currentRecord?.createdAt || new Date().toISOString()
+    }));
+
+    const formattedPersonal = personalDocs.map(d => ({
+      ...d,
+      isPersonal: true
+    }));
+
+    res.json({ success: true, data: [...formattedPersonal, ...formattedInstitutional] });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const uploadStudentPersonalDocument = async (req, res) => {
+  try {
+    const student = req.student;
+    const { fileName, documentType, fileUrl, fileSize } = req.body;
+
+    if (!fileName) {
+      return res.status(400).json({ success: false, error: { message: 'File name is required' } });
+    }
+
+    const currentRecord = await prisma.student.findUnique({
+      where: { id: student.id },
+      select: { customFields: true }
+    });
+
+    const customFields = typeof currentRecord?.customFields === 'object' && currentRecord.customFields !== null
+      ? currentRecord.customFields
+      : {};
+
+    const existingDocs = Array.isArray(customFields.documents) ? customFields.documents : [];
+
+    const newDoc = {
+      id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      fileName,
+      documentType: documentType || 'Personal Document',
+      fileUrl: fileUrl || '#',
+      fileSize: fileSize || '1.2 MB',
+      uploadedAt: new Date().toISOString()
+    };
+
+    await prisma.student.update({
+      where: { id: student.id },
+      data: {
+        customFields: {
+          ...customFields,
+          documents: [newDoc, ...existingDocs]
+        }
+      }
+    });
+
+    res.status(201).json({ success: true, data: newDoc });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const deleteStudentPersonalDocument = async (req, res) => {
+  try {
+    const student = req.student;
+    const { id } = req.params;
+
+    const currentRecord = await prisma.student.findUnique({
+      where: { id: student.id },
+      select: { customFields: true }
+    });
+
+    const customFields = typeof currentRecord?.customFields === 'object' && currentRecord.customFields !== null
+      ? currentRecord.customFields
+      : {};
+
+    const existingDocs = Array.isArray(customFields.documents) ? customFields.documents : [];
+    const filteredDocs = existingDocs.filter(d => d.id !== id);
+
+    await prisma.student.update({
+      where: { id: student.id },
+      data: {
+        customFields: {
+          ...customFields,
+          documents: filteredDocs
+        }
+      }
+    });
+
+    res.json({ success: true, message: 'Document deleted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
   }

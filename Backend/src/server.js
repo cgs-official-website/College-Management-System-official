@@ -52,6 +52,7 @@ app.use(cors({
   origin: function (origin, callback) {
     const allowedOrigins = [
       'http://localhost:5173',
+      'http://localhost:5174',
       'http://localhost:3000',
       process.env.FRONTEND_URL,
       // Allow all vercel.app subdomains
@@ -60,8 +61,11 @@ app.use(cors({
     // Allow requests with no origin (mobile apps, curl, Postman)
     if (!origin) return callback(null, true);
 
-    // Allow any vercel.app domain, railway.app domain, or teamzuna.in domain
+    const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+
+    // Allow any localhost port, vercel.app domain, railway.app domain, or teamzuna.in domain
     if (
+      isLocalhost ||
       allowedOrigins.includes(origin) ||
       origin.endsWith('.vercel.app') ||
       origin.endsWith('.railway.app') ||
@@ -160,6 +164,7 @@ app.use('/api/v1/departments', departmentsRoutes);
 app.use('/api/v1/courses', coursesRoutes);
 app.use('/api/v1/sections', sectionsRoutes);
 import assignmentsRoutes from './modules/assignments/assignments.routes.js';
+import leavesRoutes from './modules/leaves/leaves.routes.js';
 import payrollRoutes from './modules/payroll/payroll.routes.js';
 import projectsRoutes from './modules/projects/projects.routes.js';
 import apiIntegrationRoutes from './modules/api_integrations/api_integrations.routes.js';
@@ -171,11 +176,14 @@ import emailTemplatesRoutes from './modules/email/emailTemplates.routes.js';
 import studentPortalRoutes from './modules/student_portal/studentPortal.routes.js';
 import landingPageRoutes from './modules/landing_page/landingPage.routes.js';
 import subscriptionsRoutes from './modules/subscriptions/subscriptions.routes.js';
+import notificationsRoutes from './modules/notifications/notifications.routes.js';
 app.use('/api/v1/student', studentPortalRoutes);
 app.use('/api/v1/subscriptions', subscriptionsRoutes);
+app.use('/api/v1/notifications', notificationsRoutes);
 app.use('/api/v1/public', stubs.publicRoutes);
 app.use('/api/v1/mock', stubs.mockDataRoutes);
 app.use('/api/v1/assignments', assignmentsRoutes);
+app.use('/api/v1/leaves', leavesRoutes);
 app.use('/api/v1/payroll', payrollRoutes);
 app.use('/api/v1/projects', projectsRoutes);
 app.use('/api/v1/integrations', apiIntegrationRoutes);
@@ -202,19 +210,54 @@ const PORT = process.env.PORT || 5000;
 
 import { ensureCollegeCodeSequence } from './lib/collegeCodeGenerator.js';
 
-const server = app.listen(PORT, () => {
-  logger.info(`[info] Zuna ERP Backend running on port ${PORT}`);
-  ensureCollegeCodeSequence().catch(err => {
-    logger.warn(`[warn] Failed to initialize college sequence: ${err.message}`);
+const startServer = (retries = 5, delay = 600) => {
+  const server = app.listen(PORT, () => {
+    logger.info(`[info] Zuna ERP Backend running on port ${PORT}`);
+    ensureCollegeCodeSequence().catch(err => {
+      logger.warn(`[warn] Failed to initialize college sequence: ${err.message}`);
+    });
   });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE' && retries > 0) {
+      logger.warn(`[warn] Port ${PORT} in use, retrying in ${delay}ms... (${retries} retries left)`);
+      setTimeout(() => {
+        startServer(retries - 1, delay);
+      }, delay);
+    } else if (err.code === 'EADDRINUSE') {
+      logger.error(`[fatal] Port ${PORT} is already in use by another process. Exiting.`);
+      process.exit(1);
+    } else {
+      logger.error(`[fatal] Server error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+  // Graceful shutdown
+  const shutdown = async (signal) => {
+    logger.info(`[info] ${signal} received. Closing HTTP server...`);
+    server.close(async () => {
+      try { await prisma.$disconnect(); } catch (_) {}
+      try { redis.disconnect(); } catch (_) {}
+      if (signal === 'SIGUSR2') {
+        process.kill(process.pid, 'SIGUSR2');
+      } else {
+        process.exit(0);
+      }
+    });
+  };
+
+  process.once('SIGUSR2', () => shutdown('SIGUSR2'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+};
+
+startServer();
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error(`[error] Unhandled Rejection: ${reason?.stack || reason}`);
 });
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  logger.info('[info] SIGTERM received. Shutting down gracefully...');
-  server.close(async () => {
-    await prisma.$disconnect();
-    redis.disconnect();
-    process.exit(0);
-  });
+process.on('uncaughtException', (err) => {
+  logger.error(`[fatal] Uncaught Exception: ${err.stack || err}`);
 });

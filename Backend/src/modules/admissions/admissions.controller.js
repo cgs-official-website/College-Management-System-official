@@ -18,7 +18,7 @@ const submitSchema = z.object({
   courseName: z.string().optional(),
   previousSchool: z.string().optional(),
   marksheetDetails: z.record(z.string(), z.any()).optional().default({}),
-  createdFromLeadId: z.string().uuid().optional(),
+  createdFromLeadId: z.string().uuid().optional().nullable(),
   status: z.string().optional().default('Pending'),
   residenceType: z.string().optional().default('Day Scholar')
 });
@@ -117,11 +117,11 @@ export const submitApplication = async (req, res) => {
 
   const marksheetDetails = {
     ...payload.marksheetDetails,
-    email: payload.email,
-    phone: payload.phone,
-    previousSchool: payload.previousSchool,
-    courseName: payload.courseName,
-    courseId: payload.courseId,
+    email: payload.email || '',
+    phone: payload.phone || '',
+    previousSchool: payload.previousSchool || '',
+    courseName: payload.courseName || '',
+    courseId: payload.courseId || null,
   };
 
   const admission = await prisma.admission.create({

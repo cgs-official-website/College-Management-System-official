@@ -28,23 +28,23 @@ export function AuthProvider({ children }) {
     return user;
   }
 
-  async function register(email, password, additionalData) {
+  async function register(email, password, additionalData = {}) {
     if (additionalData.role === 'admin') {
       const response = await api.post('/auth/register', {
         adminEmail: email,
         password,
-        name: additionalData.name || undefined,
+        name: additionalData.name || null,
         collegeName: additionalData.collegeName,
-        slug: additionalData.collegeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
-        aicteNumber: additionalData.aicteNumber || undefined,
-        aicteCode: additionalData.aicteCode || undefined,
-        ugcRecognition: additionalData.ugcRecognition || undefined,
-        ugcCode: additionalData.ugcCode || undefined,
-        affiliationCode: additionalData.affiliationCode || undefined,
-        affiliationType: additionalData.affiliationType || undefined,
-        pan: additionalData.pan || undefined,
-        tan: additionalData.tan || undefined,
-        logoUrl: additionalData.logoBase64 || undefined
+        slug: (additionalData.slug || additionalData.collegeName || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+        aicteNumber: additionalData.aicteNumber || null,
+        aicteCode: additionalData.aicteCode || null,
+        ugcRecognition: additionalData.ugcRecognition || null,
+        ugcCode: additionalData.ugcCode || null,
+        affiliationCode: additionalData.affiliationCode || null,
+        affiliationType: (additionalData.affiliationType || 'AUTONOMOUS').toUpperCase(),
+        pan: additionalData.pan || null,
+        tan: additionalData.tan || null,
+        logoBase64: additionalData.logoBase64 || null
       });
 
       const { accessToken, refreshToken, user } = response.data?.data || response.data || {};

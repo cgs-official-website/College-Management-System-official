@@ -285,21 +285,54 @@ const StudentLayout = () => {
 const StudentDashboardHome = ({ isHosteller, isDayScholar }) => {
   const { data: dashboardData, isLoading } = useStudentDashboard();
   const { data: profileData } = useStudentProfile();
+  const { userData } = useAuth();
   const navigate = useNavigate();
 
-  const profile = profileData?.data;
-  const metrics = dashboardData?.data?.metrics;
-  const notices = dashboardData?.data?.recentNotices || [];
+  const profile = profileData?.data ?? profileData;
+  const metrics = dashboardData?.data?.metrics ?? dashboardData?.metrics;
+  const notices = (dashboardData?.data?.recentNotices ?? dashboardData?.recentNotices) || [];
+
+  const studentFullName = 
+    profile?.name || 
+    `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 
+    dashboardData?.data?.student?.name ||
+    userData?.name || 
+    'Student';
+
+  const studentResidenceType = profile?.residenceType || (isHosteller ? 'Hosteller' : 'Day Scholar');
+  const isStudentHosteller = (studentResidenceType || '').toLowerCase().includes('hostel') || isHosteller === true;
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Welcome back, {profile?.firstName || 'Student'}! 👋
-          </h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">
-            {profile?.department || 'Academic'} • Admission No: <span className="font-bold text-slate-700 dark:text-slate-200">{profile?.admissionNumber || '-'}</span> • <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300">{isHosteller ? 'Hosteller' : 'Day Scholar'}</span>
+      {/* Student Welcome Header Card with Name & Hosteller Status */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 p-6 rounded-3xl shadow-sm">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Welcome, {studentFullName} 👋
+            </h1>
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold tracking-wide uppercase shadow-sm ${
+              isStudentHosteller 
+                ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30' 
+                : 'bg-cyan-100 text-cyan-800 dark:bg-cyan-500/20 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/30'
+            }`}>
+              {isStudentHosteller ? <Home className="w-3.5 h-3.5" /> : <Bus className="w-3.5 h-3.5" />}
+              {isStudentHosteller ? 'Hosteller' : 'Day Scholar'}
+            </span>
+          </div>
+
+          <p className="text-sm font-medium text-slate-600 dark:text-slate-400 flex items-center gap-2 flex-wrap pt-1">
+            <span>Student Name: <strong className="text-slate-900 dark:text-white font-bold">{studentFullName}</strong></span>
+            <span>•</span>
+            <span>Department: <strong className="text-slate-800 dark:text-slate-200 font-semibold">{profile?.department || 'Academic'}</strong></span>
+            <span>•</span>
+            <span>Admission No: <strong className="text-slate-800 dark:text-slate-200 font-semibold">{profile?.admissionNumber || '-'}</strong></span>
+            {isStudentHosteller && profile?.hostelRoom && (
+              <>
+                <span>•</span>
+                <span>Room: <strong className="text-slate-800 dark:text-slate-200 font-semibold">{profile.hostelRoom}</strong></span>
+              </>
+            )}
           </p>
         </div>
       </div>

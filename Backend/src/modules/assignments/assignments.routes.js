@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { 
   getAssignments, 
   createAssignment, 
-  deleteAssignment 
+  deleteAssignment,
+  getAssignmentSubmissions
 } from './assignments.controller.js';
 import { authenticate } from '../../middleware/authenticate.js';
 import { resolveTenant } from '../../middleware/resolveTenant.js';
@@ -13,6 +14,7 @@ const router = Router();
 router.use(authenticate, resolveTenant);
 
 router.get('/', catchAsync(getAssignments));
+router.get('/:id/submissions', catchAsync(getAssignmentSubmissions));
 router.post('/', catchAsync(createAssignment));
 router.delete('/:id', catchAsync(deleteAssignment));
 

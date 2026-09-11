@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useDepartments } from '../../../hooks/useDepartments';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
+import { Pagination } from '../../../components/ui/Pagination';
 import { Search, Plus, Trash2, Edit2, Building2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useConfirm } from '../../../contexts/ConfirmContext';
@@ -12,6 +13,8 @@ export default function DepartmentsTab({ onSelect }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingDept, setEditingDept] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const confirm = useConfirm();
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
@@ -26,6 +29,8 @@ export default function DepartmentsTab({ onSelect }) {
     setEditingDept(null);
     reset({ name: '', code: '' });
   };
+
+  const paginatedDepts = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const handleOpenAdd = () => {
     setEditingDept(null);
@@ -139,7 +144,7 @@ export default function DepartmentsTab({ onSelect }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-white/10">
-                {filtered.map(dept => (
+                {paginatedDepts.map(dept => (
                   <tr key={dept.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group">
                     <td className="py-4 px-6">
                       <div className="font-bold text-slate-900 dark:text-white">{dept.name}</div>
@@ -164,6 +169,16 @@ export default function DepartmentsTab({ onSelect }) {
                 ))}
               </tbody>
             </table>
+            {filtered.length > 0 && (
+              <Pagination
+                totalItems={filtered.length}
+                currentPage={currentPage}
+                pageSize={pageSize}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+              />
+            )}
           </div>
         )}
       </div>

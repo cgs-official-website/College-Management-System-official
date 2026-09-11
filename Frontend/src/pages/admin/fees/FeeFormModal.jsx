@@ -53,6 +53,7 @@ export function FeeFormModal({ isOpen, onClose, onSubmit, initialData = null, is
     const finalData = {
       ...data,
       amount: Number(data.amount),
+      amountDue: Number(data.amount),
       studentName: fullName,
       studentClass: classInfo
     };

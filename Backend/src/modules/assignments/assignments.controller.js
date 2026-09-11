@@ -26,7 +26,19 @@ export const getAssignments = async (req, res) => {
   const assignments = await prisma.assignment.findMany({
     where,
     include: {
-      course: true
+      course: true,
+      teacher: {
+        include: {
+          user: {
+            select: { name: true, email: true }
+          }
+        }
+      },
+      _count: {
+        select: {
+          submissions: true
+        }
+      }
     },
     orderBy: { createdAt: 'desc' }
   });
@@ -40,7 +52,8 @@ export const getAssignments = async (req, res) => {
     courseId: a.courseId,
     subject: a.course?.name || 'Subject',
     class: a.course?.name || 'Class',
-    submissionsCount: 0,
+    teacherName: a.teacher?.user?.name || 'Faculty',
+    submissionsCount: a._count?.submissions || 0,
     gradedCount: 0,
     status: new Date(a.dueDate) > new Date() ? 'active' : 'closed'
   }));
@@ -57,8 +70,18 @@ export const createAssignment = async (req, res) => {
     include: { teacherProfile: true }
   });
 
-  if (!user?.teacherProfile) {
-    return res.status(403).json({ error: 'User is not a teacher' });
+  let teacherId = req.body.teacherId;
+  if (!teacherId) {
+    if (user?.teacherProfile) {
+      teacherId = user.teacherProfile.id;
+    } else if (user?.role === 'admin' || user?.role === 'superadmin') {
+      const firstTeacher = await prisma.teacher.findFirst({ where: { collegeId } });
+      teacherId = firstTeacher?.id;
+    }
+  }
+
+  if (!teacherId) {
+    return res.status(400).json({ error: 'No teacher profile available to assign' });
   }
 
   const data = createAssignmentSchema.parse(req.body);
@@ -69,8 +92,11 @@ export const createAssignment = async (req, res) => {
       description: data.description,
       dueDate: new Date(data.dueDate),
       courseId: data.courseId,
-      teacherId: user.teacherProfile.id,
+      teacherId,
       collegeId
+    },
+    include: {
+      course: true
     }
   });
 
@@ -86,4 +112,36 @@ export const deleteAssignment = async (req, res) => {
   });
 
   res.json({ success: true });
+};
+
+export const getAssignmentSubmissions = async (req, res) => {
+  const { id } = req.params;
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+
+  const submissions = await prisma.assignmentSubmission.findMany({
+    where: { assignmentId: id, collegeId },
+    include: {
+      student: {
+        include: {
+          user: { select: { name: true, email: true } },
+          department: { select: { name: true } }
+        }
+      }
+    },
+    orderBy: { submittedAt: 'desc' }
+  });
+
+  const formatted = submissions.map(s => ({
+    id: s.id,
+    studentName: s.student?.user?.name || 'Student',
+    admissionNumber: s.student?.admissionNumber || 'N/A',
+    department: s.student?.department?.name || 'Academic',
+    fileUrl: s.fileUrl,
+    submittedAt: s.submittedAt,
+    status: s.status,
+    score: s.score,
+    feedback: s.feedback
+  }));
+
+  res.json({ data: formatted });
 };

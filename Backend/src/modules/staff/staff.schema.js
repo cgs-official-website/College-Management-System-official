@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 export const createStaffSchema = z.object({
-  name: z.string().nullish(),
-  email: z.string().email('Invalid email address'),
+  name: z.string().optional().default(''),
+  email: z.string({ required_error: 'Email is required' }).trim().min(1, 'Email is required').email('Invalid email address'),
   department: z.string().optional(),
   departmentId: z.string().uuid().optional(),
   designation: z.string().min(1, 'Designation is required'),
@@ -10,7 +10,7 @@ export const createStaffSchema = z.object({
   salaryGrade: z.string().optional(),
   role: z.string().optional(),
   customRoleId: z.string().uuid().nullable().optional(),
-  status: z.string().optional(),
+  status: z.string().optional().default('active'),
   phone: z.preprocess(
     (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
     z.string()

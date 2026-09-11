@@ -68,7 +68,6 @@ export const getFees = async (req, res) => {
 export const createFee = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const actorId = req.user?.id || req.user?.userId;
-
   // Validate incoming body against Zod schema
   const payload = createFeeSchema.parse(req.body);
 
@@ -187,6 +186,7 @@ export const createFee = async (req, res) => {
     };
   });
 
+<<<<<<< HEAD
   const formatted = formatFeeRecord(createdFee);
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} feeId=${createdFee.id} actor=${actorId} Created fee record`);
@@ -242,6 +242,26 @@ export const updateFee = async (req, res) => {
         where: { id: existing.feeStructureId },
         data: { dueDate: payload.dueDate }
       });
+=======
+  const updateData = {};
+  if (status) updateData.status = status;
+  if (amountDue !== undefined) {
+    updateData.amountDue = Number(amountDue);
+  } else if (amount !== undefined) {
+    updateData.amountDue = Number(amount);
+  }
+  if (amountPaid !== undefined) {
+    updateData.amountPaid = Number(amountPaid);
+  } else if (status === 'paid') {
+    updateData.amountPaid = updateData.amountDue !== undefined ? updateData.amountDue : existing.amountDue;
+  }
+
+  const fee = await prisma.fee.update({
+    where: { id },
+    data: updateData,
+    include: {
+      feeStructure: true
+>>>>>>> dev
     }
 
     if (payload.paymentMethod) {

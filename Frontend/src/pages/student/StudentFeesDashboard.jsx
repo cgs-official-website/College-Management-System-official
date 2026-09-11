@@ -5,7 +5,10 @@ import { useStudentFees } from '../../hooks/useStudentPortal';
 
 const StudentFeesDashboard = () => {
   const { data: feesData, isLoading } = useStudentFees();
-  const feeInfo = feesData?.data || { totalAmount: 0, paidAmount: 0, pendingAmount: 0, invoices: [] };
+  const rawFees = feesData?.data ?? feesData;
+  const feeInfo = (rawFees && typeof rawFees === 'object' && 'totalAmount' in rawFees)
+    ? rawFees
+    : { totalAmount: 0, paidAmount: 0, pendingAmount: 0, invoices: [] };
 
   if (isLoading) {
     return (

@@ -41,7 +41,10 @@ import {
   Package,
   Sun,
   Moon,
-  IndianRupee
+  IndianRupee,
+  Files,
+  CalendarOff,
+  FileEdit
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useTheme } from '../../hooks/useTheme';
@@ -67,6 +70,9 @@ import HostelDashboard from './hostel/HostelDashboard';
 import TransportDashboard from './transport/TransportDashboard';
 import PlacementsDashboard from './placements/PlacementsDashboard';
 import ComplaintsDashboard from './complaints/ComplaintsDashboard';
+import AssignmentsDashboard from './assignments/AssignmentsDashboard';
+import LeaveRequestsDashboard from './leaves/LeaveRequestsDashboard';
+import AdminStudentDocuments from './students/AdminStudentDocuments';
 import MobileAppsDashboard from './apps/MobileAppsDashboard';
 import ApiIntegrations from './integrations/ApiIntegrations';
 import InventoryDashboard from './inventory/InventoryDashboard';
@@ -118,20 +124,24 @@ const AdminLayout = () => {
 
     { name: 'Admission', path: '/admin/admission', icon: UserPlus, moduleKey: 'admission' },
     { name: 'Students', path: '/admin/students', icon: GraduationCap, moduleKey: 'students' },
+    { name: 'Student Documents', path: '/admin/student-documents', icon: Files, moduleKey: 'students' },
     { name: 'HR & Staff', path: '/admin/hr', icon: Users, moduleKey: 'staff' },
     { name: 'Academic Structure', path: '/admin/academic-structure', icon: BookOpen, moduleKey: 'academic' },
+    { name: 'Assignments', path: '/admin/assignments', icon: FileEdit, moduleKey: 'academic' },
     { name: 'Timetable', path: '/admin/timetable', icon: Calendar, moduleKey: 'timetable' },
     { name: 'Attendance', path: '/admin/attendance', icon: Clock, moduleKey: 'attendance' },
+    { name: 'Leave Requests', path: '/admin/leave-requests', icon: CalendarOff, moduleKey: 'attendance' },
     { name: 'Exams', path: '/admin/exams', icon: ClipboardList, moduleKey: 'exams' },
     { name: 'Fees & Finance', path: '/admin/fees', icon: Calculator, moduleKey: 'fees' },
-    // { name: 'Library', path: '/admin/library', icon: LibraryIcon, moduleKey: 'library' },
-    // { name: 'Hostel', path: '/admin/hostel', icon: Home, moduleKey: 'hostel' },
-    // { name: 'Transport', path: '/admin/transport', icon: Bus, moduleKey: 'transport' },
-    // { name: 'Infrastructure', path: '/admin/infrastructure', icon: Building, moduleKey: 'infrastructure' },
+    { name: 'Library', path: '/admin/library', icon: LibraryIcon, moduleKey: 'library' },
+    { name: 'Hostel', path: '/admin/hostel', icon: Home, moduleKey: 'hostel' },
+    { name: 'Transport', path: '/admin/transport', icon: Bus, moduleKey: 'transport' },
+    { name: 'Infrastructure', path: '/admin/infrastructure', icon: Building, moduleKey: 'infrastructure' },
     { name: 'Notice Board', path: '/admin/notices', icon: Megaphone, moduleKey: 'notices' },
+    { name: 'Complaints', path: '/admin/complaints', icon: MessageSquareWarning, moduleKey: null },
     { name: 'Placements', path: '/admin/placements', icon: Briefcase, moduleKey: 'placements' },
     { name: 'Reports', path: '/admin/reports', icon: FileText, moduleKey: 'reports' },
-    // { name: 'Inventory', path: '/admin/inventory', icon: Package, moduleKey: 'inventory' },
+    { name: 'Inventory', path: '/admin/inventory', icon: Package, moduleKey: 'inventory' },
     { name: 'Payroll', path: '/admin/payroll', icon: IndianRupee, moduleKey: 'payroll' },
 
     // { name: 'API Integrations', path: '/admin/api-integrations', icon: Zap, moduleKey: 'api_integration' },
@@ -336,10 +346,13 @@ const AdminLayout = () => {
               <Route path="/roles/*" element={hasAccess('roles') ? <RolesManagement /> : <Navigate to="/404" replace />} />
               <Route path="/admission" element={hasAccess('admission') ? <Admission /> : <Navigate to="/404" replace />} />
               <Route path="/students/*" element={hasAccess('students') ? <StudentList /> : <Navigate to="/404" replace />} />
+              <Route path="/student-documents/*" element={hasAccess('students') ? <AdminStudentDocuments /> : <Navigate to="/404" replace />} />
               <Route path="/hr/*" element={hasAccess('staff') ? <HRManagement /> : <Navigate to="/404" replace />} />
               <Route path="/academic-structure/*" element={hasAccess('academic') ? <AcademicStructure /> : <Navigate to="/404" replace />} />
+              <Route path="/assignments/*" element={hasAccess('academic') ? <AssignmentsDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/timetable/*" element={hasAccess('timetable') ? <Timetable /> : <Navigate to="/404" replace />} />
               <Route path="/attendance/*" element={hasAccess('attendance') ? <Attendance /> : <Navigate to="/404" replace />} />
+              <Route path="/leave-requests/*" element={hasAccess('attendance') ? <LeaveRequestsDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/exams/*" element={hasAccess('exams') ? <Exams /> : <Navigate to="/404" replace />} />
               <Route path="/fees/*" element={hasAccess('fees') ? <Fees /> : <Navigate to="/404" replace />} />
               <Route path="/library/*" element={hasAccess('library') ? <Library /> : <Navigate to="/404" replace />} />
@@ -347,6 +360,7 @@ const AdminLayout = () => {
               <Route path="/transport/*" element={hasAccess('transport') ? <TransportDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/infrastructure/*" element={hasAccess('infrastructure') ? <Infrastructure /> : <Navigate to="/404" replace />} />
               <Route path="/notices/*" element={hasAccess('notices') ? <NoticeBoard /> : <Navigate to="/404" replace />} />
+              <Route path="/complaints/*" element={<ComplaintsDashboard />} />
               <Route path="/placements/*" element={hasAccess('placements') ? <PlacementsDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/reports/*" element={hasAccess('reports') ? <Reports /> : <Navigate to="/404" replace />} />
               <Route path="/inventory/*" element={hasAccess('inventory') ? <InventoryDashboard /> : <Navigate to="/404" replace />} />
@@ -562,7 +576,7 @@ const AdminDashboardHome = () => {
                 const diffHours = Math.floor(diffMins / 60);
                 const diffDays = Math.floor(diffHours / 24);
                 
-                let timeStr = '';
+                let timeStr;
                 if (diffMins < 60) timeStr = diffMins <= 1 ? 'Just now' : `${diffMins} minutes ago`;
                 else if (diffHours < 24) timeStr = `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
                 else if (diffDays === 1) timeStr = 'Yesterday';

@@ -125,6 +125,9 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
                   message: "Phone number must be exactly 10 digits."
                 }
               })}
+              onInput={(e) => {
+                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10);
+              }}
               error={errors.phone?.message}
             />
           </div>

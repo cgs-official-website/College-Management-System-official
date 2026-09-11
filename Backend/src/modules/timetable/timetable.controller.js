@@ -117,21 +117,27 @@ export const getTimetable = async (req, res) => {
 
   const formatted = slots.map(slot => {
     const dayName = typeof slot.dayOfWeek === 'number' ? DAY_MAP_TO_NAME[slot.dayOfWeek] || 'Monday' : slot.dayOfWeek;
-    const teacherFullName = slot.teacher?.user?.name
-      || (() => {
-        const emailPrefix = slot.teacher?.user?.email ? slot.teacher.user.email.split('@')[0] : 'Staff';
-        const parts = emailPrefix.split('.');
-        return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
-      })()
-      || slot.teacher?.user?.email
-      || 'Faculty Member';
+    let teacherFullName = slot.teacher?.user?.name;
+    if (!teacherFullName || teacherFullName.trim() === '') {
+      const email = slot.teacher?.user?.email || '';
+      if (email.includes('@')) {
+        const handle = email.split('@')[0];
+        teacherFullName = handle
+          .replace(/\./g, ' ')
+          .replace(/\b\w/g, c => c.toUpperCase());
+      } else {
+        teacherFullName = 'Faculty Member';
+      }
+    }
 
     return {
       id: slot.id,
       subject: slot.course?.name || 'Class Session',
       courseName: slot.course?.name || 'Academic Course',
+      courseCode: slot.course?.code || null,
       courseId: slot.courseId,
       teacherName: teacherFullName,
+      teacherEmail: slot.teacher?.user?.email || '',
       teacherId: slot.teacherId,
       dayOfWeek: dayName,
       startTime: slot.startTime || '09:00',
@@ -198,6 +204,21 @@ export const scheduleSlot = async (req, res) => {
     targetCourseId = existingCourse.id;
   }
 
+  let targetDeptId = defaults.deptId;
+  let targetSectionId = defaults.sectionId;
+  if (targetCourseId) {
+    const courseObj = await prisma.course.findUnique({
+      where: { id: targetCourseId },
+      include: { sections: true }
+    });
+    if (courseObj) {
+      if (courseObj.departmentId) targetDeptId = courseObj.departmentId;
+      if (courseObj.sections && courseObj.sections.length > 0) {
+        targetSectionId = courseObj.sections[0].id;
+      }
+    }
+  }
+
   // If a specific teacher was requested, validate ownership
   let targetTeacherId = defaults.teacherId;
   if (payload.teacherId) {
@@ -224,9 +245,9 @@ export const scheduleSlot = async (req, res) => {
   const slot = await prisma.timetableSlot.create({
     data: {
       collegeId,
-      departmentId: defaults.deptId,
+      departmentId: targetDeptId,
       courseId: targetCourseId,
-      sectionId: defaults.sectionId,
+      sectionId: targetSectionId,
       teacherId: targetTeacherId,
       dayOfWeek: dayInt,
       startTime: payload.startTime,

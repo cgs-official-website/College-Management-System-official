@@ -47,11 +47,23 @@ export function useColleges() {
     },
   });
 
+  const updateCollegeSubscription = useMutation({
+    mutationFn: async ({ id, ...subscriptionData }) => {
+      const response = await api.put(`/colleges/${id}/subscription`, subscriptionData);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['colleges'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+    },
+  });
+
   return {
     ...query,
     colleges: query.data?.data || [],
     onboardCollege,
     updateCollegeStatus,
     deleteCollege,
+    updateCollegeSubscription,
   };
 }

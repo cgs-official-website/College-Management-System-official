@@ -13,7 +13,8 @@ import {
   Trash2, 
   Upload, 
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  Lock
 } from 'lucide-react';
 import { 
   useStudentProfile, 
@@ -32,9 +33,9 @@ export const StudentSettings = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [imageError, setImageError] = useState('');
-  const [imageTimestamp, setImageTimestamp] = useState(Date.now());
+  const [imageTimestamp, setImageTimestamp] = useState(() => Date.now());
 
-  const profile = profileData?.data;
+  const profile = profileData?.data ?? profileData;
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -153,11 +154,22 @@ export const StudentSettings = () => {
   };
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === 'phone') {
+      const digitsOnly = value.replace(/\D/g, '').slice(0, 10);
+      setFormData(prev => ({ ...prev, phone: digitsOnly }));
+      return;
+    }
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (formData.phone && formData.phone.length !== 10) {
+      toast.error('Mobile Phone Number must be exactly 10 digits.');
+      return;
+    }
+
     setIsSaving(true);
     try {
       await api.put('/users/profile', {
@@ -176,14 +188,16 @@ export const StudentSettings = () => {
       refetchProfile();
     } catch (error) {
       console.error('Error updating profile:', error);
-      toast.error('Failed to update profile. ' + error.message);
+      const errMsg = error.response?.data?.error?.message || error.message || 'Failed to update profile';
+      toast.error('Failed to update profile. ' + errMsg);
     } finally {
       setIsSaving(false);
     }
   };
 
+  const authToken = localStorage.getItem('zuna_token');
   const hasPhoto = Boolean(profile?.hasProfileImage);
-  const imageUrl = previewUrl || (hasPhoto ? `/api/v1/student/profile/image?t=${imageTimestamp}` : null);
+  const imageUrl = previewUrl || (hasPhoto ? `/api/v1/student/profile/image?t=${imageTimestamp}${authToken ? `&token=${encodeURIComponent(authToken)}` : ''}` : null);
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -350,23 +364,34 @@ export const StudentSettings = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Registered Email Address</label>
-              <div className="relative">
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Registered Email Address</label>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/10 px-2 py-0.5 rounded-full">
+                  <Lock className="w-3 h-3 text-slate-400" /> Locked
+                </span>
+              </div>
+              <div className="relative cursor-not-allowed">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Mail className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   type="email"
                   value={profile?.email || user?.email || ''}
-                  disabled
-                  className="block w-full pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                  readOnly={true}
+                  disabled={true}
+                  tabIndex={-1}
+                  aria-readonly="true"
+                  className="block w-full pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-500 dark:text-slate-400 cursor-not-allowed select-none pointer-events-none"
                 />
               </div>
               <p className="text-xs text-slate-500 mt-1">Official tenant email is locked by administration.</p>
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Mobile Phone Number</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Mobile Phone Number</label>
+                <span className="text-[11px] text-slate-400 font-medium">10 digits</span>
+              </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Phone className="h-5 w-5 text-slate-400" />
@@ -376,37 +401,59 @@ export const StudentSettings = () => {
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
+                  maxLength={10}
+                  pattern="[0-9]{10}"
+                  placeholder="Enter 10-digit mobile number"
                   className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/50 transition-all"
                 />
               </div>
+              {formData.phone && formData.phone.length > 0 && formData.phone.length < 10 && (
+                <p className="text-xs text-amber-500 mt-1">Must be exactly 10 digits ({formData.phone.length}/10 entered)</p>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Department</label>
-              <div className="relative">
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Department</label>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/10 px-2 py-0.5 rounded-full">
+                  <Lock className="w-3 h-3 text-slate-400" /> Locked
+                </span>
+              </div>
+              <div className="relative cursor-not-allowed">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Book className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   type="text"
                   value={profile?.department || 'Academic Department'}
-                  disabled
-                  className="block w-full pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                  readOnly={true}
+                  disabled={true}
+                  tabIndex={-1}
+                  aria-readonly="true"
+                  className="block w-full pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-500 dark:text-slate-400 cursor-not-allowed select-none pointer-events-none"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Admission Number</label>
-              <div className="relative">
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Admission Number</label>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/10 px-2 py-0.5 rounded-full">
+                  <Lock className="w-3 h-3 text-slate-400" /> Locked
+                </span>
+              </div>
+              <div className="relative cursor-not-allowed">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <ShieldCheck className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   type="text"
                   value={profile?.admissionNumber || 'ADM-N/A'}
-                  disabled
-                  className="block w-full pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-500 dark:text-slate-400 cursor-not-allowed font-mono"
+                  readOnly={true}
+                  disabled={true}
+                  tabIndex={-1}
+                  aria-readonly="true"
+                  className="block w-full pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-500 dark:text-slate-400 cursor-not-allowed font-mono select-none pointer-events-none"
                 />
               </div>
             </div>

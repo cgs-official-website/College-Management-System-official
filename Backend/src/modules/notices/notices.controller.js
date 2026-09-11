@@ -104,6 +104,36 @@ export const updateNotice = async (req, res) => {
   }
 };
 
+export const updateNotice = async (req, res) => {
+  try {
+    const { collegeId } = req.tenant;
+    const { id } = req.params;
+    const { title, content, priority, targetAudience } = req.body;
+
+    const existing = await prisma.notice.findFirst({
+      where: { id, collegeId }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: { message: 'Notice not found' } });
+    }
+
+    const updated = await prisma.notice.update({
+      where: { id },
+      data: {
+        ...(title && { title }),
+        ...(content !== undefined && { content }),
+        ...(priority && { priority }),
+        ...(targetAudience && { targetAudience })
+      }
+    });
+
+    res.json({ data: updated });
+  } catch (error) {
+    res.status(400).json({ error: { message: error.message } });
+  }
+};
+
 export const deleteNotice = async (req, res) => {
   try {
     const { collegeId } = req.tenant;

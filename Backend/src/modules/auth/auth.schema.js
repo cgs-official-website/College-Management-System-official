@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
+const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
 export const loginSchema = z.object({
-  email: z.string().trim().min(1, 'Email is required').email('Please enter a valid email address').optional(),
+  email: z.string().trim().min(1, 'Email is required').regex(emailRegex, 'Please enter a valid email address with a valid domain').optional(),
   identifier: z.string().trim().optional(),
   password: z.string().min(1, 'Password is required'),
   collegeSlug: z.string().trim().optional()
@@ -17,32 +19,14 @@ export const registerAdminSchema = z.object({
   name: z.string().trim().optional().nullable(),
   aicteNumber: z.string().trim().optional().nullable(),
   ugcRecognition: z.string().trim().optional().nullable(),
-  affiliationCode: z.string().trim().optional().nullable().refine(val => !val || /^[A-Za-z0-9-]{3,30}$/.test(val), {
-    message: 'Affiliation code must be alphanumeric'
-  }),
-  aicteCode: z.string().trim().optional().nullable().refine(val => !val || /^[A-Za-z0-9-]{3,30}$/.test(val), {
-    message: 'AICTE code must be alphanumeric'
-  }),
-  pan: z.string().trim().toUpperCase().optional().nullable().refine(val => !val || /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(val), {
-    message: 'Invalid PAN format (e.g. ABCDE1234F)'
-  }),
-  tan: z.string().trim().toUpperCase().optional().nullable().refine(val => !val || /^[A-Z]{4}[0-9]{5}[A-Z]{1}$/.test(val), {
-    message: 'Invalid TAN format (e.g. ABCD12345E)'
-  }),
-  affiliationType: z.enum(['AUTONOMOUS', 'UNIVERSITY']).optional().nullable(),
+  affiliationCode: z.string().trim().optional().nullable(),
+  aicteCode: z.string().trim().optional().nullable(),
+  pan: z.string().trim().toUpperCase().optional().nullable(),
+  tan: z.string().trim().toUpperCase().optional().nullable(),
+  affiliationType: z.preprocess((val) => (typeof val === 'string' && val.trim() ? val.trim().toUpperCase() : 'AUTONOMOUS'), z.enum(['AUTONOMOUS', 'UNIVERSITY'])).optional().default('AUTONOMOUS'),
   ugcCode: z.string().trim().optional().nullable(),
   logoUrl: z.string().trim().optional().nullable(),
   logoBase64: z.string().trim().optional().nullable()
-}).superRefine((data, ctx) => {
-  if (data.affiliationType === 'UNIVERSITY' && data.ugcCode) {
-    if (!/^[A-Za-z0-9-]+$/.test(data.ugcCode.trim())) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'UGC Code must be alphanumeric',
-        path: ['ugcCode']
-      });
-    }
-  }
 });
 
 export const studentRegisterSchema = z.object({

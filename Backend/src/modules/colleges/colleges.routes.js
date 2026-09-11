@@ -6,7 +6,8 @@ import {
   deleteCollege, 
   getCollege, 
   updateCollege,
-  getMyCollegeStatus
+  getMyCollegeStatus,
+  updateCollegeSubscription
 } from './colleges.controller.js';
 import { authenticate } from '../../middleware/authenticate.js';
 
@@ -19,6 +20,7 @@ router.get('/', getAllColleges);
 router.post('/onboard', onboardCollege);
 router.put('/:id/status', updateCollegeStatus);
 router.patch('/:id/status', updateCollegeStatus);
+router.put('/:id/subscription', updateCollegeSubscription);
 router.delete('/:id', deleteCollege);
 
 // Admin accessible routes

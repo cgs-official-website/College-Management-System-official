@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 export const createStudentSchema = z.object({
-  firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().nullish(),
+  firstName: z.string({ required_error: 'First name is required' }).min(1, 'First name is required'),
+  lastName: z.string().nullish().default(''),
   email: z.preprocess(
     (val) => (typeof val === 'string' ? val.trim() : (val === null || val === undefined ? '' : val)),
     z.string()
@@ -17,15 +17,25 @@ export const createStudentSchema = z.object({
   department: z.string().nullish(),
   batchYear: z.string().nullish(),
   courseId: z.string().uuid().nullish(),
+  courseName: z.string().nullish(),
   class: z.string().nullish(),
   sectionId: z.string().uuid().nullish(),
   section: z.string().nullish(),
   parentName: z.string().nullish(),
+  fatherName: z.string().nullish(),
   parentPhone: z.preprocess(
     (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
     z.string().regex(/^[0-9]{10}$/, 'Parent phone must be exactly 10 digits.').nullable().optional()
   ),
+  parentMobile: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+    z.string().regex(/^[0-9]{10}$/, 'Parent phone must be exactly 10 digits.').nullable().optional()
+  ),
   phone: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+    z.string().regex(/^[0-9]{10}$/, 'Phone number must be exactly 10 digits.').nullable().optional()
+  ),
+  studentMobile: z.preprocess(
     (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
     z.string().regex(/^[0-9]{10}$/, 'Phone number must be exactly 10 digits.').nullable().optional()
   ),

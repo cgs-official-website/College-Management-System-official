@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useSections } from '../../../hooks/useSections';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
+import { Pagination } from '../../../components/ui/Pagination';
 import { Search, Plus, Trash2, Edit2, Users, ChevronLeft } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useConfirm } from '../../../contexts/ConfirmContext';
@@ -44,6 +45,8 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSection, setEditingSection] = useState(null);
   const [selectedTeachers, setSelectedTeachers] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const confirm = useConfirm();
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
@@ -51,6 +54,8 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
   const filtered = sections.filter(s => 
     s.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const paginatedSections = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const handleOpenAdd = () => {
     setEditingSection(null);
@@ -207,7 +212,7 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-white/10">
-                {filtered.map(section => (
+                {paginatedSections.map(section => (
                   <tr key={section.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group">
                     <td className="py-4 px-6">
                       <div className="font-bold text-slate-900 dark:text-white">{section.name}</div>
@@ -248,6 +253,16 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
                 ))}
               </tbody>
             </table>
+            {filtered.length > 0 && (
+              <Pagination
+                totalItems={filtered.length}
+                currentPage={currentPage}
+                pageSize={pageSize}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+              />
+            )}
           </div>
         )}
       </div>

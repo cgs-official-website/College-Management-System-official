@@ -19,7 +19,8 @@ import {
   RefreshCw,
   MessageSquareWarning,
   FolderKanban,
-  Banknote
+  Banknote,
+  Building
 } from 'lucide-react';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
@@ -28,6 +29,7 @@ import PayrollDashboard from './PayrollDashboard';
 import TeacherComplaints from './TeacherComplaints';
 import TeacherDashboard from './TeacherDashboard';
 import TeacherClasses from './TeacherClasses';
+import HODFacilityRequests from './HODFacilityRequests';
 import TeacherAssignments from './TeacherAssignments';
 import TeacherAttendance from './TeacherAttendance';
 import TeacherSchedule from './TeacherSchedule';
@@ -68,6 +70,7 @@ const TeacherLayout = () => {
 
   if (userData?.role === 'hod') {
     navLinks.splice(4, 0, { name: 'Manage Timetable', path: '/teacher/timetable', icon: Calendar });
+    navLinks.splice(5, 0, { name: 'Facility Requests', path: '/teacher/facility-requests', icon: Building });
   }
 
   return (
@@ -219,6 +222,7 @@ const TeacherLayout = () => {
               <Route path="/projects" element={<ProjectTimesheetDashboard />} />
               <Route path="/payroll" element={<PayrollDashboard />} />
               <Route path="/settings" element={<TeacherSettings />} />
+              <Route path="/facility-requests" element={<HODFacilityRequests />} />
               {userData?.role === 'hod' && <Route path="/timetable" element={<Timetable />} />}
             </Routes>
           </div>
