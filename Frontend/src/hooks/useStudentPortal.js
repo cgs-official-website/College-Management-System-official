@@ -111,7 +111,10 @@ export const useStudentTimetable = () => {
       const response = await api.get('/student/timetable');
       return response;
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    refetchInterval: 15000,
   });
 };
 
@@ -144,7 +147,10 @@ export const useStudentFees = () => {
       const response = await api.get('/student/fees');
       return response;
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    refetchInterval: 15000,
   });
 };
 
@@ -155,7 +161,10 @@ export const useStudentNotices = () => {
       const response = await api.get('/student/notices');
       return response;
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    refetchInterval: 15000,
   });
 };
 
@@ -180,7 +189,10 @@ export const useStudentPlacements = () => {
       const response = await api.get('/student/placements');
       return response;
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    refetchInterval: 15000,
   });
 };
 

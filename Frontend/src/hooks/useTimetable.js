@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/apiClient';
 import toast from 'react-hot-toast';
+import { broadcastSync } from '../utils/syncChannel';
 
 export function useTimetable(collegeId) {
   const queryClient = useQueryClient();
@@ -19,7 +20,9 @@ export function useTimetable(collegeId) {
     mutationFn: (newSlot) => api.post('/timetable/schedule', newSlot),
     onSuccess: () => {
       toast.success('Class session scheduled successfully!');
-      queryClient.invalidateQueries({ queryKey: ['timetable', collegeId] });
+      queryClient.invalidateQueries({ queryKey: ['timetable'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'timetable'] });
+      broadcastSync('timetable');
     },
     onError: (err) => {
       toast.error(err.message || 'Failed to schedule class');
@@ -30,7 +33,9 @@ export function useTimetable(collegeId) {
     mutationFn: ({ id, data }) => api.put(`/timetable/${id}`, data),
     onSuccess: () => {
       toast.success('Class schedule updated!');
-      queryClient.invalidateQueries({ queryKey: ['timetable', collegeId] });
+      queryClient.invalidateQueries({ queryKey: ['timetable'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'timetable'] });
+      broadcastSync('timetable');
     },
     onError: (err) => {
       toast.error(err.message || 'Failed to update schedule');
@@ -41,7 +46,9 @@ export function useTimetable(collegeId) {
     mutationFn: (id) => api.delete(`/timetable/${id}`),
     onSuccess: () => {
       toast.success('Class schedule removed.');
-      queryClient.invalidateQueries({ queryKey: ['timetable', collegeId] });
+      queryClient.invalidateQueries({ queryKey: ['timetable'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'timetable'] });
+      broadcastSync('timetable');
     },
     onError: (err) => {
       toast.error(err.message || 'Failed to delete schedule');

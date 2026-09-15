@@ -82,6 +82,11 @@ const StudentFeesDashboard = () => {
           <div className="divide-y divide-slate-100 dark:divide-white/5">
             {feeInfo.invoices.map((inv) => {
               const isPaid = inv.status === 'paid';
+              const effectivePaid = isPaid && (!inv.amountPaid || Number(inv.amountPaid) === 0)
+                ? Number(inv.amountDue || 0)
+                : Number(inv.amountPaid || 0);
+              const feeDisplayName = inv.feeType || inv.feeStructure?.name || inv.transactions?.[0]?.gatewayRef || 'Academic Fee';
+
               return (
                 <div key={inv.id} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-white/[0.02]">
                   <div className="flex items-start gap-4">
@@ -94,7 +99,7 @@ const StudentFeesDashboard = () => {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-base font-bold text-slate-900 dark:text-white">{inv.feeStructure?.name || 'Academic Fee'}</h3>
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">{feeDisplayName}</h3>
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
                           isPaid ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20' : 'bg-rose-100 text-rose-700 dark:bg-rose-500/20'
                         }`}>
@@ -102,7 +107,7 @@ const StudentFeesDashboard = () => {
                         </span>
                       </div>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        Due: ₹{inv.amountDue?.toLocaleString() || 0} • Paid: ₹{inv.amountPaid?.toLocaleString() || 0}
+                        Due: ₹{inv.amountDue?.toLocaleString() || 0} • Paid: ₹{effectivePaid.toLocaleString()}
                       </p>
                     </div>
                   </div>

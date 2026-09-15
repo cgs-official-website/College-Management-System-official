@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
+import { broadcastSync } from '../utils/syncChannel';
 
 export function useFees(collegeId) {
+  const queryClient = useQueryClient();
   const [fees, setFees] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -33,6 +36,8 @@ export function useFees(collegeId) {
       const response = await api.post('/fees', data);
       toast.success("Fee record created successfully!");
       await fetchFees();
+      queryClient.invalidateQueries({ queryKey: ['student', 'fees'] });
+      broadcastSync('fees');
       return response;
     } catch (error) {
       console.error("Error adding fee:", error);
@@ -50,6 +55,8 @@ export function useFees(collegeId) {
       const response = await api.put(`/fees/${id}`, data);
       toast.success("Fee record updated successfully!");
       await fetchFees();
+      queryClient.invalidateQueries({ queryKey: ['student', 'fees'] });
+      broadcastSync('fees');
       return response;
     } catch (error) {
       console.error("Error updating fee:", error);
@@ -66,6 +73,8 @@ export function useFees(collegeId) {
       const response = await api.delete(`/fees/${id}`);
       toast.success("Fee record deleted.");
       await fetchFees();
+      queryClient.invalidateQueries({ queryKey: ['student', 'fees'] });
+      broadcastSync('fees');
       return response;
     } catch (error) {
       console.error("Error deleting fee:", error);

@@ -164,18 +164,18 @@ export const createFee = async (req, res) => {
       }
     });
 
-    // 4. Create PaymentTransaction record if paid and paymentMethod is provided
+    // 4. Create PaymentTransaction record to record feeType and payment details
     let createdTx = null;
-    if (isPaid && payload.paymentMethod) {
+    if (payload.feeType || payload.paymentMethod || isPaid) {
       createdTx = await tx.paymentTransaction.create({
         data: {
           collegeId,
           feeId: fee.id,
-          gateway: payload.paymentMethod,
+          gateway: payload.paymentMethod || (isPaid ? 'Cash' : 'Invoice'),
           gatewayRef: payload.feeType || 'Tuition Fee',
-          amount: numAmount,
-          status: 'success',
-          paidAt: new Date()
+          amount: isPaid ? numAmount : 0,
+          status: isPaid ? 'success' : 'pending',
+          paidAt: isPaid ? new Date() : null
         }
       });
     }
@@ -214,7 +214,7 @@ export const updateFee = async (req, res) => {
     const newAmountDue = payload.amount !== undefined ? payload.amount : (payload.amountDue !== undefined ? Number(payload.amountDue) : existing.amountDue);
     const newAmountPaid = payload.amountPaid !== undefined 
       ? Number(payload.amountPaid) 
-      : (isPaid ? newAmountDue : (newStatus === 'pending' || newStatus === 'overdue' ? 0 : existing.amountPaid));
+      : (isPaid ? (existing.amountPaid > 0 ? existing.amountPaid : newAmountDue) : (newStatus === 'pending' || newStatus === 'overdue' ? 0 : existing.amountPaid));
 
     const fee = await tx.fee.update({
       where: { id },
@@ -243,31 +243,30 @@ export const updateFee = async (req, res) => {
       });
     }
 
-    if (payload.paymentMethod) {
-      const existingTx = existing.transactions?.[0];
-      if (existingTx) {
-        await tx.paymentTransaction.update({
-          where: { id: existingTx.id },
-          data: {
-            gateway: payload.paymentMethod,
-            ...(payload.feeType && { gatewayRef: payload.feeType }),
-            status: isPaid ? 'success' : existingTx.status,
-            paidAt: isPaid ? (existingTx.paidAt || new Date()) : null
-          }
-        });
-      } else if (isPaid) {
-        await tx.paymentTransaction.create({
-          data: {
-            collegeId,
-            feeId: fee.id,
-            gateway: payload.paymentMethod,
-            gatewayRef: payload.feeType || 'Tuition Fee',
-            amount: newAmountDue,
-            status: 'success',
-            paidAt: new Date()
-          }
-        });
-      }
+    const existingTx = existing.transactions?.[0];
+    if (existingTx) {
+      await tx.paymentTransaction.update({
+        where: { id: existingTx.id },
+        data: {
+          ...(payload.paymentMethod && { gateway: payload.paymentMethod }),
+          ...(payload.feeType && { gatewayRef: payload.feeType }),
+          status: isPaid ? 'success' : existingTx.status,
+          amount: isPaid ? newAmountDue : existingTx.amount,
+          paidAt: isPaid ? (existingTx.paidAt || new Date()) : existingTx.paidAt
+        }
+      });
+    } else if (payload.feeType || payload.paymentMethod || isPaid) {
+      await tx.paymentTransaction.create({
+        data: {
+          collegeId,
+          feeId: fee.id,
+          gateway: payload.paymentMethod || (isPaid ? 'Cash' : 'Invoice'),
+          gatewayRef: payload.feeType || 'Tuition Fee',
+          amount: isPaid ? newAmountDue : 0,
+          status: isPaid ? 'success' : 'pending',
+          paidAt: isPaid ? new Date() : null
+        }
+      });
     }
 
     return fee;

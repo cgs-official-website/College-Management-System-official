@@ -25,14 +25,15 @@ import {
   Sun, 
   Moon, 
   RefreshCw,
-  Bell,
+  Bell,    
   ArrowUpRight
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
+import { useQueryClient } from '@tanstack/react-query';
+import { subscribeToSync } from '../../utils/syncChannel';
 import { useStudentProfile, useStudentDashboard } from '../../hooks/useStudentPortal';
-
-import StudentCoursesDashboard from './StudentCoursesDashboard';
-import StudentAssignmentsDashboard from './StudentAssignmentsDashboard';
+import StudentCoursesDashboard from './StudentCoursesDashboard'; 
+import StudentAssignmentsDashboard from './StudentAssignmentsDashboard'; 
 import StudentAttendanceDashboard from './StudentAttendanceDashboard';
 import StudentTimetableDashboard from './StudentTimetableDashboard';
 import StudentExamsDashboard from './StudentExamsDashboard';
@@ -47,6 +48,7 @@ import StudentDocumentsDashboard from './StudentDocumentsDashboard';
 import StudentSettings from './StudentSettings';
 
 const StudentLayout = () => {
+  const queryClient = useQueryClient();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -65,6 +67,17 @@ const StudentLayout = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToSync((moduleName) => {
+      if (moduleName) {
+        queryClient.invalidateQueries({ queryKey: ['student', moduleName] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['student'] });
+      }
+    });
+    return () => unsubscribe();
+  }, [queryClient]);
 
   const handleLogout = async () => {
     await logout();

@@ -500,13 +500,31 @@ export const getStudentFees = async (req, res) => {
     const paidAmount = fees.reduce((acc, f) => acc + (Number(f.amountPaid) || (f.status === 'paid' ? Number(f.amountDue) : 0)), 0);
     const pendingAmount = Math.max(0, totalAmount - paidAmount);
 
+    const formattedInvoices = fees.map((f) => {
+      const isPaid = f.status === 'paid';
+      const effectivePaid = isPaid && (!f.amountPaid || Number(f.amountPaid) === 0)
+        ? Number(f.amountDue)
+        : Number(f.amountPaid || 0);
+      const resolvedFeeType = f.transactions?.[0]?.gatewayRef || 'Tuition Fee';
+
+      return {
+        ...f,
+        amountPaid: effectivePaid,
+        feeType: resolvedFeeType,
+        feeStructure: {
+          ...(f.feeStructure || {}),
+          name: resolvedFeeType
+        }
+      };
+    });
+
     res.json({
       success: true,
       data: {
         totalAmount,
         paidAmount,
         pendingAmount,
-        invoices: fees
+        invoices: formattedInvoices
       }
     });
   } catch (error) {

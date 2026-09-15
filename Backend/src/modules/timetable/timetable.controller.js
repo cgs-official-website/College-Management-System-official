@@ -166,56 +166,56 @@ export const scheduleSlot = async (req, res) => {
 
   // If a specific course was requested, validate ownership
   let targetCourseId = defaults.courseId;
+  let targetDeptId = defaults.deptId;
+  let targetSectionId = defaults.sectionId;
+
   if (payload.courseId) {
     const course = await prisma.course.findFirst({
       where: {
         id: payload.courseId,
         collegeId
+      },
+      include: { sections: true }
+    });
+
+    if (course) {
+      targetCourseId = course.id;
+      if (course.departmentId) targetDeptId = course.departmentId;
+      if (course.sections && course.sections.length > 0) {
+        targetSectionId = course.sections[0].id;
       }
-    });
-
-    if (!course) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: 'INVALID_COURSE',
-          message: 'Course not found or does not belong to this college'
-        }
-      });
     }
+  }
 
-    targetCourseId = course.id;
-  } else if (payload.subject) {
-    let existingCourse = await prisma.course.findFirst({
-      where: { collegeId, name: payload.subject }
+  // If a specific subject name was provided, ensure the course accurately represents the subject
+  if (payload.subject && payload.subject.trim()) {
+    const trimmedSubject = payload.subject.trim();
+    let subjectCourse = await prisma.course.findFirst({
+      where: {
+        collegeId,
+        name: { equals: trimmedSubject, mode: 'insensitive' }
+      },
+      include: { sections: true }
     });
-    if (!existingCourse) {
-      existingCourse = await prisma.course.create({
+
+    if (!subjectCourse) {
+      subjectCourse = await prisma.course.create({
         data: {
           collegeId,
-          departmentId: defaults.deptId,
-          name: payload.subject,
+          departmentId: targetDeptId,
+          name: trimmedSubject,
           code: `SUB-${Math.floor(100 + Math.random() * 900)}`,
           semester: 1,
           credits: 3
-        }
+        },
+        include: { sections: true }
       });
     }
-    targetCourseId = existingCourse.id;
-  }
 
-  let targetDeptId = defaults.deptId;
-  let targetSectionId = defaults.sectionId;
-  if (targetCourseId) {
-    const courseObj = await prisma.course.findUnique({
-      where: { id: targetCourseId },
-      include: { sections: true }
-    });
-    if (courseObj) {
-      if (courseObj.departmentId) targetDeptId = courseObj.departmentId;
-      if (courseObj.sections && courseObj.sections.length > 0) {
-        targetSectionId = courseObj.sections[0].id;
-      }
+    targetCourseId = subjectCourse.id;
+    if (subjectCourse.departmentId) targetDeptId = subjectCourse.departmentId;
+    if (subjectCourse.sections && subjectCourse.sections.length > 0) {
+      targetSectionId = subjectCourse.sections[0].id;
     }
   }
 
@@ -305,7 +305,30 @@ export const updateSlot = async (req, res) => {
   }
 
   const updateData = {};
-  if (payload.courseId) {
+  if (payload.subject && payload.subject.trim()) {
+    const trimmedSubject = payload.subject.trim();
+    let subjectCourse = await prisma.course.findFirst({
+      where: {
+        collegeId,
+        name: { equals: trimmedSubject, mode: 'insensitive' }
+      }
+    });
+
+    if (!subjectCourse) {
+      subjectCourse = await prisma.course.create({
+        data: {
+          collegeId,
+          departmentId: existing.departmentId,
+          name: trimmedSubject,
+          code: `SUB-${Math.floor(100 + Math.random() * 900)}`,
+          semester: 1,
+          credits: 3
+        }
+      });
+    }
+
+    updateData.courseId = subjectCourse.id;
+  } else if (payload.courseId) {
     const course = await prisma.course.findFirst({
       where: {
         id: payload.courseId,

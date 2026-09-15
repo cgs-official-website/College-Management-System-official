@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
+import { broadcastSync } from '../utils/syncChannel';
 
 export function useNotices(collegeId) {
+  const queryClient = useQueryClient();
   const [notices, setNotices] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -35,6 +38,8 @@ export function useNotices(collegeId) {
       await api.post('/notices', data);
       toast.success("Notice published successfully!");
       await fetchNotices();
+      queryClient.invalidateQueries({ queryKey: ['student', 'notices'] });
+      broadcastSync('notices');
     } catch (error) {
       console.error("Error adding notice:", error);
       toast.error(error?.message || "Failed to publish notice.");
@@ -50,6 +55,8 @@ export function useNotices(collegeId) {
       await api.put(`/notices/${id}`, data);
       toast.success("Notice updated successfully.");
       await fetchNotices();
+      queryClient.invalidateQueries({ queryKey: ['student', 'notices'] });
+      broadcastSync('notices');
     } catch (error) {
       console.error("Error updating notice:", error);
       toast.error(error?.message || "Failed to update notice.");
@@ -64,6 +71,8 @@ export function useNotices(collegeId) {
       await api.delete(`/notices/${id}`);
       toast.success("Notice deleted");
       await fetchNotices();
+      queryClient.invalidateQueries({ queryKey: ['student', 'notices'] });
+      broadcastSync('notices');
     } catch (error) {
       console.error("Error deleting notice:", error);
       toast.error("Failed to delete notice");

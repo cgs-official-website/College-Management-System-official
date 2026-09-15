@@ -50,10 +50,12 @@ export function FeeFormModal({ isOpen, onClose, onSubmit, initialData = null, is
       ? `${selectedStudent.class}${selectedStudent.section ? `-${selectedStudent.section}` : ''}`
       : '';
 
+    const numAmount = Number(data.amount);
     const finalData = {
       ...data,
-      amount: Number(data.amount),
-      amountDue: Number(data.amount),
+      amount: numAmount,
+      amountDue: numAmount,
+      amountPaid: data.status === 'paid' ? numAmount : (initialData?.amountPaid || 0),
       studentName: fullName,
       studentClass: classInfo
     };

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/apiClient';
 import toast from 'react-hot-toast';
+import { broadcastSync } from '../utils/syncChannel';
 
 export const usePlacements = () => {
   const queryClient = useQueryClient();
@@ -20,6 +21,8 @@ export const usePlacements = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['placements'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'placements'] });
+      broadcastSync('placements');
       toast.success('Placement drive added successfully!');
     },
     onError: (err) => {
@@ -33,6 +36,8 @@ export const usePlacements = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['placements'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'placements'] });
+      broadcastSync('placements');
       toast.success('Placement drive removed.');
     },
     onError: (err) => {
