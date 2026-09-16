@@ -76,3 +76,8 @@ CMS File Format/
 .playwright-mcp/
 **/test-results/
 test-results/
+
+# Reports & Document files
+PROJECT_STATUS_REPORT.md
+*.docx
+*.doc
