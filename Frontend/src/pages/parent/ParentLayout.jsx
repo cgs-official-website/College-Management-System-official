@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, 
@@ -9,30 +9,34 @@ import {
   Menu, 
   X,
   User,
-  Shield,
   RefreshCw,
   Home,
   Bus,
-  ShoppingCart,
-  UsersRound,
-  MessageSquareWarning
+  MessageSquareWarning,
+  CreditCard,
+  Users,
+  ChevronDown,
+  GraduationCap
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { ParentChildProvider, useParentChild } from '../../contexts/ParentChildContext';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
 import { SearchBar } from '../../components/ui/SearchBar';
-import StoreDashboard from '../shared/StoreDashboard';
-import PTMDashboard from '../shared/PTMDashboard';
 import ParentDashboard from './ParentDashboard';
 import ParentAttendance from './ParentAttendance';
 import ParentGrades from './ParentGrades';
 import ParentHostel from './ParentHostel';
 import ParentTransport from './ParentTransport';
 import ParentComplaints from './ParentComplaints';
+import ParentFees from './ParentFees';
+import ParentPTM from './ParentPTM';
 
-export default function ParentLayout() {
+function ParentLayoutContent() {
   const { userData, logout } = useAuth();
+  const { activeChild, activeChildId, setActiveChildId, linkedStudents } = useParentChild();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isChildMenuOpen, setIsChildMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -56,10 +60,10 @@ export default function ParentLayout() {
     { name: 'Dashboard', icon: LayoutDashboard, path: '/parent' },
     { name: 'Child Attendance', icon: CalendarIcon, path: '/parent/attendance' },
     { name: 'Academic Records', icon: FileBarChart, path: '/parent/grades' },
+    { name: 'Fees & Finance', icon: CreditCard, path: '/parent/fees' },
+    { name: 'PTM Meetings', icon: Users, path: '/parent/ptm' },
     { name: 'Hostel', icon: Home, path: '/parent/hostel' },
     { name: 'Transport', icon: Bus, path: '/parent/transport' },
-    { name: 'Store', icon: ShoppingCart, path: '/parent/store' },
-    { name: 'PTM', icon: UsersRound, path: '/parent/ptm' },
     { name: 'Complaints', icon: MessageSquareWarning, path: '/parent/complaints' },
   ];
 
@@ -99,6 +103,23 @@ export default function ParentLayout() {
             <p className="text-[10px] text-teal-600 dark:text-teal-400 font-bold tracking-wider uppercase">Parent Panel</p>
           </div>
         </div>
+
+        {/* Child Selector in Sidebar for Mobile */}
+        {linkedStudents.length > 0 && (
+          <div className="px-4 pt-4 pb-2">
+            <div className="p-3 bg-teal-50/70 dark:bg-teal-500/10 border border-teal-100 dark:border-teal-500/20 rounded-2xl">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-teal-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                  <GraduationCap className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{activeChild?.name}</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{activeChild?.department} • {activeChild?.admissionNumber}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-4 space-y-1">
           {navLinks.map((link) => {
@@ -163,9 +184,69 @@ export default function ParentLayout() {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="hidden sm:block w-64 md:w-80 lg:w-96">
-              <SearchBar placeholder="Search child records..." />
-            </div>
+
+            {/* Child Switcher Dropdown */}
+            {linkedStudents.length > 0 && (
+              <div className="relative">
+                <button
+                  onClick={() => setIsChildMenuOpen(!isChildMenuOpen)}
+                  className="flex items-center gap-2.5 px-3.5 py-2 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-2xl transition-all border border-slate-200/60 dark:border-white/10"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-teal-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
+                    {activeChild?.name?.charAt(0) || 'S'}
+                  </div>
+                  <div className="text-left hidden sm:block">
+                    <p className="text-xs font-extrabold text-slate-900 dark:text-white leading-tight">
+                      {activeChild?.name || 'Selected Child'}
+                    </p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-none">
+                      {activeChild?.department || 'Student'} • {activeChild?.admissionNumber || ''}
+                    </p>
+                  </div>
+                  {linkedStudents.length > 1 && (
+                    <ChevronDown className="w-4 h-4 text-slate-400 ml-1" />
+                  )}
+                </button>
+
+                {/* Dropdown Menu for multiple children */}
+                <AnimatePresence>
+                  {isChildMenuOpen && linkedStudents.length > 1 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="absolute left-0 mt-2 w-64 bg-white dark:bg-[#0A0F1C] rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 py-2 z-50 overflow-hidden"
+                    >
+                      <div className="px-4 py-2 border-b border-slate-100 dark:border-white/5 text-[10px] uppercase tracking-wider font-extrabold text-slate-400">
+                        Switch Student
+                      </div>
+                      {linkedStudents.map((child) => (
+                        <button
+                          key={child.id}
+                          onClick={() => {
+                            setActiveChildId(child.id);
+                            setIsChildMenuOpen(false);
+                          }}
+                          className={`w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors ${
+                            child.id === activeChildId
+                              ? 'bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-300 font-bold'
+                              : 'hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-teal-100 dark:bg-teal-500/20 text-teal-700 dark:text-teal-400 flex items-center justify-center font-bold text-xs shrink-0">
+                            {child.name?.charAt(0) || 'S'}
+                          </div>
+                          <div className="overflow-hidden">
+                            <p className="text-xs font-bold truncate">{child.name}</p>
+                            <p className="text-[10px] text-slate-400 truncate">{child.department} • {child.admissionNumber}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-4">
@@ -182,9 +263,9 @@ export default function ParentLayout() {
 
             <div className="h-8 w-px bg-slate-200 dark:bg-white/10 mx-1"></div>
 
-            <button onClick={() => navigate('/parent/settings')} className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center text-white font-bold shadow-lg shadow-teal-500/20 ring-2 ring-white dark:ring-[#0A0F1C] hover:scale-105 transition-transform shrink-0">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center text-white font-bold shadow-lg shadow-teal-500/20 ring-2 ring-white dark:ring-[#0A0F1C] shrink-0">
               {userData?.name ? userData.name.charAt(0).toUpperCase() : 'P'}
-            </button>
+            </div>
           </div>
         </header>
 
@@ -197,15 +278,24 @@ export default function ParentLayout() {
               <Route path="/" element={<ParentDashboard />} />
               <Route path="/attendance" element={<ParentAttendance />} />
               <Route path="/grades" element={<ParentGrades />} />
+              <Route path="/fees" element={<ParentFees />} />
+              <Route path="/ptm" element={<ParentPTM />} />
               <Route path="/hostel" element={<ParentHostel />} />
               <Route path="/transport" element={<ParentTransport />} />
-              <Route path="/store" element={<StoreDashboard />} />
-              <Route path="/ptm" element={<PTMDashboard />} />
               <Route path="/complaints" element={<ParentComplaints />} />
+              <Route path="*" element={<Navigate to="/parent" replace />} />
             </Routes>
           </div>
         </main>
       </div>
     </div>
+  );
+}
+
+export default function ParentLayout() {
+  return (
+    <ParentChildProvider>
+      <ParentLayoutContent />
+    </ParentChildProvider>
   );
 }

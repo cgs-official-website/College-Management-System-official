@@ -154,6 +154,20 @@ export const useStudentFees = () => {
   });
 };
 
+export const usePayStudentFee = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ feeId, amount, paymentMethod }) => {
+      const response = await api.post('/student/fees/pay', { feeId, amount, paymentMethod });
+      return response.data?.data || response.data || response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['student', 'fees'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'dashboard'] });
+    }
+  });
+};
+
 export const useStudentNotices = () => {
   return useQuery({
     queryKey: ['student', 'notices'],

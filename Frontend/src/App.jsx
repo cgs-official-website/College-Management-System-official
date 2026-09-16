@@ -16,6 +16,8 @@ import DashboardRedirect from './components/ui/DashboardRedirect';
 import SuperAdminLayout from './pages/superadmin/SuperAdminLayout';
 import AdminLayout from './pages/admin/AdminLayout';
 import StudentLayout from './pages/student/StudentLayout';
+import ParentLayout from './pages/parent/ParentLayout';
+import TeacherLayout from './pages/teacher/TeacherLayout';
 import NotFound from './pages/error/NotFound';
 import { Toaster } from 'react-hot-toast';
 
@@ -58,6 +60,12 @@ function App() {
 
             {/* Student Portal Routes */}
             <Route path="/student/*" element={<ProtectedRoute allowedRoles={['student', 'superadmin']}><StudentLayout /></ProtectedRoute>} />
+            
+            {/* Parent Portal Routes */}
+            <Route path="/parent/*" element={<ProtectedRoute allowedRoles={['parent', 'superadmin']}><ParentLayout /></ProtectedRoute>} />
+            
+            {/* Teacher Portal Routes */}
+            <Route path="/teacher/*" element={<ProtectedRoute allowedRoles={['teacher', 'hod', 'faculty', 'superadmin']}><TeacherLayout /></ProtectedRoute>} />
             
             {/* 404 Route */}
             <Route path="*" element={<NotFound />} />

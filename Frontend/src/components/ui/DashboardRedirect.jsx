@@ -34,6 +34,8 @@ const DashboardRedirect = () => {
   }
 
   if (userRole === 'student') return <Navigate to="/student" replace />;
+  if (userRole === 'parent') return <Navigate to="/parent" replace />;
+  if (userRole === 'teacher' || userRole === 'hod' || userRole === 'faculty') return <Navigate to="/teacher" replace />;
   
   // Approved college admins and staff proceed to admin panel
   return <Navigate to="/admin" replace />;

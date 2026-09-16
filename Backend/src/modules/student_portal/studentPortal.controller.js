@@ -532,6 +532,82 @@ export const getStudentFees = async (req, res) => {
   }
 };
 
+export const payStudentFee = async (req, res) => {
+  try {
+    const student = req.student;
+    const { feeId, amount, paymentMethod = 'Razorpay' } = req.body;
+
+    if (!feeId || !amount || Number(amount) <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Valid feeId and positive payment amount are required.' }
+      });
+    }
+
+    const fee = await prisma.fee.findFirst({
+      where: {
+        id: feeId,
+        collegeId: student.collegeId,
+        OR: [
+          { studentId: student.id },
+          { student: { userId: student.userId } }
+        ]
+      }
+    });
+
+    if (!fee) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Fee record not found for this student.' }
+      });
+    }
+
+    const paymentAmount = Number(amount);
+    const currentPaid = Number(fee.amountPaid || 0);
+    const newPaid = currentPaid + paymentAmount;
+    const isFullyPaid = newPaid >= Number(fee.amountDue);
+    const newStatus = isFullyPaid ? 'paid' : 'partial';
+
+    const transactionRef = `TXN-STU-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const transaction = await prisma.paymentTransaction.create({
+      data: {
+        collegeId: student.collegeId,
+        feeId: fee.id,
+        gateway: paymentMethod,
+        gatewayRef: transactionRef,
+        amount: paymentAmount,
+        status: 'success',
+        paidAt: new Date()
+      }
+    });
+
+    const updatedFee = await prisma.fee.update({
+      where: { id: fee.id },
+      data: {
+        amountPaid: newPaid,
+        status: newStatus
+      },
+      include: {
+        feeStructure: true,
+        transactions: true
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Fee payment processed successfully.',
+      data: {
+        transaction,
+        fee: updatedFee,
+        receiptNumber: transactionRef
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
 export const getStudentNotices = async (req, res) => {
   try {
     const student = req.student;

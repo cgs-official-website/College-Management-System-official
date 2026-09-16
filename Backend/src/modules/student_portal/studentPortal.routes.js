@@ -20,6 +20,7 @@ import {
   getStudentExams,
   getStudentResults,
   getStudentFees,
+  payStudentFee,
   getStudentNotices,
   getStudentLibrary,
   getStudentPlacements,
@@ -60,6 +61,7 @@ router.get('/timetable', catchAsync(getStudentTimetable));
 router.get('/exams', catchAsync(getStudentExams));
 router.get('/results', catchAsync(getStudentResults));
 router.get('/fees', catchAsync(getStudentFees));
+router.post('/fees/pay', catchAsync(payStudentFee));
 router.get('/notices', catchAsync(getStudentNotices));
 router.get('/library', catchAsync(getStudentLibrary));
 router.get('/placements', catchAsync(getStudentPlacements));

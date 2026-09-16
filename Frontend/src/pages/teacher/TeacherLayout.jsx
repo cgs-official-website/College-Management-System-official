@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
@@ -224,6 +224,7 @@ const TeacherLayout = () => {
               <Route path="/settings" element={<TeacherSettings />} />
               <Route path="/facility-requests" element={<HODFacilityRequests />} />
               {userData?.role === 'hod' && <Route path="/timetable" element={<Timetable />} />}
+              <Route path="*" element={<Navigate to="/teacher" replace />} />
             </Routes>
           </div>
         </main>
