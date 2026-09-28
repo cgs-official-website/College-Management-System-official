@@ -47,6 +47,7 @@ import {
   FileEdit
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { api } from '../../services/api';
 import { useTheme } from '../../hooks/useTheme';
 import PlaceholderModule from '../../components/ui/PlaceholderModule';
 import RaiseTicketModal from '../../components/ui/RaiseTicketModal';
@@ -343,6 +344,7 @@ const AdminLayout = () => {
           <div className="max-w-7xl mx-auto relative">
             <Routes>
               <Route path="/" element={<AdminDashboardHome />} />
+              <Route path="/dashboard" element={<AdminDashboardHome />} />
               <Route path="/roles/*" element={hasAccess('roles') ? <RolesManagement /> : <Navigate to="/404" replace />} />
               <Route path="/admission" element={hasAccess('admission') ? <Admission /> : <Navigate to="/404" replace />} />
               <Route path="/students/*" element={hasAccess('students') ? <StudentList /> : <Navigate to="/404" replace />} />
@@ -388,53 +390,89 @@ const AdminDashboardHome = () => {
 
   const handleGenerateLink = async (role) => {
     if (!userData?.collegeId && !userData?.collegeSlug) return;
-    
-    // Construct the registration link with the college slug and specific role
+
     const baseUrl = window.location.origin;
-    const inviteLink = userData?.collegeSlug 
-      ? `${baseUrl}/register/${role}/${userData.collegeSlug}` 
-      : `${baseUrl}/register/${role}?code=${userData.collegeId}`;
-    
+    let inviteLink = '';
+
+    // ── STUDENT: must use the secure token-based registration flow ──
+    // Generates a fresh cryptographic token via the backend and builds
+    // the correct URL: /student/register?token=<rawToken>
+    // (NOT /register/student?code=<collegeId> — that was wrong path, wrong
+    //  param name, and a UUID instead of a real crypto token)
+    if (role === 'student') {
+      try {
+        console.log('[AdminLayout] Fetching student registration token from API...');
+        const response = await api.post('/students/registration-link/regenerate');
+        const linkData = response.data ?? response;
+        const rawToken = linkData?.rawToken;
+        const path = linkData?.path;
+
+        if (!rawToken || !path) {
+          console.error('[AdminLayout] Token API did not return rawToken. Response:', { hasData: !!linkData, hasPath: !!path });
+          toast.error('Failed to generate student registration link. Please try again.');
+          return;
+        }
+
+        // Safe log — only token length and first 4 chars, never full token
+        console.log(`[AdminLayout] Student registration token ready. Length: ${rawToken.length}, prefix: ${rawToken.slice(0, 4)}...`);
+
+        // path from backend is e.g. /student/register?token=<rawToken>
+        inviteLink = `${baseUrl}${path}`;
+      } catch (err) {
+        console.error('[AdminLayout] Error generating student registration token:', err.message);
+        toast.error(err.message || 'Failed to generate student registration link.');
+        return;
+      }
+    } else {
+      // ── TEACHER / HOD / PARENT: general /register/:role flow ──
+      // These use the existing Register.jsx page with collegeSlug or collegeId
+      inviteLink = userData?.collegeSlug
+        ? `${baseUrl}/register/${role}/${userData.collegeSlug}`
+        : `${baseUrl}/register/${role}?code=${userData.collegeId}`;
+    }
+
+    console.log(`[AdminLayout] Generated ${role} invite link. Route: ${new URL(inviteLink).pathname}`);
+
     // Copy to clipboard with fallback
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(inviteLink);
-        toast.success(`Copied ${role} link to clipboard!`);
+        toast.success(`Copied ${role} registration link to clipboard!`);
       } else {
-        const textArea = document.createElement("textarea");
+        const textArea = document.createElement('textarea');
         textArea.value = inviteLink;
-        textArea.style.position = "fixed";
-        textArea.style.left = "-999999px";
-        textArea.style.top = "-999999px";
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
         try {
           document.execCommand('copy');
-          toast.success(`Copied ${role} link to clipboard!`);
+          toast.success(`Copied ${role} registration link to clipboard!`);
         } catch (err) {
-          console.error("Fallback copy failed", err);
+          console.error('Fallback copy failed', err);
           toast.error(
             <div className="flex flex-col gap-2">
               <span className="font-bold">Manual copy required:</span>
               <input readOnly value={inviteLink} className="text-xs p-1 rounded bg-slate-100 dark:bg-slate-800 border-none w-full" onClick={e => e.target.select()} />
-            </div>, 
+            </div>,
             { duration: 8000 }
           );
         }
         document.body.removeChild(textArea);
       }
     } catch (err) {
-      console.error("Failed to copy", err);
+      console.error('Failed to copy', err);
       toast.error(
         <div className="flex flex-col gap-2">
           <span className="font-bold">Manual copy required:</span>
           <input readOnly value={inviteLink} className="text-xs p-1 rounded bg-slate-100 dark:bg-slate-800 border-none w-full" onClick={e => e.target.select()} />
-        </div>, 
+        </div>,
         { duration: 8000 }
       );
     }
-    
+
     setCopiedLink(role);
     setIsDropdownOpen(false);
     setTimeout(() => setCopiedLink(null), 3000);

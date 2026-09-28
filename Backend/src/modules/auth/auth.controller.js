@@ -328,6 +328,8 @@ export const getStudentRegistrationInfo = async (req, res) => {
         collegeName: link.college.name,
         collegeSlug: link.college.slug,
         logoUrl: link.college.logoUrl || null,
+        contactEmail: link.college.contactEmail || null,
+        website: link.college.website || null,
         expiresAt: link.expiresAt
       }
     });
@@ -339,141 +341,196 @@ export const getStudentRegistrationInfo = async (req, res) => {
 export const studentRegister = async (req, res) => {
   try {
     const payload = studentRegisterSchema.parse(req.body);
-    const { token, admissionNumber, email, firstName, lastName, phone, password } = payload;
+    const { token, collegeId: requestedCollegeId, admissionNumber, email, firstName, lastName, phone, password } = payload;
+    let collegeId = requestedCollegeId;
+    let college = null;
 
-    // 1. Hash raw token with SHA-256 and look up registration link
-    const tokenHash = crypto.createHash('sha256').update(token.trim()).digest('hex');
-    const link = await prisma.studentRegistrationLink.findUnique({
-      where: { tokenHash },
-      include: { college: true }
-    });
-
-    if (!link || !link.isActive) {
-      return res.status(401).json({
-        success: false,
-        error: { code: 'INVALID_REGISTRATION_TOKEN', message: 'Invalid or deactivated registration link' }
+    if (token) {
+      const tokenHash = crypto.createHash('sha256').update(token.trim()).digest('hex');
+      const link = await prisma.studentRegistrationLink.findUnique({
+        where: { tokenHash },
+        include: { college: true }
       });
-    }
 
-    if (link.expiresAt && link.expiresAt < new Date()) {
-      return res.status(401).json({
-        success: false,
-        error: { code: 'REGISTRATION_LINK_EXPIRED', message: 'Registration link has expired' }
-      });
-    }
-
-    const collegeId = link.collegeId;
-
-    // 2. Find pre-created student record for this college
-    const student = await prisma.student.findFirst({
-      where: {
-        collegeId,
-        admissionNumber: { equals: admissionNumber.trim(), mode: 'insensitive' },
-        deletedAt: null
-      },
-      include: {
-        user: true
+      if (!link || !link.isActive) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'INVALID_REGISTRATION_TOKEN', message: 'Invalid or deactivated registration link' }
+        });
       }
-    });
+      if (link.expiresAt && link.expiresAt < new Date()) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'REGISTRATION_LINK_EXPIRED', message: 'Registration link has expired' }
+        });
+      }
+      if (requestedCollegeId && requestedCollegeId !== link.collegeId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'COLLEGE_LINK_MISMATCH', message: 'Registration link does not match the selected college' }
+        });
+      }
 
-    if (!student) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'STUDENT_RECORD_NOT_FOUND', message: 'No student record found matching the provided admission number in this college.' }
+      collegeId = link.collegeId;
+      college = link.college;
+    } else if (collegeId) {
+      college = await prisma.college.findUnique({
+        where: { id: collegeId },
+        select: { id: true, status: true }
       });
     }
 
-    // 3. Email verification against existing student record
-    const normalizedEmail = email.trim().toLowerCase();
-    const existingStudentEmail = (student.emailId || student.user?.email || '').trim().toLowerCase();
+    if (!college || !collegeId) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'COLLEGE_NOT_FOUND', message: 'Registration college was not found' }
+      });
+    }
+    if (college.status === 'rejected') {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'COLLEGE_REJECTED', message: 'College registration was rejected' }
+      });
+    }
 
-    if (existingStudentEmail && existingStudentEmail !== normalizedEmail) {
+    const normalizedAdmissionNumber = admissionNumber.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+    const student = normalizedAdmissionNumber
+      ? await prisma.student.findFirst({
+          where: {
+            collegeId,
+            admissionNumber: { equals: normalizedAdmissionNumber, mode: 'insensitive' },
+            deletedAt: null
+          },
+          include: { user: true }
+        })
+      : null;
+
+    // If an admin pre-created this admission record, verify its stored email.
+    const existingStudentEmail = (student?.emailId || student?.user?.email || '').trim().toLowerCase();
+
+    if (student && existingStudentEmail && existingStudentEmail !== normalizedEmail) {
       return res.status(400).json({
         success: false,
         error: { code: 'EMAIL_MISMATCH', message: 'The provided email does not match our official student records.' }
       });
     }
 
-    // 4. Duplicate registration guard: Check if user is already registered and active
-    if (student.user && student.user.accountStatus === 'active') {
+    if (student?.user?.accountStatus === 'active') {
       return res.status(409).json({
         success: false,
         error: { code: 'ALREADY_REGISTERED', message: 'This student account has already been registered. Please log in with your credentials.' }
       });
     }
 
-    // 5. Atomic transaction to create/activate User and link Student
     const passwordHash = await bcrypt.hash(password, 10);
     const fullName = `${firstName.trim()} ${lastName ? lastName.trim() : ''}`.trim();
 
     const result = await prisma.$transaction(async (tx) => {
-      let user = null;
-      if (student.userId) {
+      let admissionNo = normalizedAdmissionNumber;
+      if (!admissionNo) {
+        await tx.$queryRaw`SELECT "id" FROM "College" WHERE "id" = ${collegeId}::uuid FOR UPDATE`;
+        const admissionPrefix = `ADM${new Date().getFullYear()}`;
+        const latestStudent = await tx.student.findFirst({
+          where: { collegeId, admissionNumber: { startsWith: admissionPrefix } },
+          orderBy: { admissionNumber: 'desc' },
+          select: { admissionNumber: true }
+        });
+        const latestSequence = Number.parseInt(latestStudent?.admissionNumber?.slice(admissionPrefix.length) || '0', 10) || 0;
+        admissionNo = `${admissionPrefix}${String(latestSequence + 1).padStart(4, '0')}`;
+      }
+
+      let department = await tx.department.findFirst({
+        where: { collegeId },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true }
+      });
+      if (!department) {
+        department = await tx.department.create({
+          data: { name: 'General Studies', code: 'GEN', collegeId },
+          select: { id: true }
+        });
+      }
+
+      let user = student?.userId
+        ? await tx.user.findUnique({ where: { id: student.userId } })
+        : await tx.user.findFirst({ where: { email: normalizedEmail, collegeId } });
+
+      if (user) {
+        const linkedStudent = await tx.student.findUnique({ where: { userId: user.id }, select: { id: true } });
+        if (user.role !== 'student' || (linkedStudent && linkedStudent.id !== student?.id)) {
+          const conflict = new Error('An account with this email already exists in this college.');
+          conflict.statusCode = 409;
+          conflict.code = 'STUDENT_EMAIL_ALREADY_EXISTS';
+          throw conflict;
+        }
+        if (student && user.accountStatus === 'active') {
+          const conflict = new Error('This student account is already registered. Please sign in.');
+          conflict.statusCode = 409;
+          conflict.code = 'ALREADY_REGISTERED';
+          throw conflict;
+        }
         user = await tx.user.update({
-          where: { id: student.userId },
+          where: { id: user.id },
+          data: { email: normalizedEmail, name: fullName, passwordHash, accountStatus: 'active', role: 'student' }
+        });
+      } else {
+        user = await tx.user.create({
           data: {
             email: normalizedEmail,
             name: fullName,
+            collegeId,
             passwordHash,
-            accountStatus: 'active',
-            role: 'student'
+            role: 'student',
+            accountStatus: 'active'
           }
         });
-      } else {
-        const existingUser = await tx.user.findFirst({
-          where: { email: normalizedEmail, collegeId }
-        });
-
-        if (existingUser) {
-          user = await tx.user.update({
-            where: { id: existingUser.id },
-            data: {
-              name: fullName,
-              passwordHash,
-              accountStatus: 'active',
-              role: 'student'
-            }
-          });
-        } else {
-          user = await tx.user.create({
-            data: {
-              email: normalizedEmail,
-              name: fullName,
-              collegeId,
-              passwordHash,
-              role: 'student',
-              accountStatus: 'active'
-            }
-          });
-        }
       }
 
-      // Update student record with userId and contact details
-      const updatedStudent = await tx.student.update({
-        where: { id: student.id },
-        data: {
-          userId: user.id,
-          emailId: normalizedEmail,
-          studentMobile: phone || student.studentMobile,
-          emergencyContact: phone || student.emergencyContact
-        }
-      });
+      const existingCustomFields = student?.customFields && typeof student.customFields === 'object'
+        ? student.customFields
+        : {};
+      const studentData = {
+        userId: user.id,
+        emailId: normalizedEmail,
+        studentMobile: phone || student?.studentMobile || null,
+        emergencyContact: phone || student?.emergencyContact || null,
+        customFields: { ...existingCustomFields, firstName: firstName.trim(), lastName: lastName || '' }
+      };
 
-      return { user, student: updatedStudent };
+      const savedStudent = student
+        ? await tx.student.update({ where: { id: student.id }, data: studentData })
+        : await tx.student.create({
+            data: {
+              ...studentData,
+              collegeId,
+              departmentId: department.id,
+              admissionNumber: admissionNo,
+              rollNumber: admissionNo,
+              batchYear: String(new Date().getFullYear())
+            }
+          });
+
+      return { user, student: savedStudent, admissionNumber: admissionNo };
     });
 
-    logger.info(`[info] Student ${normalizedEmail} (admission=${student.admissionNumber}, collegeId=${collegeId}) registered successfully`);
+    logger.info(`[info] Student ${normalizedEmail} (admission=${result.admissionNumber}, collegeId=${collegeId}) registered successfully`);
 
     res.status(201).json({
       success: true,
       message: 'Registration completed successfully! You can now log in using your Admission Number or Email.',
       data: {
-        admissionNumber: student.admissionNumber,
+        studentId: result.student.id,
+        admissionNumber: result.admissionNumber,
         email: normalizedEmail
       }
     });
   } catch (error) {
-    res.status(400).json({ success: false, error: { message: error.message } });
+    const status = error.statusCode || (error.code === 'P2002' ? 409 : 400);
+    res.status(status).json({
+      success: false,
+      error: { code: error.code || 'STUDENT_REGISTRATION_FAILED', message: error.message }
+    });
   }
 };
 

@@ -5,6 +5,7 @@ import { FaSpinner } from 'react-icons/fa';
 
 const DashboardRedirect = () => {
   const { userRole, userData, loading } = useAuth();
+  const role = typeof userRole === 'string' ? userRole.trim().toLowerCase() : '';
 
   if (loading) {
     return (
@@ -17,7 +18,7 @@ const DashboardRedirect = () => {
     );
   }
 
-  if (userRole === 'superadmin') return <Navigate to="/super" replace />;
+  if (role === 'superadmin') return <Navigate to="/super" replace />;
 
   const collegeStatus = userData?.collegeStatus || userData?.college?.status;
 
@@ -33,12 +34,12 @@ const DashboardRedirect = () => {
     return <Navigate to="/pending-approval" replace />;
   }
 
-  if (userRole === 'student') return <Navigate to="/student" replace />;
-  if (userRole === 'parent') return <Navigate to="/parent" replace />;
-  if (userRole === 'teacher' || userRole === 'hod' || userRole === 'faculty') return <Navigate to="/teacher" replace />;
-  
-  // Approved college admins and staff proceed to admin panel
-  return <Navigate to="/admin" replace />;
+  if (role === 'student') return <Navigate to="/student/dashboard" replace />;
+  if (role === 'admin') return <Navigate to="/admin/dashboard" replace />;
+  if (role === 'parent') return <Navigate to="/parent" replace />;
+  if (role === 'teacher' || role === 'hod' || role === 'faculty') return <Navigate to="/teacher" replace />;
+
+  return <Navigate to="/login" replace />;
 };
 
 export default DashboardRedirect;

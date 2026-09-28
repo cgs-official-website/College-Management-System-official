@@ -12,8 +12,22 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
-  Home
+  Home,
+  GraduationCap
 } from 'lucide-react';
+
+const getRoleDestination = (role) => {
+  switch (typeof role === 'string' ? role.trim().toLowerCase() : '') {
+    case 'student': return '/student/dashboard';
+    case 'admin': return '/admin/dashboard';
+    case 'superadmin': return '/super';
+    case 'parent': return '/parent';
+    case 'teacher':
+    case 'hod':
+    case 'faculty': return '/teacher';
+    default: return '/login';
+  }
+};
 
 const Login = () => {
   const { register, handleSubmit, formState: { errors } } = useForm();
@@ -25,7 +39,7 @@ const Login = () => {
 
   useEffect(() => {
     if (currentUser && userRole) {
-      navigate('/dashboard');
+      navigate(getRoleDestination(userRole), { replace: true });
     }
   }, [currentUser, userRole, navigate]);
 
@@ -193,6 +207,17 @@ const Login = () => {
             </form>
             
             <div className="mt-6 pt-6 border-t border-slate-100 dark:border-white/5 space-y-3 text-center text-sm text-slate-500 dark:text-slate-400">
+              {/* Student registration link */}
+              <div className="flex items-center justify-center gap-2 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20">
+                <GraduationCap className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>New student?{' '}
+                  <Link to="/student/register" className="font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors">
+                    Register here
+                  </Link>
+                  {' '}using your college link
+                </span>
+              </div>
+              {/* Admin registration link */}
               <div>
                 College administrator?{' '}
                 <Link to="/register" className="font-bold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors">

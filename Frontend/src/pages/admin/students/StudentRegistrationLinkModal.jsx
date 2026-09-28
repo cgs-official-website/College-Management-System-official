@@ -27,8 +27,10 @@ export const StudentRegistrationLinkModal = ({ isOpen, onClose }) => {
     setIsLoading(true);
     setError('');
     try {
+      // apiClient interceptor unwraps axios response.data automatically,
+      // so `response` here is the full API JSON: { success, data: {...} }
       const response = await api.get('/students/registration-link');
-      setLinkData(response.data);
+      setLinkData(response.data ?? response);
     } catch (err) {
       setError(err.message || 'Failed to load registration link.');
     } finally {
@@ -49,8 +51,9 @@ export const StudentRegistrationLinkModal = ({ isOpen, onClose }) => {
 
     setIsRegenerating(true);
     try {
+      // apiClient interceptor unwraps axios response.data automatically
       const response = await api.post('/students/registration-link/regenerate');
-      setLinkData(response.data);
+      setLinkData(response.data ?? response);
       toast.success('Registration link regenerated! Previous links are now invalid.');
     } catch (err) {
       toast.error(err.message || 'Failed to regenerate link.');
@@ -161,33 +164,45 @@ export const StudentRegistrationLinkModal = ({ isOpen, onClose }) => {
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wider">
                   Registration URL
                 </label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3 text-xs font-mono text-slate-800 dark:text-slate-200 truncate select-all">
-                    {getFullUrl()}
+                {linkData?.path ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3 text-xs font-mono text-slate-800 dark:text-slate-200 truncate select-all">
+                      {getFullUrl()}
+                    </div>
+                    <button
+                      onClick={handleCopy}
+                      className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-500/20 flex items-center gap-1.5 shrink-0 transition-all"
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="w-4 h-4" /> Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4" /> Copy Link
+                        </>
+                      )}
+                    </button>
                   </div>
-                  <button
-                    onClick={handleCopy}
-                    className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-500/20 flex items-center gap-1.5 shrink-0 transition-all"
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="w-4 h-4" /> Copied!
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4" /> Copy Link
-                      </>
-                    )}
-                  </button>
-                </div>
+                ) : (
+                  // rawToken is never stored (only SHA-256 hash is kept for security).
+                  // Once the modal is closed and reopened, the raw token cannot be recovered.
+                  // The admin must regenerate to get a new copyable URL.
+                  <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Token not displayable.</strong> The registration token is stored as a secure hash — the original URL cannot be recovered. Click <strong>"Regenerate Token"</strong> below to create a new copyable link. Previous links will be invalidated.
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Security Details */}
               <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 text-xs text-slate-600 dark:text-slate-400 space-y-2">
                 <p className="font-semibold text-slate-800 dark:text-slate-200">How Student Registration Works:</p>
                 <ul className="list-disc list-inside space-y-1">
-                  <li>Only students with pre-created admission records in your college can register.</li>
-                  <li>Students must verify their <strong>Admission Number</strong> + <strong>Email</strong> to activate their account.</li>
+                  <li>Students can register directly through this college-specific link.</li>
+                  <li>Admission Number is optional; if omitted, one is assigned automatically.</li>
                   <li>Passwords are encrypted with industry-standard bcrypt hashing.</li>
                 </ul>
               </div>

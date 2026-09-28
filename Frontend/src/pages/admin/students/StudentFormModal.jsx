@@ -12,6 +12,7 @@ const getInitialValues = (initialData) => ({
   firstName: initialData?.firstName || '',
   lastName: initialData?.lastName || '',
   email: initialData?.email || '',
+  admissionNumber: initialData?.admissionNumber || initialData?.admissionNo || '',
   phone: initialData?.phone || initialData?.studentMobile || '',
   dob: initialData?.dob || (initialData?.dateOfBirth ? (typeof initialData.dateOfBirth === 'string' ? initialData.dateOfBirth.split('T')[0] : new Date(initialData.dateOfBirth).toISOString().split('T')[0]) : ''),
   gender: initialData?.gender || '',
@@ -88,6 +89,11 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
                 }
               })}
               error={errors.email?.message}
+            />
+            <Input
+              label="Admission ID / Number *"
+              {...register('admissionNumber', { required: 'Admission ID / Number is required' })}
+              error={errors.admissionNumber?.message}
             />
             <Input 
               label="Phone Number" 

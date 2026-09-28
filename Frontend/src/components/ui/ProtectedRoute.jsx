@@ -6,6 +6,7 @@ import { FaSpinner } from 'react-icons/fa';
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { currentUser, userRole, userData, loading } = useAuth();
   const location = useLocation();
+  const role = typeof userRole === 'string' ? userRole.trim().toLowerCase() : '';
 
   if (loading) {
     return (
@@ -23,7 +24,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   // Superadmin has universal access
-  if (userRole !== 'superadmin') {
+  if (role !== 'superadmin') {
     const collegeStatus = userData?.collegeStatus || userData?.college?.status;
     
     // If college is pending approval, block admin routes and route to pending approval
@@ -41,7 +42,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   // If roles are specified and user's role is not in the list, redirect
-  if (allowedRoles && (!userRole || !allowedRoles.includes(userRole))) {
+  if (allowedRoles && (!role || !allowedRoles.includes(role))) {
     return <Navigate to="/login" replace />;
   }
 

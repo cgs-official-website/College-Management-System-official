@@ -272,6 +272,7 @@ const StudentLayout = () => {
           <div className="max-w-7xl mx-auto relative">
             <Routes>
               <Route path="/" element={<StudentDashboardHome isHosteller={isHosteller} isDayScholar={isDayScholar} />} />
+              <Route path="/dashboard" element={<StudentDashboardHome isHosteller={isHosteller} isDayScholar={isDayScholar} />} />
               <Route path="/courses" element={<StudentCoursesDashboard />} />
               <Route path="/assignments" element={<StudentAssignmentsDashboard />} />
               <Route path="/attendance" element={<StudentAttendanceDashboard />} />

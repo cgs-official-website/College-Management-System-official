@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { 
   getAllColleges, 
+  getCollegeBySlug,
+  getCollegeRegistrationContext,
   onboardCollege, 
   updateCollegeStatus, 
   deleteCollege, 
@@ -16,6 +18,8 @@ const router = Router();
 // Current User's College Status (accessible to pending/active admins)
 router.get('/me/status', authenticate, getMyCollegeStatus);
 
+router.get('/slug/:slug', getCollegeBySlug);
+router.get('/registration-context/:identifier', getCollegeRegistrationContext);
 router.get('/', getAllColleges);
 router.post('/onboard', onboardCollege);
 router.put('/:id/status', updateCollegeStatus);

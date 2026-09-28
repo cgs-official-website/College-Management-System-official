@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate, Link, useSearchParams, useParams } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams, useParams, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Zap, 
@@ -31,8 +31,15 @@ const Register = () => {
   const [searchParams] = useSearchParams();
   const { roleParam, collegeSlug } = useParams();
   const defaultCollegeCode = searchParams.get('code') || '';
-  
+  const queryCollegeSlug = searchParams.get('college') || '';
+  const queryCollegeId = searchParams.get('collegeId') || '';
+  const roleParams = ['admin', 'student', 'teacher', 'hod', 'parent', 'faculty', 'superadmin'];
+  const pathCollegeSlug = roleParam && !roleParams.includes(roleParam) ? roleParam : '';
+  const registrationCollegeSlug = collegeSlug || pathCollegeSlug || queryCollegeSlug;
+
   const initialRole = roleParam || searchParams.get('role') || 'admin';
+  // Preserve ?token= if it happens to be in the URL (e.g. someone shared /register/student?token=...)
+  const tokenParam = searchParams.get('token') || '';
   
   const { register, handleSubmit, watch, formState: { errors }, setValue, trigger } = useForm({
     defaultValues: {
@@ -115,7 +122,7 @@ const Register = () => {
   // Fetch college if slug is provided
   useEffect(() => {
     const fetchCollegeBySlug = async () => {
-      if (!collegeSlug) return;
+      if (!collegeSlug || initialRole === 'student') return;
       
       setFetchingCollege(true);
       try {
@@ -138,11 +145,47 @@ const Register = () => {
     };
 
     fetchCollegeBySlug();
-  }, [collegeSlug, setValue]);
+  }, [collegeSlug, initialRole, setValue]);
+
+  // Student links use the dedicated multi-step registration flow.
+  const isCollegeOnlyLink = Boolean(queryCollegeSlug) && !roleParam && !searchParams.get('role');
+  const isStudentRegistrationLink = Boolean(tokenParam || queryCollegeId);
+  if (initialRole === 'student' || pathCollegeSlug || isCollegeOnlyLink || isStudentRegistrationLink) {
+    const registrationParams = new URLSearchParams();
+    if (registrationCollegeSlug) registrationParams.set('college', registrationCollegeSlug);
+    if (queryCollegeId) registrationParams.set('collegeId', queryCollegeId);
+    if (tokenParam) registrationParams.set('token', tokenParam);
+    const query = registrationParams.toString();
+    const dest = `/student/register${query ? `?${query}` : ''}`;
+    return <Navigate to={dest} replace />;
+  }
 
   const onSubmit = async (data) => {
     setIsLoading(true);
     setError('');
+
+    // ── Student Registration: must use the college-issued token link ──
+    // Students cannot register through this page. They need the secure
+    // /student/register?token=... link provided by their college admin.
+    if (data.role === 'student') {
+      setIsLoading(false);
+      setError('');
+      navigate('/student/register');
+      return;
+    }
+
+    // ── Teacher / HOD / Parent: no self-service registration endpoint ──
+    if (data.role === 'teacher' || data.role === 'hod') {
+      setIsLoading(false);
+      setError('Teacher accounts are created by the college admin. Please check your email for a staff setup invitation link.');
+      return;
+    }
+
+    if (data.role === 'parent') {
+      setIsLoading(false);
+      setError('Parent accounts are linked by the college admin. Please contact your institution for access.');
+      return;
+    }
     
     try {
       const additionalData = {

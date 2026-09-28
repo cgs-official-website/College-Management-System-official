@@ -30,18 +30,24 @@ export const registerAdminSchema = z.object({
 });
 
 export const studentRegisterSchema = z.object({
-  token: z.string().trim().min(1, 'Registration token is required'),
-  admissionNumber: z.string().trim().min(1, 'Admission number is required'),
+  token: z.string().trim().min(1, 'Registration token cannot be empty').optional(),
+  collegeId: z.string().uuid('Invalid college ID').optional(),
+  admissionNumber: z.string().trim().optional().default(''),
   email: z.string().trim().email('Valid email is required').toLowerCase(),
   firstName: z.string().trim().min(1, 'First name is required'),
   lastName: z.string().trim().optional().default(''),
   phone: z.string().trim().optional().nullable(),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string().min(6)
-}).refine(data => data.password === data.confirmPassword, {
-  message: "Passwords do not match",
-  path: ['confirmPassword']
-});
+})
+  .refine(data => Boolean(data.token || data.collegeId), {
+    message: 'A valid student registration link is required',
+    path: ['token']
+  })
+  .refine(data => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ['confirmPassword']
+  });
 
 export const refreshTokenSchema = z.object({
   refreshToken: z.string()

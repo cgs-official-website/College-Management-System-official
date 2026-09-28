@@ -3,6 +3,61 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { onboardCollegeSchema, updateCollegeStatusSchema, updateCollegeSchema, updateSubscriptionSchema } from './colleges.schema.js';
 
+export const getCollegeBySlug = async (req, res) => {
+  try {
+    const college = await prisma.college.findUnique({
+      where: { slug: req.params.slug },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        logoUrl: true,
+        contactEmail: true,
+        website: true
+      }
+    });
+
+    if (!college) {
+      return res.status(404).json({ success: false, error: { message: 'College not found' } });
+    }
+
+    return res.json({ success: true, data: college });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getCollegeRegistrationContext = async (req, res) => {
+  try {
+    const { identifier } = req.params;
+    const isCollegeId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(identifier);
+    const college = await prisma.college.findUnique({
+      where: isCollegeId ? { id: identifier } : { slug: identifier },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        logoUrl: true,
+        contactEmail: true,
+        website: true,
+        status: true
+      }
+    });
+
+    if (!college) {
+      return res.status(404).json({ success: false, error: { message: 'College not found' } });
+    }
+    if (college.status === 'rejected') {
+      return res.status(403).json({ success: false, error: { message: 'College registration was rejected' } });
+    }
+
+    const { status, ...registrationContext } = college;
+    return res.json({ success: true, data: registrationContext });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
 export const getAllColleges = async (req, res) => {
   try {
     const colleges = await prisma.college.findMany({

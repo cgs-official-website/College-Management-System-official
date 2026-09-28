@@ -210,6 +210,14 @@ export const createStudent = async (req, res) => {
     return res.status(400).json({ success: false, error: { code: 'COLLEGE_REQUIRED', message: 'College ID is required' } });
   }
 
+  const admissionNumber = (payload.admissionNo || payload.admissionNumber || '').trim();
+  if (!admissionNumber) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'ADMISSION_NUMBER_REQUIRED', message: 'Admission ID / Number is required when an admin creates a student.' }
+    });
+  }
+
   // Ensure department exists or find/create a default department
   let deptId = payload.departmentId;
   
@@ -258,27 +266,21 @@ export const createStudent = async (req, res) => {
     });
   }
 
-  if (payload.admissionNo || payload.admissionNumber) {
-    const customAdmissionNo = (payload.admissionNo || payload.admissionNumber).trim();
-    const existingStudentByAdm = await prisma.student.findFirst({
-      where: {
-        collegeId,
-        admissionNumber: customAdmissionNo
+  const existingStudentByAdm = await prisma.student.findFirst({
+    where: { collegeId, admissionNumber }
+  });
+
+  if (existingStudentByAdm) {
+    return res.status(409).json({
+      success: false,
+      error: {
+        code: 'ADMISSION_NUMBER_ALREADY_EXISTS',
+        message: `Admission number '${admissionNumber}' already exists in this college.`
       }
     });
-
-    if (existingStudentByAdm) {
-      return res.status(409).json({
-        success: false,
-        error: {
-          code: 'ADMISSION_NUMBER_ALREADY_EXISTS',
-          message: `Admission number '${customAdmissionNo}' already exists in this college.`
-        }
-      });
-    }
   }
 
-  const admissionNo = (payload.admissionNo || payload.admissionNumber || `ADM-${Date.now().toString().slice(-6)}`).trim();
+  const admissionNo = admissionNumber;
   const rollNo = (payload.rollNo || payload.rollNumber || `R-${Date.now().toString().slice(-4)}`).trim();
   const temporaryPassword = payload.password || 'Student@123';
   const passwordHash = await bcrypt.hash(temporaryPassword, 10);
@@ -656,26 +658,28 @@ export const getRegistrationLink = async (req, res) => {
     return res.status(400).json({ success: false, error: { code: 'COLLEGE_REQUIRED', message: 'College ID is required' } });
   }
 
-  let link = await prisma.studentRegistrationLink.findFirst({
-    where: { collegeId, isActive: true },
-    orderBy: { createdAt: 'desc' }
+  // Always generate a fresh raw token on GET so the admin can copy the URL.
+  // The raw token is NEVER stored in the DB (only the SHA-256 hash is kept for
+  // security). Once the initial API response is sent, the raw token is gone.
+  // Deactivating old links first prevents orphaned inactive records accumulating.
+  await prisma.studentRegistrationLink.updateMany({
+    where: { collegeId },
+    data: { isActive: false }
   });
 
-  let rawToken = null;
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
 
-  if (!link) {
-    rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const link = await prisma.studentRegistrationLink.create({
+    data: {
+      collegeId,
+      tokenHash,
+      isActive: true,
+      createdById: req.user?.id || req.user?.userId
+    }
+  });
 
-    link = await prisma.studentRegistrationLink.create({
-      data: {
-        collegeId,
-        tokenHash,
-        isActive: true,
-        createdById: req.user?.id || req.user?.userId
-      }
-    });
-  }
+  logger.info(`[info] College ${collegeId} fetched/refreshed student registration link (id=${link.id})`);
 
   res.json({
     success: true,
@@ -685,7 +689,7 @@ export const getRegistrationLink = async (req, res) => {
       expiresAt: link.expiresAt,
       createdAt: link.createdAt,
       rawToken,
-      path: rawToken ? `/student/register?token=${rawToken}` : null
+      path: `/student/register?token=${rawToken}`
     }
   });
 };
