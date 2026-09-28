@@ -3,6 +3,20 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { FaSpinner } from 'react-icons/fa';
 
+// Returns the home dashboard path for a given role
+const getRoleDashboard = (role) => {
+  switch (role) {
+    case 'student':  return '/student/dashboard';
+    case 'admin':    return '/admin/dashboard';
+    case 'superadmin': return '/super';
+    case 'parent':   return '/parent';
+    case 'teacher':
+    case 'hod':
+    case 'faculty':  return '/teacher';
+    default:         return '/login';
+  }
+};
+
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { currentUser, userRole, userData, loading } = useAuth();
   const location = useLocation();
@@ -20,7 +34,10 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   if (!currentUser) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    const loginPath = location.pathname === '/admin' || location.pathname.startsWith('/admin/')
+      ? '/admin/login'
+      : '/login';
+    return <Navigate to={loginPath} state={{ from: location }} replace />;
   }
 
   // Superadmin has universal access
@@ -41,9 +58,11 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     }
   }
 
-  // If roles are specified and user's role is not in the list, redirect
+  // If roles are specified and user's role is not in the allowed list,
+  // redirect to their OWN dashboard (not /login) so they don't get
+  // bounced back to a wrong dashboard via the Login page auto-redirect.
   if (allowedRoles && (!role || !allowedRoles.includes(role))) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={getRoleDashboard(role)} replace />;
   }
 
   return children;

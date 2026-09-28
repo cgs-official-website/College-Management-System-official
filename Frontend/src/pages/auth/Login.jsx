@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
@@ -29,19 +29,21 @@ const getRoleDestination = (role) => {
   }
 };
 
-const Login = () => {
+const Login = ({ requiredRole }) => {
   const { register, handleSubmit, formState: { errors } } = useForm();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const { login, currentUser, userRole } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const successMessage = location.state?.successMessage;
 
   useEffect(() => {
-    if (currentUser && userRole) {
+    if (currentUser && userRole && (!requiredRole || userRole === requiredRole)) {
       navigate(getRoleDestination(userRole), { replace: true });
     }
-  }, [currentUser, userRole, navigate]);
+  }, [currentUser, userRole, navigate, requiredRole]);
 
   const onSubmit = async (data) => {
     setIsLoading(true);
@@ -49,7 +51,8 @@ const Login = () => {
     
     try {
       const email = data.email.toLowerCase().trim();
-      await login(email, data.password);
+      const collegeSlug = new URLSearchParams(location.search).get('college');
+      await login(email, data.password, collegeSlug);
       // Redirection is handled by useEffect when AuthContext resolves user role
     } catch (err) {
       console.error("Login Error:", err);
@@ -114,6 +117,11 @@ const Login = () => {
 
           {/* Form Card */}
           <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-3xl p-8 shadow-xl dark:shadow-2xl backdrop-blur-xl relative">
+            {successMessage && (
+              <div className="mb-5 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 p-4 rounded-xl text-sm font-medium">
+                {successMessage}
+              </div>
+            )}
             <AnimatePresence>
               {error && (
                 <motion.div 

@@ -10,7 +10,8 @@ import {
   forgotPassword, 
   resetPassword,
   getStudentRegistrationInfo,
-  studentRegister
+  studentRegister,
+  activateStudentAccount
 } from './auth.controller.js';
 import { authenticate } from '../../middleware/authenticate.js';
 
@@ -25,6 +26,7 @@ router.get('/me', authenticate, getMe);
 // Student Registration routes (public)
 router.get('/student/register-info', getStudentRegistrationInfo);
 router.post('/student/register', studentRegister);
+router.post('/student/activate', activateStudentAccount);
 
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);

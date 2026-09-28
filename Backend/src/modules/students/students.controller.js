@@ -2,7 +2,6 @@ import crypto from 'crypto';
 import { prisma, logger } from '../../server.js';
 import bcrypt from 'bcryptjs';
 import { createStudentSchema, updateStudentSchema } from './students.schema.js';
-import { sendDynamicMail } from '../../services/email/email.service.js';
 
 export const getStudents = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId || req.query.collegeId;
@@ -282,8 +281,7 @@ export const createStudent = async (req, res) => {
 
   const admissionNo = admissionNumber;
   const rollNo = (payload.rollNo || payload.rollNumber || `R-${Date.now().toString().slice(-4)}`).trim();
-  const temporaryPassword = payload.password || 'Student@123';
-  const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+  const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
 
   let student;
   try {
@@ -319,7 +317,7 @@ export const createStudent = async (req, res) => {
             collegeId,
             role: 'student',
             passwordHash,
-            accountStatus: payload.status || 'active'
+            accountStatus: 'pending'
           }
         });
       }
@@ -377,24 +375,6 @@ export const createStudent = async (req, res) => {
   }
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} studentId=${student.id} actor=${actorId} Created student '${payload.firstName} ${payload.lastName || ''}'`);
-
-  // Send welcome email with login credentials (isolated try/catch so mail glitch never turns 201 into 500)
-  const loginUrl = `${process.env.FRONTEND_URL}/login`;
-  
-  try {
-    await sendDynamicMail({
-      to: email,
-      templateName: 'Student Welcome',
-      variables: {
-        name: `${payload.firstName} ${payload.lastName || ''}`.trim(),
-        email,
-        password: temporaryPassword,
-        loginUrl
-      }
-    });
-  } catch (mailError) {
-    logger.warn(`[warn] req=${req.id || ''} college=${collegeId} studentId=${student.id} Failed to send welcome email to ${email}: ${mailError.message}`);
-  }
 
   res.status(201).json({
     success: true,

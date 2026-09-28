@@ -154,10 +154,10 @@ export default function StudentRegister() {
         return;
       }
 
-      console.log(`[StudentRegister] Submitting registration.`);
+      console.log(`[StudentRegister] Submitting account activation.`);
       console.log(`[StudentRegister] Token exists: ${!!resolvedToken}, Length: ${resolvedToken.length}`);
       console.log(`[StudentRegister] CollegeId from validated info: ${collegeInfo?.collegeId ?? 'not validated'}`);
-      console.log(`[StudentRegister] Endpoint: POST /auth/student/register`);
+      console.log(`[StudentRegister] Endpoint: POST /auth/student/activate`);
 
       const payload = {
         admissionNumber: data.admissionNumber?.trim() || '',
@@ -175,17 +175,22 @@ export default function StudentRegister() {
         payload.phone = data.phone.trim();
       }
 
-      const response = await api.post('/auth/student/register', payload);
+      const response = await api.post('/auth/student/activate', payload);
       const registrationResult = response.data?.data || response.data || response;
-      console.log('[StudentRegister] Registration successful:', { admissionNumber: registrationResult?.admissionNumber, email: registrationResult?.email });
+      console.log('[StudentRegister] Account activation successful:', { admissionNumber: registrationResult?.admissionNumber, email: registrationResult?.email });
       setRegisteredData(registrationResult || payload);
       setIsSuccess(true);
+      const collegeSlug = registrationResult?.collegeSlug || collegeInfo?.collegeSlug || activeCollege?.slug;
+      navigate(collegeSlug ? `/login?college=${encodeURIComponent(collegeSlug)}` : '/login', {
+        replace: true,
+        state: { successMessage: 'Account setup complete. You can now log in.' }
+      });
     } catch (err) {
-      console.error('[StudentRegister] Registration error:', err.message, 'Code:', err.code);
+      console.error('[StudentRegister] Account activation error:', err.message, 'Code:', err.code);
       if (err.code === 'ALREADY_REGISTERED' || err.status === 409) {
-        setError('This student account is already registered! Please sign in using your Admission Number or Email.');
+        setError('This student account is already active. Please sign in using your official email.');
       } else if (err.code === 'STUDENT_RECORD_NOT_FOUND') {
-        setError('No student record found matching this Admission Number in the specified college.');
+        setError('Student not found. Please contact administration.');
       } else if (err.code === 'EMAIL_MISMATCH') {
         setError('The provided email does not match our official student records for this admission number.');
       } else if (err.code === 'INVALID_REGISTRATION_TOKEN') {
@@ -267,9 +272,9 @@ export default function StudentRegister() {
                   <CheckCircle2 className="w-10 h-10" />
                 </div>
                 <div className="space-y-2">
-                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Registration Complete!</h3>
+                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Account Setup Complete</h3>
                   <p className="text-slate-500 dark:text-slate-400 text-sm max-w-sm mx-auto">
-                    Your student profile and portal account are ready. You can now sign in using your registered Email Address.
+                    Your student account is active. You can now sign in using your official email address.
                   </p>
                 </div>
                 <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 text-left text-sm space-y-2">
@@ -494,18 +499,19 @@ export default function StudentRegister() {
                     >
                       {/* Admission Number */}
                       <div>
-                        <label className={labelCls}>Admission Number (Optional)</label>
+                        <label className={labelCls}>Admission Number *</label>
                         <div className="relative group">
                           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                             <GraduationCap className="h-4 w-4 text-slate-400 group-focus-within:text-emerald-500" />
                           </div>
                           <input
                             type="text"
-                            {...register('admissionNumber')}
+                            {...register('admissionNumber', { required: 'Admission number is required' })}
                             placeholder="e.g. ADM2026001"
                             className={inputCls}
                           />
                         </div>
+                        {errors.admissionNumber && <p className="mt-1 text-xs text-red-500 font-medium">{errors.admissionNumber.message}</p>}
                       </div>
 
                       {/* Phone (optional) */}
@@ -526,7 +532,7 @@ export default function StudentRegister() {
 
                       {/* Navigation: Back + Submit */}
                       <div className="pt-2 flex gap-3">
-                        <button
+                          <button
                           type="button"
                           onClick={handleBack}
                           className="flex items-center gap-2 px-5 py-4 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 font-bold text-sm hover:bg-slate-50 dark:hover:bg-white/5 transition-all shrink-0"
@@ -539,9 +545,9 @@ export default function StudentRegister() {
                           className="flex-1 py-4 px-6 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm shadow-lg shadow-emerald-500/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                         >
                           {isLoading ? (
-                            <><Loader2 className="w-5 h-5 animate-spin" /> Creating Account...</>
+                            <><Loader2 className="w-5 h-5 animate-spin" /> Activating Account...</>
                           ) : (
-                            <>Complete Registration <ChevronRight className="w-5 h-5" /></>
+                            <>Activate Account <ChevronRight className="w-5 h-5" /></>
                           )}
                         </button>
                       </div>

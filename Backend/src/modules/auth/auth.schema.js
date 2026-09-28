@@ -49,6 +49,23 @@ export const studentRegisterSchema = z.object({
     path: ['confirmPassword']
   });
 
+export const studentActivationSchema = z.object({
+  token: z.string().trim().min(1).optional(),
+  collegeId: z.string().uuid('Invalid college ID').optional(),
+  admissionNumber: z.string().trim().min(1, 'Admission number is required'),
+  email: z.string().trim().email('Valid email is required').toLowerCase(),
+  firstName: z.string().trim().optional(),
+  lastName: z.string().trim().optional().default(''),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  confirmPassword: z.string().min(6)
+}).refine(data => Boolean(data.token || data.collegeId), {
+  message: 'A valid student registration link is required',
+  path: ['token']
+}).refine(data => data.password === data.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword']
+});
+
 export const refreshTokenSchema = z.object({
   refreshToken: z.string()
 });

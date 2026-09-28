@@ -98,6 +98,26 @@ app.get('/health', async (req, res) => {
   });
 });
 
+// ---------------------------------------------------------
+// REDIS TEST ENDPOINT
+// ---------------------------------------------------------
+app.get('/redis-test', async (req, res) => {
+  try {
+    await redis.set('test', 'Hello Redis');
+    const value = await redis.get('test');
+    res.json({
+      message: 'Redis is working!',
+      value: value,
+    });
+  } catch (error) {
+    console.error('Redis test error:', error.message);
+    res.status(500).json({
+      message: 'Redis connection failed',
+      error: error.message,
+    });
+  }
+});
+
 import authRoutes from './modules/auth/auth.routes.js';
 import collegesRoutes from './modules/colleges/colleges.routes.js';
 import admissionsRoutes from './modules/admissions/admissions.routes.js';

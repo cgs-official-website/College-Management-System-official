@@ -8,6 +8,7 @@ import {
   registerAdminSchema, 
   refreshTokenSchema, 
   studentRegisterSchema,
+  studentActivationSchema,
   forgotPasswordSchema, 
   resetPasswordSchema 
 } from './auth.schema.js';
@@ -61,7 +62,7 @@ export const login = async (req, res) => {
     }
 
     // Generic 401 on missing user or invalid password (zero account enumeration)
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    if (!user || !user.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
       return res.status(401).json({ success: false, error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } });
     }
 
@@ -335,6 +336,115 @@ export const getStudentRegistrationInfo = async (req, res) => {
     });
   } catch (error) {
     res.status(400).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const activateStudentAccount = async (req, res) => {
+  try {
+    const payload = studentActivationSchema.parse(req.body);
+    const normalizedEmail = payload.email.trim().toLowerCase();
+    let collegeId = payload.collegeId;
+    let college = null;
+
+    if (payload.token) {
+      const tokenHash = crypto.createHash('sha256').update(payload.token).digest('hex');
+      const link = await prisma.studentRegistrationLink.findUnique({
+        where: { tokenHash },
+        include: { college: true }
+      });
+
+      if (!link || !link.isActive || (link.expiresAt && link.expiresAt < new Date())) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'INVALID_REGISTRATION_TOKEN', message: 'Invalid or expired student registration link' }
+        });
+      }
+      if (collegeId && collegeId !== link.collegeId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'COLLEGE_LINK_MISMATCH', message: 'Registration link does not match the selected college' }
+        });
+      }
+
+      collegeId = link.collegeId;
+      college = link.college;
+    } else if (collegeId) {
+      college = await prisma.college.findUnique({ where: { id: collegeId } });
+    }
+
+    if (!college || !collegeId) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'COLLEGE_NOT_FOUND', message: 'Registration college was not found' }
+      });
+    }
+    if (college.status === 'rejected') {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'COLLEGE_REJECTED', message: 'College registration was rejected' }
+      });
+    }
+
+    const student = await prisma.student.findFirst({
+      where: {
+        collegeId,
+        admissionNumber: { equals: payload.admissionNumber.trim(), mode: 'insensitive' },
+        deletedAt: null
+      },
+      include: { user: true }
+    });
+
+    if (!student?.user) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'STUDENT_RECORD_NOT_FOUND', message: 'Student not found. Please contact administration.' }
+      });
+    }
+
+    const officialEmail = (student.emailId || student.user.email || '').trim().toLowerCase();
+    if (!officialEmail || officialEmail !== normalizedEmail) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'EMAIL_MISMATCH', message: 'The provided email does not match our official student records.' }
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(payload.password, 10);
+    const fullName = payload.firstName
+      ? `${payload.firstName.trim()} ${payload.lastName || ''}`.trim()
+      : undefined;
+    await prisma.$transaction(async (tx) => {
+      const result = await tx.user.updateMany({
+        where: {
+          id: student.userId,
+          accountStatus: student.user.accountStatus,
+          passwordHash: student.user.passwordHash
+        },
+        data: { passwordHash, accountStatus: 'active', role: 'student', ...(fullName ? { name: fullName } : {}) }
+      });
+      if (result.count !== 1) {
+        const conflict = new Error('This student account is already active. Please sign in.');
+        conflict.statusCode = 409;
+        conflict.code = 'ALREADY_REGISTERED';
+        throw conflict;
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: 'Account activated successfully. Please sign in.',
+      data: {
+        email: normalizedEmail,
+        admissionNumber: student.admissionNumber,
+        collegeSlug: college.slug
+      }
+    });
+  } catch (error) {
+    const status = error.statusCode || (error.code === 'P2002' ? 409 : 400);
+    return res.status(status).json({
+      success: false,
+      error: { code: error.code || 'STUDENT_ACTIVATION_FAILED', message: error.message }
+    });
   }
 };
 

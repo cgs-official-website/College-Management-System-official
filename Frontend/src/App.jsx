@@ -1,6 +1,7 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ConfirmProvider } from './contexts/ConfirmContext';
 import LandingPage from './pages/landing/LandingPage';
 import DemoSeeder from './pages/landing/DemoSeeder';
@@ -24,12 +25,24 @@ import { Toaster } from 'react-hot-toast';
 // Create a client for React Query
 const queryClient = new QueryClient();
 
+function AuthRouteSync() {
+  const location = useLocation();
+  const { restoreSession } = useAuth();
+
+  useEffect(() => {
+    restoreSession();
+  }, [location.pathname, location.search]);
+
+  return null;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <ConfirmProvider>
           <Router>
+          <AuthRouteSync />
           <Routes>
             {/* Landing Page */}
             <Route path="/" element={<LandingPage />} />
@@ -37,6 +50,7 @@ function App() {
             
             {/* Auth Routes */}
             <Route path="/login" element={<Login />} />
+            <Route path="/admin/login" element={<Login requiredRole="admin" />} />
             <Route path="/register" element={<Register />} />
             <Route path="/register/:roleParam" element={<Register />} />
             <Route path="/register/:roleParam/:collegeSlug" element={<Register />} />

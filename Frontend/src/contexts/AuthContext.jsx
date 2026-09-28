@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { api } from '../services/api';
+import { clearAuthSession, getAuthSessionForCurrentRoute, storeAuthSession } from '../services/apiClient';
 import { FullPageSkeleton } from '../components/ui/FullPageSkeleton';
 
 const AuthContext = createContext();
@@ -16,28 +17,31 @@ export function AuthProvider({ children }) {
   const [userData, setUserData] = useState(null);
   const [permissions, setPermissions] = useState({});
   const [loading, setLoading] = useState(true);
+  const restoreSequence = useRef(0);
+
+  const clearAuthState = () => {
+    setCurrentUser(null);
+    setUserRole(null);
+    setUserData(null);
+    setPermissions({});
+  };
 
   // =========================
   // LOGIN
   // =========================
-  async function login(email, password) {
+  async function login(email, password, collegeSlug) {
     const response = await api.post('/auth/login', {
       email,
-      password
+      password,
+      ...(collegeSlug ? { collegeSlug } : {})
     });
 
     const { accessToken, refreshToken, user } =
       response.data?.data || response.data || {};
 
-    if (accessToken) {
-      localStorage.setItem('zuna_token', accessToken);
-    }
+    storeAuthSession(user?.role, accessToken, refreshToken);
 
-    if (refreshToken) {
-      localStorage.setItem('zuna_refresh', refreshToken);
-    }
-
-    await restoreSession();
+    await restoreSession(user?.role);
 
     return user;
   }
@@ -119,8 +123,7 @@ export function AuthProvider({ children }) {
           role: user?.role
         });
 
-        if (accessToken) localStorage.setItem('zuna_token', accessToken);
-        if (refreshToken) localStorage.setItem('zuna_refresh', refreshToken);
+        storeAuthSession(user?.role || 'admin', accessToken, refreshToken);
         if (accessToken) await restoreSession();
 
         return user || response.data?.data || response.data;
@@ -212,24 +215,20 @@ export function AuthProvider({ children }) {
   // LOGOUT
   // =========================
   function logout() {
-    const refreshToken =
-      localStorage.getItem('zuna_refresh');
+    const session = userRole ? {
+      refreshToken: localStorage.getItem(`zuna_${userRole}_refresh`)
+    } : null;
 
-    if (refreshToken) {
+    if (session?.refreshToken) {
       api
         .post('/auth/logout', {
-          refreshToken
+          refreshToken: session.refreshToken
         })
         .catch(() => {});
     }
 
-    localStorage.removeItem('zuna_token');
-    localStorage.removeItem('zuna_refresh');
-
-    setCurrentUser(null);
-    setUserRole(null);
-    setUserData(null);
-    setPermissions({});
+    clearAuthSession(userRole);
+    clearAuthState();
   }
 
   // =========================
@@ -254,21 +253,21 @@ export function AuthProvider({ children }) {
   // =========================
   // RESTORE SESSION
   // =========================
-  const restoreSession = async () => {
-    const token =
-      localStorage.getItem('zuna_token');
+  const restoreSession = async (preferredRole) => {
+    const sequence = ++restoreSequence.current;
+    const session = getAuthSessionForCurrentRoute(preferredRole);
 
-    const refreshToken =
-      localStorage.getItem('zuna_refresh');
-
-    if (!token && !refreshToken) {
+    if (!session) {
+      clearAuthState();
       setLoading(false);
       return;
     }
 
     try {
       const response =
-        await api.get('/auth/me');
+        await api.get('/auth/me', { authRole: session.role });
+
+      if (sequence !== restoreSequence.current) return;
 
       const data = response.data;
 
@@ -337,10 +336,13 @@ export function AuthProvider({ children }) {
         error
       );
 
-      logout();
+      if (sequence === restoreSequence.current) {
+        clearAuthSession(session.role);
+        clearAuthState();
+      }
 
     } finally {
-      setLoading(false);
+      if (sequence === restoreSequence.current) setLoading(false);
     }
   };
 
@@ -351,7 +353,7 @@ export function AuthProvider({ children }) {
     restoreSession();
 
     const handleAuthExpired = () => {
-      logout();
+      clearAuthState();
     };
 
     window.addEventListener(
