@@ -13,7 +13,8 @@ import {
   getRegistrationLink,
   regenerateRegistrationLink,
   toggleRegistrationLink,
-  getAllStudentDocuments
+  getAllStudentDocuments,
+  activateStudent
 } from './students.controller.js';
 
 const router = Router();
@@ -33,6 +34,7 @@ router.get('/:id', requirePermission('students', 'read'), catchAsync(getStudentB
 router.post('/', requirePermission('students', 'create'), catchAsync(createStudent));
 router.post('/bulk', requirePermission('students', 'create'), catchAsync(bulkImportStudents));
 router.put('/:id', requirePermission('students', 'update'), catchAsync(updateStudent));
+router.patch('/:id/activate', requirePermission('students', 'update'), catchAsync(activateStudent));
 router.delete('/:id', requirePermission('students', 'delete'), catchAsync(deleteStudent));
 
 export default router;

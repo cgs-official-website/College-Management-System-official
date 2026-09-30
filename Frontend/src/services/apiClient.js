@@ -17,12 +17,13 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000,
+  timeout: 60000, // 60s — remote DB can be slow on first request
 });
 
 const routeRoles = () => {
   const { pathname, search } = window.location;
   if (pathname.startsWith('/student/register')) return [];
+  if (pathname.startsWith('/teacher/register')) return [];   // teacher registration page — no auth needed
   if (pathname === '/admin/login') return ['admin'];
   if (pathname === '/admin' || pathname.startsWith('/admin/')) return ['admin', 'teacher', 'hod', 'faculty', 'superadmin'];
   if (pathname === '/student' || pathname.startsWith('/student/')) return ['student', 'superadmin'];

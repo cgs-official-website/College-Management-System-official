@@ -26,9 +26,10 @@ export default function HRManagement() {
     const fullName = `${member.firstName || ''} ${member.lastName || ''} ${member.name || ''}`.toLowerCase();
     const dept = (member.department || '').toLowerCase();
     const email = (member.email || '').toLowerCase();
+    const tid = (member.teacherId || '').toLowerCase();
     const search = (searchTerm || '').toLowerCase();
     
-    return fullName.includes(search) || dept.includes(search) || email.includes(search);
+    return fullName.includes(search) || dept.includes(search) || email.includes(search) || tid.includes(search);
   });
 
   const handleOpenAdd = () => {
@@ -50,11 +51,16 @@ export default function HRManagement() {
   const handleCopyLink = async (memberId) => {
     try {
       const response = await apiClient.get(`/staff/${memberId}/setup-link`);
-      const token = response.data?.data?.token || response.data?.token;
-      if (token) {
-        const url = `${window.location.origin}/staff-setup?token=${token}`;
+      const data = response.data?.data || response.data;
+      const url = data?.registrationUrl || (() => {
+        const token = data?.token;
+        return token ? `${window.location.origin}/teacher/register?token=${token}` : null;
+      })();
+      if (url) {
         await navigator.clipboard.writeText(url);
-        toast.success("Setup link copied to clipboard!");
+        toast.success("Registration link copied to clipboard!");
+      } else {
+        toast.error("Could not retrieve the registration link.");
       }
     } catch (error) {
       console.error('Failed to generate link:', error);
@@ -66,10 +72,29 @@ export default function HRManagement() {
     try {
       if (editingStaff) {
         await updateStaff({ id: editingStaff.id, data });
+        setIsFormOpen(false);
       } else {
-        await addStaff(data);
+        const result = await addStaff(data);
+        setIsFormOpen(false);
+        // Show the registration link immediately after creating a new teacher
+        const registrationUrl = result?.data?.registrationUrl || result?.registrationUrl;
+        if (registrationUrl) {
+          try {
+            await navigator.clipboard.writeText(registrationUrl);
+            toast.success(
+              `Teacher created! Registration link copied to clipboard.\n\n` +
+              `Share this link with the teacher:\n${registrationUrl}`,
+              { duration: 8000 }
+            );
+          } catch {
+            // Clipboard may not be available (non-HTTPS, permissions)
+            toast.success(
+              `Teacher created! Share this registration link:\n${registrationUrl}`,
+              { duration: 10000 }
+            );
+          }
+        }
       }
-      setIsFormOpen(false);
     } catch (error) {
       console.error(error);
     }
@@ -142,6 +167,7 @@ export default function HRManagement() {
                 [1, 2, 3, 4].map(n => (
                   <tr key={n} className="animate-pulse">
                     <td className="p-4 pl-6"><div className="h-10 w-48 bg-slate-100 dark:bg-white/5 rounded-lg"></div></td>
+                    <td className="p-4"><div className="h-6 w-20 bg-slate-100 dark:bg-white/5 rounded-lg"></div></td>
                     <td className="p-4"><div className="h-6 w-24 bg-slate-100 dark:bg-white/5 rounded-lg"></div></td>
                     <td className="p-4"><div className="h-6 w-32 bg-slate-100 dark:bg-white/5 rounded-lg"></div></td>
                     <td className="p-4"><div className="h-6 w-16 bg-slate-100 dark:bg-white/5 rounded-lg"></div></td>
@@ -150,7 +176,7 @@ export default function HRManagement() {
                 ))
               ) : filteredStaff.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="p-8 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan="6" className="p-8 text-center text-slate-500 dark:text-slate-400">
                     No staff members found matching your search.
                   </td>
                 </tr>
@@ -167,6 +193,15 @@ export default function HRManagement() {
                           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Joined: {member.joinDate || 'N/A'}</p>
                         </div>
                       </div>
+                    </td>
+                    <td className="p-4">
+                      {member.teacherId ? (
+                        <span className="inline-flex items-center px-2.5 py-1 bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300 rounded-md text-xs font-bold font-mono tracking-wider">
+                          {member.teacherId}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400 dark:text-slate-600 font-medium">—</span>
+                      )}
                     </td>
                     <td className="p-4">
                       <div className="flex flex-col gap-1.5">
@@ -214,6 +249,7 @@ export default function HRManagement() {
                   </tr>
                 ))
               )}
+
             </tbody>
           </table>
         </div>

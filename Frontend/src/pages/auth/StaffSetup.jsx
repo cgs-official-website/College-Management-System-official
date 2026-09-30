@@ -31,7 +31,8 @@ export default function StaffSetup() {
 
     const verifyToken = async () => {
       try {
-        const res = await apiClient.get(`/auth/staff-setup/verify?token=${token}`);
+        const query = new URLSearchParams({ token });
+        const res = await apiClient.get(`/auth/staff-setup/verify?${query}`);
         setStaffInfo(res.data);
         
         // Pre-fill name if it exists
@@ -46,7 +47,7 @@ export default function StaffSetup() {
 
         setIsValidToken(true);
       } catch (error) {
-        console.error('Invalid setup token', error);
+        console.error('Teacher setup verification failed:', error.response?.status || 'request error');
         toast.error("Invalid or expired setup link.");
         setIsValidToken(false);
       } finally {
@@ -76,15 +77,16 @@ export default function StaffSetup() {
         token,
         firstName: formData.firstName,
         lastName: formData.lastName,
-        password: formData.password
+        password: formData.password,
+        confirmPassword: formData.confirmPassword,
       });
 
       toast.success("Account setup successful! Redirecting to login...");
       setTimeout(() => {
-        navigate('/login');
+        navigate(`/login?college=${encodeURIComponent(staffInfo.collegeSlug)}`);
       }, 2000);
     } catch (error) {
-      console.error(error);
+      console.error('Teacher setup failed:', error.response?.status || 'request error');
       toast.error(error.response?.data?.error?.message || "Failed to setup account.");
       setIsSubmitting(false);
     }
@@ -133,17 +135,31 @@ export default function StaffSetup() {
         <div className="bg-slate-50 dark:bg-white/5 rounded-2xl p-4 mb-8 border border-slate-200 dark:border-white/10 flex flex-col gap-3">
           <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
             <Mail className="w-4 h-4 text-slate-400" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 w-20 shrink-0">Email</span>
             <span className="font-medium text-sm">{staffInfo.email}</span>
           </div>
           <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
-            <Building className="w-4 h-4 text-emerald-500" />
+            <Building className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 w-20 shrink-0">College</span>
+            <span className="font-medium text-sm">{staffInfo.collegeName}</span>
+          </div>
+          <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
+            <Briefcase className="w-4 h-4 text-primary-500 shrink-0" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 w-20 shrink-0">Teacher ID</span>
+            <span className="font-medium text-sm">{staffInfo.teacherId}</span>
+          </div>
+          <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
+            <Building className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 w-20 shrink-0">Department</span>
             <span className="font-medium text-sm">{staffInfo.department || 'Assigned Department'}</span>
           </div>
           <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
-            <User className="w-4 h-4 text-primary-500" />
+            <User className="w-4 h-4 text-primary-500 shrink-0" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 w-20 shrink-0">Role</span>
             <span className="font-medium text-sm capitalize">{staffInfo.role}</span>
           </div>
         </div>
+
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -170,6 +186,7 @@ export default function StaffSetup() {
               placeholder="••••••••"
               value={formData.password}
               onChange={(e) => setFormData(p => ({ ...p, password: e.target.value }))}
+              autoComplete="new-password"
               required
             />
             <Input 
@@ -178,6 +195,7 @@ export default function StaffSetup() {
               placeholder="••••••••"
               value={formData.confirmPassword}
               onChange={(e) => setFormData(p => ({ ...p, confirmPassword: e.target.value }))}
+              autoComplete="new-password"
               required
             />
           </div>

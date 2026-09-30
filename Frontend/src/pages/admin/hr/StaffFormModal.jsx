@@ -28,6 +28,7 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
       lastName: '',
       email: '',
       phone: '',
+      teacherId: '',
       role: 'staff',
       customRoleId: '',
       staffType: 'teaching',
@@ -43,13 +44,16 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
     if (isOpen) {
       reset(initialData ? {
         ...initialData,
+        teacherId: initialData.teacherId || '',
         customRoleId: initialData.customRoleId || '',
-        staffType: initialData.departmentId ? 'teaching' : 'non-teaching'
+        // Detect teaching staff: has a departmentId, or existing staffType field
+        staffType: initialData.staffType || (initialData.departmentId ? 'teaching' : 'non-teaching')
       } : {
         firstName: '',
         lastName: '',
         email: '',
         phone: '',
+        teacherId: '',
         role: 'staff',
         customRoleId: '',
         staffType: 'teaching',
@@ -66,10 +70,12 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
 
     const payload = {
       ...data,
-      role: 'staff', // base role is handled by backend or customRole now
+      role: data.staffType === 'non-teaching' ? 'staff' : 'teacher',
       name: `${data.firstName} ${data.lastName}`.trim(),
       designation: designation,
-      customRoleId: data.customRoleId || null
+      customRoleId: data.customRoleId || null,
+      // Preserve the exact admin-entered Teacher ID.
+      teacherId: data.teacherId.trim(),
     };
     
     if (data.staffType === 'non-teaching') {
@@ -106,13 +112,29 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
               {...register('lastName')}
               error={errors.lastName?.message}
             />
-            <Input 
-              label="Email Address" 
-              type="email"
-              placeholder="robert@college.edu"
-              {...register('email', { required: "Email is required" })}
-              error={errors.email?.message}
-            />
+            <div className="space-y-1.5">
+              <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                Email Address <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="email"
+                type="email"
+                placeholder="teacher@gmail.com"
+                {...register('email', {
+                  required: 'Email is required.',
+                  pattern: {
+                    value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                    message: 'Please enter a valid email address.'
+                  }
+                })}
+                className={`w-full px-4 py-2.5 bg-white dark:bg-[#0A0F1C] border rounded-xl text-sm transition-all duration-200 focus:outline-none focus:ring-2 text-slate-900 dark:text-white placeholder-slate-400 ${
+                  errors.email
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500/50'
+                    : 'border-slate-200 dark:border-white/10 focus:border-primary-500 focus:ring-primary-500/50'
+                }`}
+              />
+              {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
+            </div>
             <Input 
               label="Phone Number" 
               type="tel"
@@ -130,6 +152,27 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
               }}
               error={errors.phone?.message}
             />
+            <div className="space-y-1.5">
+              <label htmlFor="teacherId" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                Teacher ID <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="teacherId"
+                type="text"
+                placeholder="e.g. TCH001"
+                {...register('teacherId', {
+                  required: 'Teacher ID is required.',
+                  validate: (val) =>
+                    val.trim().length > 0 || 'Teacher ID is required.'
+                })}
+                className={`w-full px-4 py-2.5 bg-white dark:bg-[#0A0F1C] border rounded-xl text-sm transition-all duration-200 focus:outline-none focus:ring-2 font-mono text-slate-900 dark:text-white placeholder-slate-400 ${
+                  errors.teacherId
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500/50'
+                    : 'border-slate-200 dark:border-white/10 focus:border-primary-500 focus:ring-primary-500/50'
+                }`}
+              />
+              {errors.teacherId && <p className="text-sm text-red-500">{errors.teacherId.message}</p>}
+            </div>
           </div>
         </div>
 

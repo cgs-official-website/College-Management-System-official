@@ -2,13 +2,18 @@ import { z } from 'zod';
 
 export const createStaffSchema = z.object({
   name: z.string().optional().default(''),
-  email: z.string({ required_error: 'Email is required' }).trim().min(1, 'Email is required').email('Invalid email address'),
+  email: z
+    .string({ required_error: 'Email is required.' })
+    .trim()
+    .min(1, 'Email is required.')
+    .email('Please enter a valid email address.'),
   department: z.string().optional(),
   departmentId: z.string().uuid().optional(),
   designation: z.string().min(1, 'Designation is required'),
   joiningDate: z.string().or(z.date()).optional(),
   salaryGrade: z.string().optional(),
   role: z.string().optional(),
+  staffType: z.enum(['teaching', 'non-teaching']).optional().default('teaching'),
   customRoleId: z.string().uuid().nullable().optional(),
   status: z.string().optional().default('active'),
   phone: z.preprocess(
@@ -18,6 +23,28 @@ export const createStaffSchema = z.object({
       .nullable()
       .optional()
   ),
+  // teacherId is MANDATORY for creation
+  teacherId: z.string({ required_error: 'Teacher ID is required.' })
+    .trim()
+    .min(1, 'Teacher ID is required.'),
 });
 
-export const updateStaffSchema = createStaffSchema.partial();
+// For updates: teacherId is still required if provided; cannot be set to empty
+export const updateStaffSchema = createStaffSchema
+  .omit({ teacherId: true })
+  .extend({
+    teacherId: z.string()
+      .trim()
+      .min(1, 'Teacher ID cannot be empty.')
+      .optional(),
+  })
+  .partial()
+  .extend({
+    // email stays optional in updates but must be valid if provided
+    email: z
+      .string()
+      .trim()
+      .min(1, 'Email is required.')
+      .email('Please enter a valid email address.')
+      .optional(),
+  });

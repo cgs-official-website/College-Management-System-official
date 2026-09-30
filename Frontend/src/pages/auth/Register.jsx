@@ -59,6 +59,9 @@ const Register = () => {
   const [fetchingCollege, setFetchingCollege] = useState(false);
   const [fetchedCollegeName, setFetchedCollegeName] = useState('');
   const [fetchedCollegeId, setFetchedCollegeId] = useState('');
+  // College info fetched by UUID code (teacher link flow)
+  const [codeCollegeName, setCodeCollegeName] = useState('');
+  const [codeCollegeId, setCodeCollegeId] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [logoBase64, setLogoBase64] = useState('');
@@ -119,7 +122,7 @@ const Register = () => {
     setCurrentStep(prev => Math.max(prev - 1, 1));
   };
 
-  // Fetch college if slug is provided
+  // Fetch college if slug is provided in path
   useEffect(() => {
     const fetchCollegeBySlug = async () => {
       if (!collegeSlug || initialRole === 'student') return;
@@ -146,6 +149,28 @@ const Register = () => {
 
     fetchCollegeBySlug();
   }, [collegeSlug, initialRole, setValue]);
+
+  // When admin generates a teacher link with ?code=<collegeId UUID>,
+  // fetch the college name from the backend so it can be displayed.
+  // NEVER trust the frontend/URL for the college name — fetch from DB.
+  useEffect(() => {
+    const fetchCollegeByCode = async () => {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(defaultCollegeCode);
+      if (!defaultCollegeCode || !isUUID || initialRole !== 'teacher') return;
+      try {
+        // Uses GET /colleges/registration-context/:id which accepts UUID or slug
+        const response = await api.get(`/colleges/registration-context/${defaultCollegeCode}`);
+        const collegeDoc = response.data?.data || response.data;
+        if (collegeDoc?.id) {
+          setCodeCollegeName(collegeDoc.name);
+          setCodeCollegeId(collegeDoc.id);
+        }
+      } catch (err) {
+        console.error('[Register] Failed to fetch college by code:', err.message);
+      }
+    };
+    fetchCollegeByCode();
+  }, [defaultCollegeCode, initialRole]);
 
   // Student links use the dedicated multi-step registration flow.
   const isCollegeOnlyLink = Boolean(queryCollegeSlug) && !roleParam && !searchParams.get('role');
@@ -274,6 +299,27 @@ const Register = () => {
             <div className="w-16 h-16 mb-6">
               <img src="/logo.png" alt="Zuna" className="w-full h-full object-contain drop-shadow-2xl" />
             </div>
+
+            {/*
+              College / Organization Name — displayed ABOVE the form title
+              when teacher opens an admin-generated link with ?code=<collegeId>.
+              Name is fetched from DB via /colleges/registration-context/:id.
+              NEVER hardcoded or taken from the URL directly.
+            */}
+            {(codeCollegeName || fetchedCollegeName) && (selectedRole === 'teacher' || selectedRole === 'hod') && (
+              <div className="mb-3 text-center">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 mb-2">
+                  <Building2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
+                    Verified Institution
+                  </span>
+                </div>
+                <p className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                  {codeCollegeName || fetchedCollegeName}
+                </p>
+              </div>
+            )}
+
             <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white mb-2">
               {selectedRole === 'admin' 
                 ? 'Register College' 

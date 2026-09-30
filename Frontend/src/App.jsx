@@ -10,7 +10,7 @@ import Register from './pages/auth/Register';
 import StudentRegister from './pages/auth/StudentRegister';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
-import StaffSetup from './pages/auth/StaffSetup';
+import TeacherRegister from './pages/auth/TeacherRegister';
 import { PendingApproval, RejectedApproval } from './pages/auth/PendingApproval';
 import ProtectedRoute from './components/ui/ProtectedRoute';
 import DashboardRedirect from './components/ui/DashboardRedirect';
@@ -51,6 +51,7 @@ function App() {
             {/* Auth Routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/admin/login" element={<Login requiredRole="admin" />} />
+            <Route path="/super/login" element={<Login requiredRole="superadmin" />} />
             <Route path="/register" element={<Register />} />
             <Route path="/register/:roleParam" element={<Register />} />
             <Route path="/register/:roleParam/:collegeSlug" element={<Register />} />
@@ -62,7 +63,7 @@ function App() {
 
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/staff-setup" element={<StaffSetup />} />
+            <Route path="/teacher/register" element={<TeacherRegister />} />
             <Route path="/pending-approval" element={<PendingApproval />} />
             <Route path="/rejected" element={<RejectedApproval />} />
             <Route path="/dashboard" element={<ProtectedRoute><DashboardRedirect /></ProtectedRoute>} />

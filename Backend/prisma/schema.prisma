@@ -125,7 +125,7 @@ model User {
   updatedAt      DateTime         @updatedAt
   accountStatus  String           @default("pending")
   lastLoginAt    DateTime?
-  passwordHash   String
+  passwordHash   String?
   id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   collegeId      String?          @db.Uuid
   customRoleId   String?          @db.Uuid
@@ -273,6 +273,7 @@ model Teacher {
   timetable    TimetableSlot[]
   sections     Section[]       @relation("TeacherSections")
 
+  teacherId               String?  // Required for new teachers; nullable for existing records without an assigned ID.
   gender                  String?
   dateOfBirth             DateTime?
   employmentType          String?
@@ -293,6 +294,7 @@ model Teacher {
   customFields            Json?
 
   @@index([collegeId])
+  @@unique([collegeId, teacherId])
 }
 
 model Student {

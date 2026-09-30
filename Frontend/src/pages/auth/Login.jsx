@@ -13,7 +13,8 @@ import {
   Eye,
   EyeOff,
   Home,
-  GraduationCap
+  GraduationCap,
+  Building2
 } from 'lucide-react';
 
 const getRoleDestination = (role) => {
@@ -38,6 +39,9 @@ const Login = ({ requiredRole }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const successMessage = location.state?.successMessage;
+  // collegeSlug is present only on student-specific login URLs like /login?college=xyz
+  // Used both for the login call and to conditionally show the student registration link
+  const collegeSlug = new URLSearchParams(location.search).get('college');
 
   useEffect(() => {
     if (currentUser && userRole && (!requiredRole || userRole === requiredRole)) {
@@ -51,12 +55,13 @@ const Login = ({ requiredRole }) => {
     
     try {
       const email = data.email.toLowerCase().trim();
-      const collegeSlug = new URLSearchParams(location.search).get('college');
       await login(email, data.password, collegeSlug);
       // Redirection is handled by useEffect when AuthContext resolves user role
     } catch (err) {
       console.error("Login Error:", err);
-      if (err.code === 'COLLEGE_PENDING_APPROVAL') {
+      if (err.code === 'ACCOUNT_PENDING_APPROVAL') {
+        setError('Your account is pending administrator approval. Please contact your college admin.');
+      } else if (err.code === 'COLLEGE_PENDING_APPROVAL') {
         navigate('/pending-approval');
         return;
       } else if (err.code === 'COLLEGE_REJECTED') {
@@ -214,25 +219,54 @@ const Login = ({ requiredRole }) => {
               </button>
             </form>
             
-            <div className="mt-6 pt-6 border-t border-slate-100 dark:border-white/5 space-y-3 text-center text-sm text-slate-500 dark:text-slate-400">
-              {/* Student registration link */}
-              <div className="flex items-center justify-center gap-2 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20">
-                <GraduationCap className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <span>New student?{' '}
-                  <Link to="/student/register" className="font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors">
-                    Register here
-                  </Link>
-                  {' '}using your college link
-                </span>
+            {/*
+              Footer prompt — conditionally shown based on which login page this is:
+
+              1. Student login (/login?college=<slug>):
+                 → "New student? Register here using your college link"
+
+              2. Admin login (/admin/login) or Super Admin login (/super/login):
+                 → "New organization? Register here"
+
+              3. Plain /login (no college slug, no requiredRole) and all other pages:
+                 → Nothing shown
+            */}
+
+            {/* [1] Student login — only when ?college= is present.
+                 Passes the collegeSlug forward so StudentRegister knows which college. */}
+            {!requiredRole && collegeSlug && (
+              <div className="mt-6 pt-6 border-t border-slate-100 dark:border-white/5 text-center text-sm text-slate-500 dark:text-slate-400">
+                <div className="flex items-center justify-center gap-2 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20">
+                  <GraduationCap className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>New student?{' '}
+                    <Link
+                      to={`/student/register?college=${encodeURIComponent(collegeSlug)}`}
+                      className="font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
+                    >
+                      Register here
+                    </Link>
+                    {' '}using your college link
+                  </span>
+                </div>
               </div>
-              {/* Admin registration link */}
-              <div>
-                College administrator?{' '}
-                <Link to="/register" className="font-bold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors">
-                  Register college
-                </Link>
+            )}
+
+            {/* [2] Organization registration link:
+                 - /super/login (requiredRole="superadmin")
+                 - plain /login with no ?college= (superadmins use this page directly)
+                 NOT shown on: /admin/login, /login?college=..., or any other page */}
+            {(requiredRole === 'superadmin' || (!requiredRole && !collegeSlug)) && (
+              <div className="mt-6 pt-6 border-t border-slate-100 dark:border-white/5 text-center text-sm text-slate-500 dark:text-slate-400">
+                <div className="flex items-center justify-center gap-2 p-3 rounded-xl bg-primary-50 dark:bg-primary-500/10 border border-primary-100 dark:border-primary-500/20">
+                  <Building2 className="w-4 h-4 text-primary-600 dark:text-primary-400 shrink-0" />
+                  <span>New organization?{' '}
+                    <Link to="/register/admin" className="font-bold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors">
+                      Register here
+                    </Link>
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </motion.div>
       </div>

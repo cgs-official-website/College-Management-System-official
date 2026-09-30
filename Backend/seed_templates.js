@@ -29,25 +29,6 @@ const templatesToSeed = [
     `
   },
   {
-    name: 'Staff Welcome',
-    subject: 'Welcome to Zuna ERP',
-    contentHtml: `
-    <h2 style="color: #0f172a; margin-top: 0;">Welcome to Zuna ERP, {{name}}!</h2>
-    <p>Your staff account has been successfully created. You can now log in to the system using the following credentials:</p>
-    
-    <div class="highlight" style="text-align: left;">
-      <div style="margin-bottom: 8px;"><strong>Email:</strong> {{email}}</div>
-      <div><strong>Temporary Password:</strong> {{password}}</div>
-    </div>
-    
-    <p>We strongly recommend changing your password after your first login.</p>
-    
-    <div style="text-align: center;">
-      <a href="{{loginUrl}}" class="button">Log In to Your Account</a>
-    </div>
-    `
-  },
-  {
     name: 'Admin Welcome',
     subject: 'Welcome to Zuna ERP - College Admin',
     contentHtml: `

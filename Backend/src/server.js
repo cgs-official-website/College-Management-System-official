@@ -221,12 +221,16 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 
 import { ensureCollegeCodeSequence } from './lib/collegeCodeGenerator.js';
+import { connectWithRetry } from './lib/prisma.js';
 
 const startServer = (retries = 5, delay = 600) => {
   const server = app.listen(PORT, () => {
     logger.info(`[info] Zuna ERP Backend running on port ${PORT}`);
-    ensureCollegeCodeSequence().catch(err => {
-      logger.warn(`[warn] Failed to initialize college sequence: ${err.message}`);
+    // Connect to DB with retries first, then run startup tasks
+    connectWithRetry(5, 3000).then(() => {
+      ensureCollegeCodeSequence().catch(err => {
+        logger.warn(`[warn] Failed to initialize college sequence: ${err.message}`);
+      });
     });
   });
 

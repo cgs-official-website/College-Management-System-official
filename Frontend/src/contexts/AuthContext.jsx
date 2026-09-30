@@ -178,8 +178,8 @@ export function AuthProvider({ children }) {
 
       // ──────────────────────────────────────────────────────────────
       // TEACHER / OTHER ROLES
-      // Teachers are added by the Admin and receive a staff-setup
-      // invitation email. They complete setup via /staff-setup?token=…
+      // Teachers are added by the Admin and receive a registration link.
+      // They complete registration at /teacher/register?token=…
       // There is no self-service teacher registration endpoint.
       // ──────────────────────────────────────────────────────────────
       throw new Error(

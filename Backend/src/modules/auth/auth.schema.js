@@ -37,6 +37,14 @@ export const studentRegisterSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required'),
   lastName: z.string().trim().optional().default(''),
   phone: z.string().trim().optional().nullable(),
+  dob: z.string().trim().optional().nullable(),
+  gender: z.string().trim().optional().nullable(),
+  course: z.string().trim().optional().nullable(),   // free-text course name from student
+  section: z.string().trim().optional().nullable(),  // free-text section from student
+  parentName: z.string().trim().optional().nullable(),
+  parentPhone: z.string().trim().optional().nullable(),
+  address: z.string().trim().optional().nullable(),
+  residenceType: z.string().trim().optional().default('Day Scholar'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string().min(6)
 })
@@ -48,6 +56,7 @@ export const studentRegisterSchema = z.object({
     message: "Passwords do not match",
     path: ['confirmPassword']
   });
+
 
 export const studentActivationSchema = z.object({
   token: z.string().trim().min(1).optional(),
@@ -78,4 +87,15 @@ export const resetPasswordSchema = z.object({
   token: z.string(),
   userId: z.string().uuid(),
   password: z.string().min(6, "Password must be at least 6 characters long")
+});
+
+export const staffSetupSchema = z.object({
+  token: z.string().min(1, 'Setup token is required.'),
+  firstName: z.string().trim().min(1, 'First name is required.'),
+  lastName: z.string().trim().min(1, 'Last name is required.'),
+  password: z.string().min(6, 'Password must be at least 6 characters.'),
+  confirmPassword: z.string().min(6, 'Confirm password must be at least 6 characters.'),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: 'Passwords do not match.',
+  path: ['confirmPassword'],
 });

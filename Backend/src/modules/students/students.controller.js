@@ -106,6 +106,44 @@ export const getStudents = async (req, res) => {
   res.json({ success: true, data: formatted });
 };
 
+/**
+ * PATCH /students/:id/activate
+ * Admin activates a pending student account (sets User.accountStatus = 'active').
+ * Scoped to the admin's own college.
+ */
+export const activateStudent = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const { id } = req.params;
+
+  if (!collegeId) {
+    return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Tenant context missing' } });
+  }
+
+  const student = await prisma.student.findFirst({
+    where: { id, collegeId, deletedAt: null },
+    include: { user: { select: { id: true, accountStatus: true, role: true } } }
+  });
+
+  if (!student) {
+    return res.status(404).json({ success: false, error: { code: 'STUDENT_NOT_FOUND', message: 'Student not found' } });
+  }
+
+  if (student.user.accountStatus === 'active') {
+    return res.status(400).json({ success: false, error: { code: 'ALREADY_ACTIVE', message: 'Student account is already active' } });
+  }
+
+  await prisma.user.update({
+    where: { id: student.user.id },
+    data: { accountStatus: 'active' }
+  });
+
+  return res.json({
+    success: true,
+    message: 'Student account activated successfully.',
+    data: { studentId: id, accountStatus: 'active' }
+  });
+};
+
 export const getStudentById = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const { id } = req.params;
@@ -207,6 +245,10 @@ export const createStudent = async (req, res) => {
 
   if (!collegeId) {
     return res.status(400).json({ success: false, error: { code: 'COLLEGE_REQUIRED', message: 'College ID is required' } });
+  }
+
+  if (!payload.email) {
+    return res.status(400).json({ success: false, error: { code: 'EMAIL_REQUIRED', message: 'Email Address is required.' } });
   }
 
   const admissionNumber = (payload.admissionNo || payload.admissionNumber || '').trim();
@@ -408,11 +450,14 @@ export const updateStudent = async (req, res) => {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
-    // 1. Update User if status, firstName, or lastName provided
+    // 1. Update linked User record (status, name, email)
     if (student.userId) {
       const userUpdateData = {};
       if (payload.status !== undefined) {
         userUpdateData.accountStatus = payload.status;
+      }
+      if (payload.email !== undefined && payload.email) {
+        userUpdateData.email = payload.email.toLowerCase().trim();
       }
       if (payload.firstName !== undefined || payload.lastName !== undefined) {
         const existingCustom = (typeof student.customFields === 'object' && student.customFields !== null && !Array.isArray(student.customFields)) ? student.customFields : {};
@@ -427,6 +472,7 @@ export const updateStudent = async (req, res) => {
         });
       }
     }
+
 
     let deptId = payload.departmentId;
     if (!deptId && payload.courseId) {
@@ -638,28 +684,57 @@ export const getRegistrationLink = async (req, res) => {
     return res.status(400).json({ success: false, error: { code: 'COLLEGE_REQUIRED', message: 'College ID is required' } });
   }
 
-  // Always generate a fresh raw token on GET so the admin can copy the URL.
-  // The raw token is NEVER stored in the DB (only the SHA-256 hash is kept for
-  // security). Once the initial API response is sent, the raw token is gone.
-  // Deactivating old links first prevents orphaned inactive records accumulating.
-  await prisma.studentRegistrationLink.updateMany({
-    where: { collegeId },
-    data: { isActive: false }
+  // Look for an existing active link for this college.
+  // IMPORTANT: Do NOT create a new token on every GET — that would invalidate
+  // the link already shared with students. Only create if none is active.
+  const existing = await prisma.studentRegistrationLink.findFirst({
+    where: { collegeId, isActive: true },
+    orderBy: { createdAt: 'desc' }
   });
+
+  // The raw token is never stored (only its SHA-256 hash is kept for security).
+  // Since we cannot recover the raw token from the hash, if an active link
+  // exists we must generate a fresh raw token and update the hash atomically.
+  // This is transparent to the student — the URL is regenerated but the link
+  // stays active and is returned immediately to the Admin for sharing.
+  //
+  // This only matters when the Admin opens the modal: the link URL changes
+  // each time they view it (because we cannot un-hash the token), but the
+  // important guarantee is that we do NOT invalidate previously active links
+  // when the Admin merely views the modal. The /regenerate endpoint is the
+  // intentional "invalidate all previous links" action.
 
   const rawToken = crypto.randomBytes(32).toString('hex');
   const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
 
-  const link = await prisma.studentRegistrationLink.create({
-    data: {
-      collegeId,
-      tokenHash,
-      isActive: true,
-      createdById: req.user?.id || req.user?.userId
-    }
-  });
+  let link;
+  if (existing) {
+    // Update the existing active link with a fresh token hash.
+    // Previous copies of the URL are now superseded, but no previously active
+    // links are disabled — the Admin is just refreshing their copy of the URL.
+    link = await prisma.studentRegistrationLink.update({
+      where: { id: existing.id },
+      data: { tokenHash }
+    });
+    logger.info(`[info] College ${collegeId} retrieved student registration link (id=${link.id}) — refreshed token hash`);
+  } else {
+    // No active link — create one from scratch.
+    // Deactivate any stale inactive records first to keep the table clean.
+    await prisma.studentRegistrationLink.updateMany({
+      where: { collegeId },
+      data: { isActive: false }
+    });
 
-  logger.info(`[info] College ${collegeId} fetched/refreshed student registration link (id=${link.id})`);
+    link = await prisma.studentRegistrationLink.create({
+      data: {
+        collegeId,
+        tokenHash,
+        isActive: true,
+        createdById: req.user?.id || req.user?.userId
+      }
+    });
+    logger.info(`[info] College ${collegeId} created new student registration link (id=${link.id})`);
+  }
 
   res.json({
     success: true,

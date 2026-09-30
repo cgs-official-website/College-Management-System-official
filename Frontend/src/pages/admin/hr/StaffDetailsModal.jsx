@@ -70,6 +70,15 @@ export function StaffDetailsModal({ isOpen, onClose, staff }) {
 
           <div className="bg-white dark:bg-[#0A0F1C] p-4 rounded-xl border border-slate-200 dark:border-white/10">
             <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 mb-1 text-sm">
+              <User className="w-4 h-4" /> Staff / Teacher ID
+            </div>
+            <p className="font-bold text-slate-900 dark:text-white font-mono tracking-wider">
+              {staff.teacherId || <span className="text-slate-400 dark:text-slate-600 font-normal font-sans text-sm">Not assigned</span>}
+            </p>
+          </div>
+
+          <div className="bg-white dark:bg-[#0A0F1C] p-4 rounded-xl border border-slate-200 dark:border-white/10">
+            <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 mb-1 text-sm">
               <Shield className="w-4 h-4" /> System Role
             </div>
             <p className="font-medium text-slate-900 dark:text-white capitalize">

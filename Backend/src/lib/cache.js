@@ -51,7 +51,8 @@ export const redisKeys = {
   revokedToken: (jti) => `auth:revoked:${jti}`,
   dashboardStats: (collegeId) => `dashboard:stats:${collegeId}`,
   inventoryItems: (collegeId, paramsStr = '') => `inventory:items:${collegeId}:${paramsStr}`,
-  inventoryCategories: (collegeId) => `inventory:categories:${collegeId}:*`
+  inventoryCategories: (collegeId) => `inventory:categories:${collegeId}:*`,
+  staffList: (collegeId) => `staff:list:${collegeId}`,
 };
 
 /**

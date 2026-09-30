@@ -10,6 +10,7 @@ import {
   forgotPassword, 
   resetPassword,
   getStudentRegistrationInfo,
+  getStudentLookup,
   studentRegister,
   activateStudentAccount
 } from './auth.controller.js';
@@ -25,6 +26,7 @@ router.get('/me', authenticate, getMe);
 
 // Student Registration routes (public)
 router.get('/student/register-info', getStudentRegistrationInfo);
+router.get('/student/lookup', getStudentLookup);
 router.post('/student/register', studentRegister);
 router.post('/student/activate', activateStudentAccount);
 

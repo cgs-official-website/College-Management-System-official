@@ -10,8 +10,10 @@ import {
   studentRegisterSchema,
   studentActivationSchema,
   forgotPasswordSchema, 
-  resetPasswordSchema 
+  resetPasswordSchema,
+  staffSetupSchema,
 } from './auth.schema.js';
+import { verifyStaffSetupToken } from './staffSetupToken.js';
 import { sendDynamicMail } from '../../services/email/email.service.js';
 import { getNextCollegeCode } from '../../lib/collegeCodeGenerator.js';
 
@@ -66,7 +68,18 @@ export const login = async (req, res) => {
       return res.status(401).json({ success: false, error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } });
     }
 
+    // Block login for accounts that are not active.
+    // Pending students get a specific, user-friendly error code.
     if (user.accountStatus !== 'active') {
+      if (user.role === 'student' && user.accountStatus === 'pending') {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'ACCOUNT_PENDING_APPROVAL',
+            message: 'Your account is pending administrator approval. Please wait for the admin to activate your account.'
+          }
+        });
+      }
       return res.status(403).json({ success: false, error: { code: 'ACCOUNT_INACTIVE', message: 'Account is not active' } });
     }
 
@@ -339,6 +352,128 @@ export const getStudentRegistrationInfo = async (req, res) => {
   }
 };
 
+/**
+ * GET /auth/student/lookup?token=&admissionNumber=&email=
+ * Called BEFORE the student sets a password.
+ * Validates the college link, then fetches the admin-created student record.
+ * Returns all admin-filled fields so the frontend can show them read-only.
+ * The student must match by admissionNumber + email to prevent unauthorised lookups.
+ */
+export const getStudentLookup = async (req, res) => {
+  try {
+    const { token, admissionNumber, email } = req.query;
+
+    if (!token || !admissionNumber || !email) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'MISSING_PARAMS', message: 'token, admissionNumber and email are required' }
+      });
+    }
+
+    // 1. Validate the college registration link
+    const tokenHash = crypto.createHash('sha256').update(token.trim()).digest('hex');
+    const link = await prisma.studentRegistrationLink.findUnique({
+      where: { tokenHash },
+      include: { college: true }
+    });
+
+    if (!link || !link.isActive) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'LINK_INVALID', message: 'Student registration link is invalid or has been disabled' }
+      });
+    }
+    if (link.expiresAt && link.expiresAt < new Date()) {
+      return res.status(410).json({
+        success: false,
+        error: { code: 'LINK_EXPIRED', message: 'Student registration link has expired' }
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedAdmission = admissionNumber.trim();
+
+    // 2. Look up the admin-created student record
+    const student = await prisma.student.findFirst({
+      where: {
+        collegeId: link.collegeId,
+        admissionNumber: { equals: normalizedAdmission, mode: 'insensitive' },
+        deletedAt: null
+      },
+      include: {
+        user: { select: { id: true, email: true, accountStatus: true } },
+        department: { select: { id: true, name: true } },
+        course: { select: { id: true, name: true } },
+        section: { select: { id: true, name: true } }
+      }
+    });
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'STUDENT_NOT_FOUND', message: 'No student record found with this Admission Number. Please contact your college administrator.' }
+      });
+    }
+
+    // 3. Verify the email matches the admin-stored email (prevents unauthorised lookups)
+    const storedEmail = (student.user?.email || student.emailId || '').trim().toLowerCase();
+    if (storedEmail && storedEmail !== normalizedEmail) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'EMAIL_MISMATCH', message: 'The email address does not match our records for this Admission Number.' }
+      });
+    }
+
+    // 4. If already active, they should login instead
+    if (student.user?.accountStatus === 'active') {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'ALREADY_REGISTERED', message: 'This student account has already been set up. Please log in.' }
+      });
+    }
+
+    // 5. Return all admin-created details (read-only for the student)
+    const custom = (typeof student.customFields === 'object' && student.customFields !== null) ? student.customFields : {};
+    const firstName = custom.firstName || (student.user?.email ? student.user.email.split('@')[0] : '');
+    const lastName = custom.lastName || '';
+    const dob = custom.dob || custom.dateOfBirth || null;
+    const gender = custom.gender || null;
+
+    res.json({
+      success: true,
+      data: {
+        // College info
+        collegeId: link.collegeId,
+        collegeName: link.college.name,
+        collegeSlug: link.college.slug,
+        // Student personal info (admin-created, read-only)
+        admissionNumber: student.admissionNumber,
+        email: storedEmail || normalizedEmail,
+        firstName,
+        lastName,
+        phone: student.studentMobile || '',
+        dob,
+        gender,
+        // Academic info (admin-created, read-only)
+        courseId: student.courseId || null,
+        courseName: student.course?.name || null,
+        sectionId: student.sectionId || null,
+        sectionName: student.section?.name || null,
+        departmentName: student.department?.name || null,
+        batchYear: student.batchYear || null,
+        // Parent info (admin-created, read-only)
+        parentName: student.fatherName || null,
+        parentPhone: student.parentMobile || null,
+        address: student.address || null,
+        residenceType: student.residenceType || 'Day Scholar'
+      }
+    });
+  } catch (error) {
+    res.status(400).json({ success: false, error: { message: error.message } });
+  }
+};
+
+
 export const activateStudentAccount = async (req, res) => {
   try {
     const payload = studentActivationSchema.parse(req.body);
@@ -451,7 +586,13 @@ export const activateStudentAccount = async (req, res) => {
 export const studentRegister = async (req, res) => {
   try {
     const payload = studentRegisterSchema.parse(req.body);
-    const { token, collegeId: requestedCollegeId, admissionNumber, email, firstName, lastName, phone, password } = payload;
+    const {
+      token, collegeId: requestedCollegeId, admissionNumber, email,
+      firstName, lastName, phone,
+      dob, gender, course, section,
+      parentName, parentPhone, address, residenceType,
+      password
+    } = payload;
     let collegeId = requestedCollegeId;
     let college = null;
 
@@ -534,7 +675,11 @@ export const studentRegister = async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const fullName = `${firstName.trim()} ${lastName ? lastName.trim() : ''}`.trim();
+
+    // Student fills all fields themselves — use supplied values directly.
+    const trustedFirstName = (firstName || '').trim();
+    const trustedLastName = (lastName || '').trim();
+    const fullName = `${trustedFirstName} ${trustedLastName}`.trim();
 
     const result = await prisma.$transaction(async (tx) => {
       let admissionNo = normalizedAdmissionNumber;
@@ -582,7 +727,8 @@ export const studentRegister = async (req, res) => {
         }
         user = await tx.user.update({
           where: { id: user.id },
-          data: { email: normalizedEmail, name: fullName, passwordHash, accountStatus: 'active', role: 'student' }
+          // Student self-registrations start as 'pending' — admin must activate
+          data: { email: normalizedEmail, name: fullName, passwordHash, accountStatus: 'pending', role: 'student' }
         });
       } else {
         user = await tx.user.create({
@@ -592,7 +738,8 @@ export const studentRegister = async (req, res) => {
             collegeId,
             passwordHash,
             role: 'student',
-            accountStatus: 'active'
+            // Student self-registrations start as 'pending' — admin must activate
+            accountStatus: 'pending'
           }
         });
       }
@@ -603,9 +750,26 @@ export const studentRegister = async (req, res) => {
       const studentData = {
         userId: user.id,
         emailId: normalizedEmail,
+        // Student-supplied phone (overrides any admin placeholder)
         studentMobile: phone || student?.studentMobile || null,
-        emergencyContact: phone || student?.emergencyContact || null,
-        customFields: { ...existingCustomFields, firstName: firstName.trim(), lastName: lastName || '' }
+        emergencyContact: student?.emergencyContact || null,
+        // Student-supplied parent/guardian info
+        fatherName: parentName || student?.fatherName || null,
+        parentMobile: parentPhone || student?.parentMobile || null,
+        address: address || student?.address || null,
+        residenceType: residenceType || student?.residenceType || 'Day Scholar',
+        customFields: {
+          ...existingCustomFields,
+          firstName: trustedFirstName,
+          lastName: trustedLastName,
+          // Student-supplied personal details
+          dob: dob || existingCustomFields?.dob || null,
+          dateOfBirth: dob || existingCustomFields?.dateOfBirth || null,
+          gender: gender || existingCustomFields?.gender || null,
+          // Student-supplied academic info (free-text, admin assigns official IDs later)
+          courseName: course || existingCustomFields?.courseName || null,
+          sectionName: section || existingCustomFields?.sectionName || null,
+        }
       };
 
       const savedStudent = student
@@ -628,7 +792,7 @@ export const studentRegister = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Registration completed successfully! You can now log in using your Admission Number or Email.',
+      message: 'Registration submitted successfully! Your account is pending administrator approval. You will be able to log in once approved.',
       data: {
         studentId: result.student.id,
         admissionNumber: result.admissionNumber,
@@ -743,39 +907,48 @@ export const logout = async (req, res) => {
 
 export const getMe = async (req, res) => {
   try {
+    const role = req.user?.role;
+
+    // Students: return bare user only — the student portal fetches its own profile
+    // via GET /student/profile. No joins needed here for auth session restore.
+    if (role === 'student') {
+      const user = await prisma.user.findUnique({
+        where: { id: req.user.userId },
+        select: {
+          id: true, email: true, name: true, role: true,
+          collegeId: true, accountStatus: true, createdAt: true,
+          college: { select: { id: true, name: true, slug: true, status: true, logoUrl: true } }
+        }
+      });
+      if (!user) return res.status(404).json({ success: false, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
+      return res.json({ success: true, data: { ...user, collegeStatus: user.college?.status || null } });
+    }
+
+    // Teacher/HOD/faculty: lean query — skip billing join
+    if (role === 'teacher' || role === 'hod' || role === 'faculty') {
+      const user = await prisma.user.findUnique({
+        where: { id: req.user.userId },
+        include: {
+          college: { select: { id: true, name: true, slug: true, status: true, logoUrl: true } },
+          teacherProfile: { include: { department: true } },
+          customRole: { include: { permissions: { include: { module: true } } } }
+        }
+      });
+      if (!user) return res.status(404).json({ success: false, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
+      const { passwordHash, ...safeUser } = user;
+      return res.json({ success: true, data: { ...safeUser, collegeStatus: user.college?.status || null } });
+    }
+
+    // Admin / SuperAdmin: full query with billing
     const user = await prisma.user.findUnique({
       where: { id: req.user.userId },
-      include: { 
+      include: {
         college: {
           include: {
-            billingSubscription: {
-              include: {
-                subscriptionPlan: true
-              }
-            }
+            billingSubscription: { include: { subscriptionPlan: true } }
           }
         },
-        studentProfile: {
-          include: {
-            department: true,
-            section: true,
-            course: true
-          }
-        },
-        teacherProfile: {
-          include: {
-            department: true
-          }
-        },
-        customRole: {
-          include: {
-            permissions: {
-              include: {
-                module: true
-              }
-            }
-          }
-        }
+        customRole: { include: { permissions: { include: { module: true } } } }
       }
     });
 
@@ -785,15 +958,54 @@ export const getMe = async (req, res) => {
 
     const { passwordHash, ...safeUser } = user;
     safeUser.collegeStatus = user.college?.status || null;
-
-    // Attach allowedModules if a subscription plan is mapped
     if (safeUser.college?.billingSubscription?.subscriptionPlan) {
       safeUser.allowedModules = safeUser.college.billingSubscription.subscriptionPlan.modules;
     }
     res.json({ success: true, data: safeUser });
   } catch (error) {
-    res.status(400).json({ success: false, error: { message: error.message } });
+    res.status(500).json({ success: false, error: { message: error.message } });
   }
+};
+
+
+const findTeacherForSetup = (client, claims) => client.teacher.findFirst({
+  where: {
+    id: claims.teacherRecordId,
+    teacherId: claims.teacherId,
+    userId: claims.userId,
+    collegeId: claims.collegeId,
+    deletedAt: null,
+  },
+  include: {
+    user: true,
+    college: { select: { id: true, name: true, slug: true } },
+    department: { select: { name: true } },
+  },
+});
+
+const hasPendingSetupIdentity = (teacher, claims) => {
+  const email = teacher?.emailId || teacher?.user?.email;
+  return Boolean(
+    teacher &&
+    teacher.user &&
+    teacher.college &&
+    teacher.id === claims.teacherRecordId &&
+    teacher.teacherId === claims.teacherId &&
+    teacher.userId === claims.userId &&
+    teacher.collegeId === claims.collegeId &&
+    teacher.user.collegeId === claims.collegeId &&
+    teacher.user.email?.toLowerCase() === claims.email.toLowerCase() &&
+    email === claims.email &&
+    teacher.user.accountStatus === 'pending_setup' &&
+    teacher.user.passwordHash === null
+  );
+};
+
+const invalidSetupLink = (code = 'SETUP_LINK_INVALID') => {
+  const error = new Error('This setup link is invalid, expired, or already used.');
+  error.statusCode = 400;
+  error.code = code;
+  return error;
 };
 
 export const verifyStaffSetup = async (req, res) => {
@@ -801,70 +1013,119 @@ export const verifyStaffSetup = async (req, res) => {
     const { token } = req.query;
     if (!token) return res.status(400).json({ success: false, error: { message: 'Token is required' } });
 
-    const decoded = jwt.verify(token, JWT_SECRET);
-    if (decoded.type !== 'staff-setup') return res.status(400).json({ success: false, error: { message: 'Invalid token type' } });
-
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      include: {
-        teacherProfile: { include: { department: true } }
-      }
-    });
-
-    if (!user) {
-      return res.status(400).json({ success: false, error: { message: 'User does not exist' } });
-    }
+    const claims = verifyStaffSetupToken(token);
+    const teacher = await findTeacherForSetup(prisma, claims);
+    if (!hasPendingSetupIdentity(teacher, claims)) throw invalidSetupLink();
 
     res.json({
       success: true,
       data: {
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        department: user.teacherProfile?.department?.name,
-        employeeId: user.teacherProfile?.id
+        email: teacher.emailId || teacher.user.email,
+        name: teacher.user.name,
+        role: teacher.user.role,
+        teacherId: teacher.teacherId,
+        department: teacher.department?.name,
+        collegeName: teacher.college.name,
+        collegeSlug: teacher.college.slug,
       }
     });
-  } catch (error) {
-    res.status(400).json({ success: false, error: { message: 'Invalid or expired token' } });
+  } catch {
+    res.status(400).json({ success: false, error: { message: 'Invalid or expired setup link.' } });
   }
 };
 
 export const completeStaffSetup = async (req, res) => {
+  let setupStage = 'validate-request';
   try {
-    const { token, password, firstName, lastName } = req.body;
-    if (!token || !password) return res.status(400).json({ success: false, error: { message: 'Token and password are required' } });
+    const payload = staffSetupSchema.parse(req.body);
+    setupStage = 'verify-token';
+    const claims = verifyStaffSetupToken(payload.token);
 
-    const decoded = jwt.verify(token, JWT_SECRET);
-    if (decoded.type !== 'staff-setup') return res.status(400).json({ success: false, error: { message: 'Invalid token type' } });
+    logger.info(
+      `[TEACHER] Registration token validated | teacher_record_id=${claims.teacherRecordId} ` +
+      `teacherId=${claims.teacherId} college=${claims.collegeId}`
+    );
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      include: { teacherProfile: true }
-    });
+    setupStage = 'hash-password';
+    const passwordHash = await bcrypt.hash(payload.password, 10);
+    const fullName = `${payload.firstName} ${payload.lastName}`.trim();
 
-    if (!user) {
-      return res.status(400).json({ success: false, error: { message: 'User does not exist or invalid token' } });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    const fullName = `${firstName || ''} ${lastName || ''}`.trim() || user.name;
+    let activatedEmail;
+    let collegeName;
 
     await prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: user.id },
+      setupStage = 'check-teacher-user-college-association';
+      const teacher = await findTeacherForSetup(tx, claims);
+      if (!hasPendingSetupIdentity(teacher, claims)) throw invalidSetupLink('SETUP_ASSOCIATION_INVALID');
+
+      collegeName = teacher.college?.name;
+      activatedEmail = teacher.emailId || teacher.user.email;
+
+      setupStage = 'activate-pending-user';
+      const updated = await tx.user.updateMany({
+        where: {
+          id: claims.userId,
+          collegeId: claims.collegeId,
+          email: teacher.user.email,
+          accountStatus: 'pending_setup',
+          passwordHash: null,
+        },
         data: {
           passwordHash,
           accountStatus: 'active',
           name: fullName
         }
       });
+      if (updated.count !== 1) throw invalidSetupLink('SETUP_ALREADY_COMPLETED');
     });
 
-    res.json({ success: true, message: 'Setup completed successfully' });
+    logger.info(
+      `[TEACHER] Teacher account created | teacher_record_id=${claims.teacherRecordId} ` +
+      `teacherId=${claims.teacherId} email=${activatedEmail} college=${claims.collegeId}`
+    );
+
+    // Send welcome login-link email AFTER successful registration
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
+    const loginUrl = `${frontendUrl}/login`;
+
+    logger.info(`[EMAIL] Sending teacher setup email to ${activatedEmail}`);
+
+    const emailResult = await sendDynamicMail({
+      to: activatedEmail,
+      templateName: 'Teacher Account Setup',
+      variables: {
+        name: fullName || activatedEmail.split('@')[0],
+        email: activatedEmail,
+        teacherId: claims.teacherId,
+        collegeName: collegeName || '',
+        setupUrl: loginUrl,   // re-uses the {{setupUrl}} placeholder as the login link
+        loginUrl,
+      },
+    });
+
+    if (emailResult.success) {
+      logger.info(`[EMAIL] Teacher setup email sent successfully to ${activatedEmail}`);
+    } else {
+      // Log the exact error — do NOT expose it to the client response
+      logger.warn(`[EMAIL] Teacher setup email failed for ${activatedEmail}: ${emailResult.error}`);
+    }
+
+    res.json({
+      success: true,
+      message: 'Registration completed successfully! Check your email for the login link.'
+    });
   } catch (error) {
-    console.error('completeStaffSetup Error:', error);
-    res.status(400).json({ success: false, error: { message: error.message || 'Invalid or expired token' } });
+    logger.warn({
+      reqId: req.id,
+      stage: setupStage,
+      errorName: error.name,
+      errorCode: error.code || error.statusCode || 'UNKNOWN',
+    }, 'Teacher account setup rejected');
+    const isValidationError = error.name === 'ZodError';
+    res.status(error.statusCode || 400).json({
+      success: false,
+      error: { message: isValidationError ? error.message : 'Invalid or expired setup link.' }
+    });
   }
 };
 

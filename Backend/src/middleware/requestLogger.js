@@ -1,6 +1,9 @@
 import crypto from 'crypto';
 import { logger } from '../server.js';
 
+const redactSensitiveQuery = (url) =>
+  url.replace(/([?&](?:token|access_token|refresh_token|password)=)[^&]*/gi, '$1[redacted]');
+
 export const requestLogger = (req, res, next) => {
   const reqId = crypto.randomUUID();
   req.id = reqId;
@@ -14,7 +17,7 @@ export const requestLogger = (req, res, next) => {
     const collegeId = req.user?.collegeId || req.tenant?.collegeId || 'none';
     const statusCode = res.statusCode;
     const method = req.method;
-    const url = req.originalUrl || req.url;
+    const url = redactSensitiveQuery(req.originalUrl || req.url);
 
     const logMessage = `[${statusCode >= 400 ? (statusCode >= 500 ? 'error' : 'warn') : 'info'}] req=${reqId} college=${collegeId} ${method} ${url} ${statusCode} ${duration}ms`;
 

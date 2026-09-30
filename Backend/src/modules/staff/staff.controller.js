@@ -1,8 +1,54 @@
 import { prisma, logger } from '../../server.js';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { createStaffSchema, updateStaffSchema } from './staff.schema.js';
-import { sendDynamicMail } from '../../services/email/email.service.js';
+import { redis } from '../../lib/cache.js';
+import { createStaffSetupToken } from '../auth/staffSetupToken.js';
+
+const buildTeacherSetupEmail = (teacher, email) => {
+  const token = createStaffSetupToken({
+    teacherRecordId: teacher.id,
+    teacherId: teacher.teacherId,
+    userId: teacher.userId,
+    collegeId: teacher.collegeId,
+    email,
+  });
+  const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  return {
+    token,
+    setupUrl: `${frontendUrl}/teacher/register?token=${encodeURIComponent(token)}`,
+  };
+};
+
+/**
+ * Builds the post-registration welcome email payload sent to a teacher
+ * AFTER they have successfully completed their account setup.
+ * Contains their login link — NO password.
+ */
+const buildTeacherWelcomeEmail = (teacher, email, collegeName) => {
+  const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  const loginUrl = `${frontendUrl}/login`;
+  return {
+    to: email,
+    templateName: 'Teacher Account Setup',
+    variables: {
+      name: teacher.user?.name || email.split('@')[0],
+      email,
+      teacherId: teacher.teacherId,
+      collegeName: collegeName || teacher.college?.name || '',
+      setupUrl: loginUrl,        // re-uses setupUrl variable in the email template as the login link
+      loginUrl,
+    },
+  };
+};
+
+/**
+ * Invalidates the Redis staff list cache for a given college.
+ * Fails open if Redis is down.
+ */
+async function invalidateStaffCache(collegeId) {
+  if (redis && redis.status === 'ready') {
+    await redis.del(`staff:list:${collegeId}`).catch(() => {});
+  }
+}
 
 export const getStaff = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
@@ -38,10 +84,11 @@ export const getStaff = async (req, res) => {
 
     return {
       id: t.id,
+      teacherId: t.teacherId || null,
       name,
       firstName,
       lastName,
-      email: t.user?.email || t.emailId || '',
+      email: t.emailId || t.user?.email || '',
       phone: t.mobileNumber || '',
       department: t.department?.name || 'General',
       departmentId: t.departmentId,
@@ -53,7 +100,7 @@ export const getStaff = async (req, res) => {
       customRole: t.user?.customRole?.name || null,
       customRoleId: t.user?.customRoleId || null,
       status: t.user?.accountStatus || 'active',
-      phone: t.mobileNumber || '',
+      staffType: ['teacher', 'hod', 'faculty'].includes(t.user?.role) ? 'teaching' : 'non-teaching',
       createdAt: t.createdAt,
     };
   });
@@ -68,6 +115,28 @@ export const createStaff = async (req, res) => {
 
   if (!collegeId) {
     return res.status(400).json({ success: false, error: { code: 'COLLEGE_REQUIRED', message: 'College ID is required' } });
+  }
+
+  // teacherId is mandatory — reject if missing after schema parse
+  if (!payload.teacherId || !payload.teacherId.trim()) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'TEACHER_ID_REQUIRED', message: 'Teacher ID is required.' }
+    });
+  }
+
+  // Normalize teacherId: trim and uppercase (schema already does this, belt-and-suspenders)
+  const teacherId = payload.teacherId.trim();
+
+  // Check teacherId uniqueness within this college before proceeding
+  const existing = await prisma.teacher.findFirst({
+    where: { teacherId, collegeId, deletedAt: null }
+  });
+  if (existing) {
+    return res.status(409).json({
+      success: false,
+      error: { code: 'TEACHER_ID_DUPLICATE', message: `Teacher ID '${teacherId}' is already in use.` }
+    });
   }
 
   // Validate customRoleId belongs to this college
@@ -98,32 +167,50 @@ export const createStaff = async (req, res) => {
     deptId = dept.id;
   }
 
-  const email = payload.email.toLowerCase().trim();
-  const defaultPassword = await bcrypt.hash('Staff@123', 10);
+  // Determine final role for the User record.
+  // SECURITY: The backend determines the role — never blindly trust the frontend.
+  //   - 'hod' and 'faculty' are valid explicit teacher-tier roles.
+  //   - Any other value (including 'staff' sent by mistake) is normalized to 'teacher'
+  //     for teaching staff or 'staff' for non-teaching staff.
+  //   - An account with a teacherId is always teaching staff.
+  const TEACHER_TIER_ROLES = ['teacher', 'hod', 'faculty'];
+  let accountRole;
+  if (payload.staffType === 'non-teaching') {
+    // Non-teaching staff have no teacherId and no teacher dashboard access.
+    // Allow 'staff' or any custom role string; default to 'staff'.
+    accountRole = 'staff';
+  } else {
+    // Teaching staff: must be 'teacher', 'hod', or 'faculty'.
+    // If frontend sends 'staff' by mistake, normalize to 'teacher'.
+    accountRole = TEACHER_TIER_ROLES.includes(payload.role) ? payload.role : 'teacher';
+  }
+
+  const setupEmail = payload.email.trim();
+  const email = setupEmail.toLowerCase();
 
   const teacher = await prisma.$transaction(async (tx) => {
-    let user = await tx.user.findFirst({
+    const existingUser = await tx.user.findFirst({
       where: { email, collegeId }
     });
 
-    if (!user) {
-      user = await tx.user.create({
-        data: {
-          email,
-          ...(payload.name ? { name: payload.name } : {}),
-          collegeId,
-          role: payload.role || 'teacher',
-          customRoleId: payload.customRoleId || null,
-          passwordHash: defaultPassword,
-          accountStatus: 'pending_setup'
-        }
-      });
-    } else if (payload.name && !user.name) {
-      user = await tx.user.update({
-        where: { id: user.id },
-        data: { name: payload.name }
-      });
+    if (existingUser) {
+      const error = new Error('An account with this email already exists in this college.');
+      error.statusCode = 409;
+      error.code = 'STAFF_ACCOUNT_EXISTS';
+      throw error;
     }
+
+    const user = await tx.user.create({
+      data: {
+        email,
+        ...(payload.name ? { name: payload.name } : {}),
+        collegeId,
+        role: accountRole,
+        customRoleId: payload.customRoleId || null,
+        passwordHash: null,
+        accountStatus: 'pending_setup'
+      }
+    });
 
     const newTeacher = await tx.teacher.create({
       data: {
@@ -134,46 +221,46 @@ export const createStaff = async (req, res) => {
         joiningDate: payload.joiningDate ? new Date(payload.joiningDate) : new Date(),
         salaryGrade: payload.salaryGrade || 'Grade A',
         mobileNumber: payload.phone || null,
-        emailId: email,
+        emailId: setupEmail,
+        teacherId,
       },
       include: {
         user: true,
         department: true,
+        college: { select: { name: true } },
       }
     });
 
     return newTeacher;
   });
 
-  logger.info(`[info] req=${req.id || ''} college=${collegeId} teacherId=${teacher.id} actor=${actorId} Created staff '${payload.name}'`);
+  // Invalidate Redis staff cache for this college
+  await invalidateStaffCache(collegeId);
 
-  // Send Welcome Email asynchronously
-  const loginUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login`;
-  
-  await sendDynamicMail({
-    to: email,
-    templateName: 'Staff Welcome',
-    variables: {
-      name: payload.name,
-      email,
-      password: 'Staff@123',
-      loginUrl
-    }
-  }).catch((err) => {
-    logger.warn(`[warn] Failed to send staff welcome email: ${err.message}`);
-  });
+  // Build and log the registration link (Admin copies this link and shares it with the teacher)
+  const { token, setupUrl } = buildTeacherSetupEmail(teacher, setupEmail);
+  logger.info(
+    `[TEACHER] Registration link generated | teacher_record_id=${teacher.id} teacherId=${teacherId} ` +
+    `college=${collegeId} actor=${actorId} url=${setupUrl}`
+  );
+
+  // NOTE: Email is NOT sent here. The teacher will receive a welcome email
+  // only AFTER they complete registration through the link.
 
   res.status(201).json({
     success: true,
     data: {
       id: teacher.id,
+      teacherId: teacher.teacherId || null,
       name: payload.name,
-      email: teacher.user?.email,
+      email: teacher.emailId || teacher.user?.email,
       phone: teacher.mobileNumber || '',
       department: teacher.department?.name,
       designation: teacher.designation,
       joiningDate: teacher.joiningDate,
       role: teacher.user?.role,
+      // Return the registration URL so the Admin Panel can display/copy it
+      registrationUrl: setupUrl,
     }
   });
 };
@@ -184,20 +271,26 @@ export const generateSetupLink = async (req, res) => {
 
   const teacher = await prisma.teacher.findUnique({
     where: { id, collegeId },
-    include: { user: true }
+    include: { user: true, college: { select: { name: true } } }
   });
 
   if (!teacher) {
     return res.status(404).json({ success: false, error: { message: 'Staff member not found' } });
   }
 
-  const token = jwt.sign(
-    { teacherId: teacher.id, userId: teacher.user.id, email: teacher.user.email, type: 'staff-setup' },
-    process.env.JWT_SECRET || 'fallback_secret',
-    { expiresIn: '7d' }
+  if (teacher.user.accountStatus !== 'pending_setup' || teacher.user.passwordHash !== null || !teacher.teacherId) {
+    return res.status(409).json({ success: false, error: { message: 'This account is not awaiting setup.' } });
+  }
+
+  const email = teacher.emailId || teacher.user.email;
+  const { token, setupUrl } = buildTeacherSetupEmail(teacher, email);
+
+  logger.info(
+    `[TEACHER] Registration link regenerated | teacher_record_id=${teacher.id} teacherId=${teacher.teacherId} ` +
+    `college=${collegeId} actor=${req.user?.id || req.user?.userId}`
   );
 
-  res.json({ success: true, data: { token } });
+  res.json({ success: true, data: { token, registrationUrl: setupUrl } });
 };
 
 export const updateStaff = async (req, res) => {
@@ -225,6 +318,23 @@ export const updateStaff = async (req, res) => {
     return res.status(404).json({ success: false, error: { code: 'STAFF_NOT_FOUND', message: 'Staff member not found' } });
   }
 
+  // Normalize and validate teacherId update if provided
+  let normalizedTeacherId = undefined;
+  if (payload.teacherId !== undefined) {
+    normalizedTeacherId = payload.teacherId ? payload.teacherId.trim() : null;
+    if (normalizedTeacherId) {
+      const duplicate = await prisma.teacher.findFirst({
+        where: { teacherId: normalizedTeacherId, collegeId, deletedAt: null, NOT: { id } }
+      });
+      if (duplicate) {
+        return res.status(409).json({
+          success: false,
+          error: { code: 'TEACHER_ID_DUPLICATE', message: `Teacher ID '${normalizedTeacherId}' is already in use.` }
+        });
+      }
+    }
+  }
+
   const updated = await prisma.$transaction(async (tx) => {
     if ((payload.name || payload.role || payload.customRoleId !== undefined || payload.status) && teacher.userId) {
       await tx.user.update({
@@ -239,13 +349,14 @@ export const updateStaff = async (req, res) => {
     }
 
     const t = await tx.teacher.update({
-      where: { id },
+      where: { id }, // collegeId isolation enforced by findFirst pre-check above
       data: {
         ...(payload.designation ? { designation: payload.designation } : {}),
         ...(payload.salaryGrade ? { salaryGrade: payload.salaryGrade } : {}),
         ...(payload.joiningDate ? { joiningDate: new Date(payload.joiningDate) } : {}),
         ...(payload.departmentId ? { departmentId: payload.departmentId } : {}),
         ...(payload.phone !== undefined ? { mobileNumber: payload.phone || null } : {}),
+        ...(normalizedTeacherId !== undefined ? { teacherId: normalizedTeacherId } : {}),
       },
       include: {
         user: true,
@@ -256,11 +367,15 @@ export const updateStaff = async (req, res) => {
     return t;
   });
 
+  // Invalidate Redis staff cache for this college
+  await invalidateStaffCache(collegeId);
+
   logger.info(`[info] req=${req.id || ''} college=${collegeId} teacherId=${id} actor=${actorId} Updated staff`);
   res.json({
     success: true,
     data: {
       ...updated,
+      teacherId: updated.teacherId || null,
       phone: updated.mobileNumber || ''
     }
   });
@@ -283,6 +398,9 @@ export const deleteStaff = async (req, res) => {
     where: { id },
     data: { deletedAt: new Date() }
   });
+
+  // Invalidate Redis staff cache for this college
+  await invalidateStaffCache(collegeId);
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} teacherId=${id} actor=${actorId} Soft-deleted staff`);
   res.json({ success: true, message: 'Staff member deleted successfully' });
@@ -333,22 +451,26 @@ export const bulkImportStaff = async (req, res) => {
         deptId = dept.id;
       }
 
-      const email = String(row['Email_ID'] || `${employeeId.toLowerCase()}@example.com`).toLowerCase().trim();
+      const setupEmail = String(row['Email_ID'] || '').trim();
+      if (!setupEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(setupEmail)) {
+        throw new Error('A valid Email_ID is required for teacher setup');
+      }
+      const email = setupEmail.toLowerCase();
 
-      await prisma.$transaction(async (tx) => {
+      const importedTeacher = await prisma.$transaction(async (tx) => {
         let user = await tx.user.findFirst({
           where: { email, collegeId }
         });
 
         if (!user) {
-          const defaultPassword = await bcrypt.hash('Staff@123', 10);
           user = await tx.user.create({
             data: {
               email,
+              name: staffName,
               collegeId,
               role: 'teacher',
-              passwordHash: defaultPassword,
-              accountStatus: 'active'
+              passwordHash: null,
+              accountStatus: 'pending_setup'
             }
           });
         }
@@ -356,11 +478,12 @@ export const bulkImportStaff = async (req, res) => {
         const joiningDate = row['Date_of_Joining*'] || row['Date_of_Joining'] ? new Date(row['Date_of_Joining*'] || row['Date_of_Joining']) : new Date();
         const dateOfBirth = row['Date_of_Birth'] ? new Date(row['Date_of_Birth']) : null;
         
-        await tx.teacher.create({
+        const createdTeacher = await tx.teacher.create({
           data: {
             collegeId,
             userId: user.id,
             departmentId: deptId,
+            teacherId: employeeId,
             designation: String(row['Designation*'] || row['Designation'] || 'Staff'),
             joiningDate: isNaN(joiningDate) ? new Date() : joiningDate,
             salaryGrade: 'Grade A',
@@ -372,7 +495,7 @@ export const bulkImportStaff = async (req, res) => {
             qualification: row['Qualification'] ? String(row['Qualification']) : null,
             experienceYears: row['Experience_Years'] ? parseInt(row['Experience_Years'], 10) : null,
             mobileNumber: row['Mobile_Number*'] || row['Mobile_Number'] ? String(row['Mobile_Number*'] || row['Mobile_Number']) : null,
-            emailId: email,
+            emailId: setupEmail,
             aadhaarNumber: row['Aadhaar_Number'] ? String(row['Aadhaar_Number']) : null,
             panNumber: row['PAN_Number'] ? String(row['PAN_Number']) : null,
             bloodGroup: row['Blood_Group'] ? String(row['Blood_Group']) : null,
@@ -383,9 +506,25 @@ export const bulkImportStaff = async (req, res) => {
             pincode: row['Pincode'] ? String(row['Pincode']) : null,
             emergencyContactName: row['Emergency_Contact_Name'] ? String(row['Emergency_Contact_Name']) : null,
             emergencyContactNumber: row['Emergency_Contact_Number'] ? String(row['Emergency_Contact_Number']) : null,
-          }
+          },
+          include: {
+            user: true,
+            department: true,
+            college: { select: { name: true } },
+          },
         });
+
+        return createdTeacher;
       });
+
+      if (importedTeacher.user.accountStatus === 'pending_setup' && importedTeacher.user.passwordHash === null) {
+        const { setupUrl } = buildTeacherSetupEmail(importedTeacher, setupEmail);
+        logger.info(
+          `[TEACHER] Registration link generated (bulk import) | teacher_record_id=${importedTeacher.id} ` +
+          `teacherId=${importedTeacher.teacherId} email=${setupEmail} college=${collegeId} url=${setupUrl}`
+        );
+        // NOTE: Email is NOT sent here either — teacher receives welcome email only after completing registration.
+      }
 
       results.successful++;
     } catch (error) {

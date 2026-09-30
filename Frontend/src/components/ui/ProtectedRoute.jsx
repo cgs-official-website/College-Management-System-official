@@ -34,9 +34,12 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   if (!currentUser) {
-    const loginPath = location.pathname === '/admin' || location.pathname.startsWith('/admin/')
-      ? '/admin/login'
-      : '/login';
+    let loginPath = '/login';
+    if (location.pathname === '/admin' || location.pathname.startsWith('/admin/')) {
+      loginPath = '/admin/login';
+    } else if (location.pathname === '/super' || location.pathname.startsWith('/super/')) {
+      loginPath = '/super/login';
+    }
     return <Navigate to={loginPath} state={{ from: location }} replace />;
   }
 
