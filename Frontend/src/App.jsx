@@ -11,6 +11,7 @@ import StudentRegister from './pages/auth/StudentRegister';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
 import TeacherRegister from './pages/auth/TeacherRegister';
+import StaffSetup from './pages/auth/StaffSetup';
 import { PendingApproval, RejectedApproval } from './pages/auth/PendingApproval';
 import ProtectedRoute from './components/ui/ProtectedRoute';
 import DashboardRedirect from './components/ui/DashboardRedirect';
@@ -63,7 +64,10 @@ function App() {
 
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            {/* Teacher Registration — Step 1: teacher enters own email, gets setup link emailed */}
             <Route path="/teacher/register" element={<TeacherRegister />} />
+            {/* Teacher Setup — Step 2: teacher creates password via emailed setup link */}
+            <Route path="/teacher/setup" element={<StaffSetup />} />
             <Route path="/pending-approval" element={<PendingApproval />} />
             <Route path="/rejected" element={<RejectedApproval />} />
             <Route path="/dashboard" element={<ProtectedRoute><DashboardRedirect /></ProtectedRoute>} />

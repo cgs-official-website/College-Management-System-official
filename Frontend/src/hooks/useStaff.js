@@ -17,12 +17,12 @@ export function useStaff(collegeId) {
 
   const addStaff = useMutation({
     mutationFn: (newStaff) => api.post('/staff', newStaff),
+    // NOTE: No toast here — HRManagement.jsx shows the Registration Link toast instead
     onSuccess: () => {
-      toast.success('Staff member added successfully!');
       queryClient.invalidateQueries({ queryKey: ['staff', collegeId] });
     },
     onError: (err) => {
-      toast.error(err.message || 'Failed to add staff member.');
+      toast.error(err.response?.data?.error?.message || err.message || 'Failed to add staff member.');
     }
   });
 

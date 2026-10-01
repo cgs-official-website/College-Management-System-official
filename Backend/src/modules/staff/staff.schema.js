@@ -2,11 +2,15 @@ import { z } from 'zod';
 
 export const createStaffSchema = z.object({
   name: z.string().optional().default(''),
+  // Email is optional at creation time.
+  // If provided, it is used to pre-fill the teacher's user account.
+  // If omitted, the teacher will enter their own email during registration.
   email: z
-    .string({ required_error: 'Email is required.' })
+    .string()
     .trim()
-    .min(1, 'Email is required.')
-    .email('Please enter a valid email address.'),
+    .email('Please enter a valid email address.')
+    .optional()
+    .or(z.literal('')),
   department: z.string().optional(),
   departmentId: z.string().uuid().optional(),
   designation: z.string().min(1, 'Designation is required'),
@@ -28,6 +32,7 @@ export const createStaffSchema = z.object({
     .trim()
     .min(1, 'Teacher ID is required.'),
 });
+
 
 // For updates: teacherId is still required if provided; cannot be set to empty
 export const updateStaffSchema = createStaffSchema

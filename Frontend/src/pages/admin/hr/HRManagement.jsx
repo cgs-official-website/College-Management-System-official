@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, Filter, Mail, Phone, MoreVertical, Edit, Trash2, Building, Shield, Eye, Link } from 'lucide-react';
+import { Plus, Search, Filter, Mail, Phone, MoreVertical, Edit, Trash2, Building, Shield, Eye, Link2 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useStaff } from '../../../hooks/useStaff';
 import { Button } from '../../../components/ui/Button';
@@ -48,23 +48,28 @@ export default function HRManagement() {
     }
   };
 
-  const handleCopyLink = async (memberId) => {
+  // Copy Registration Link — generates a fresh /teacher/register?token=... link for pending teachers
+  const handleCopyRegistrationLink = async (memberId, memberName) => {
+    const toastId = toast.loading('Generating registration link...');
     try {
-      const response = await apiClient.get(`/staff/${memberId}/setup-link`);
-      const data = response.data?.data || response.data;
-      const url = data?.registrationUrl || (() => {
-        const token = data?.token;
-        return token ? `${window.location.origin}/teacher/register?token=${token}` : null;
-      })();
-      if (url) {
+      const response = await apiClient.get(`/staff/${memberId}/registration-link`);
+      const url = response?.data?.registrationUrl || response?.registrationUrl;
+      if (!url) throw new Error('No registration URL returned from server.');
+      try {
         await navigator.clipboard.writeText(url);
-        toast.success("Registration link copied to clipboard!");
-      } else {
-        toast.error("Could not retrieve the registration link.");
+        toast.success(
+          `Registration link copied!\nShare this link with ${memberName || 'the teacher'} so they can register:\n${url}`,
+          { id: toastId, duration: 10000 }
+        );
+      } catch {
+        toast.success(
+          `Share this registration link with ${memberName || 'the teacher'}:\n${url}`,
+          { id: toastId, duration: 10000 }
+        );
       }
     } catch (error) {
-      console.error('Failed to generate link:', error);
-      toast.error(error.response?.data?.error?.message || "Failed to generate link");
+      const msg = error.response?.data?.error?.message || error.message || 'Failed to generate link';
+      toast.error(msg, { id: toastId });
     }
   };
 
@@ -233,9 +238,14 @@ export default function HRManagement() {
                         <button onClick={() => setViewingStaff(member)} className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="View Profile">
                           <Eye className="w-4 h-4" />
                         </button>
+                        {/* Copy Registration Link — only for pending teachers (not yet registered) */}
                         {(member.status || member.accountStatus) !== 'active' && (
-                          <button onClick={() => handleCopyLink(member.id)} className="p-2 text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="Copy Link">
-                            <Link className="w-4 h-4" />
+                          <button
+                            onClick={() => handleCopyRegistrationLink(member.id, member.name)}
+                            className="p-2 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm"
+                            title="Copy Registration Link (share with teacher so they can register)"
+                          >
+                            <Link2 className="w-4 h-4" />
                           </button>
                         )}
                         <button onClick={() => handleOpenEdit(member)} className="p-2 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="Edit">

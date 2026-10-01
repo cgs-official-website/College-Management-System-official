@@ -282,47 +282,55 @@ export const sendDynamicMail = async ({ to, templateName, variables = {}, cc, bc
         `  Refusing to send to ${to} — falling back to built-in template.\n` +
         `  Update the DB template in the Email Templates panel to remove the password placeholder.`
       );
-      // Fall through: treat as if template was not found, use built-in fallback
+      // Fall through to built-in fallback below
     } else if (template) {
 
       if (template.status !== 'Active') {
-        console.warn(`[EmailService] ⚠️  Template "${templateName}" exists in DB but status="${template.status}" (not "Active"). Skipping email to ${to}.`);
-        return { success: false, error: `Template "${templateName}" is not active` };
-      }
-
-      // DB template found and safe — interpolate variables
-      subject = template.subject;
-      htmlContent = template.contentHtml || '';
-
-      for (const [key, value] of Object.entries(variables)) {
-        const regex = new RegExp(`{{${key}}}`, 'g');
-        subject = subject.replace(regex, String(value ?? ''));
-        htmlContent = htmlContent.replace(regex, String(value ?? ''));
-      }
-
-      htmlContent = baseTemplate(htmlContent);
-      console.log(`[EmailService] Using DB template: "${templateName}"`);
-
-    } else {
-      // --- DB template not found — use built-in fallback ---
-      const fallback = FALLBACK_TEMPLATES[templateName];
-
-      if (!fallback) {
-        console.error(
-          `[EmailService] ❌ No DB template AND no built-in fallback found for: "${templateName}".\n` +
-          `  Run: node seed_templates.js  — to seed templates into the database.`
+        // Template exists but is inactive — fall through to built-in fallback.
+        // Do NOT return early; the built-in template is always safe to use.
+        console.warn(
+          `[EmailService] ⚠️  DB template "${templateName}" status="${template.status}" (not "Active").` +
+          ` Falling back to built-in template for: ${to}`
         );
-        return { success: false, error: `Email template not found: ${templateName}` };
-      }
+        // Fall through to built-in fallback below
+      } else {
+        // DB template found, active, and safe — interpolate variables
+        subject = template.subject;
+        htmlContent = template.contentHtml || '';
 
+        for (const [key, value] of Object.entries(variables)) {
+          const regex = new RegExp(`{{${key}}}`, 'g');
+          subject = subject.replace(regex, String(value ?? ''));
+          htmlContent = htmlContent.replace(regex, String(value ?? ''));
+        }
+
+        htmlContent = baseTemplate(htmlContent);
+        console.log(`[EmailService] Using DB template: "${templateName}"`);
+
+        return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo });
+      }
+    }
+
+    // --- DB template not found or inactive — use built-in fallback ---
+    const fallback = FALLBACK_TEMPLATES[templateName];
+
+    if (!fallback) {
+      console.error(
+        `[EmailService] ❌ No DB template AND no built-in fallback found for: "${templateName}".\n` +
+        `  Run: node seed_templates.js  — to seed templates into the database.`
+      );
+      return { success: false, error: `Email template not found: ${templateName}` };
+    }
+
+    if (!template) {
       console.warn(
         `[EmailService] ⚠️  Template "${templateName}" not found in DB. Using built-in fallback.\n` +
         `  To persist templates to DB, run: node seed_templates.js`
       );
-
-      subject = fallback.subject;
-      htmlContent = baseTemplate(fallback.buildHtml(variables));
     }
+
+    subject = fallback.subject;
+    htmlContent = baseTemplate(fallback.buildHtml(variables));
 
     return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo });
 

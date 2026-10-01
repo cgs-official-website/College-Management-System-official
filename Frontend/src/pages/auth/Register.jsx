@@ -96,9 +96,21 @@ const Register = () => {
 
   const maxSteps = selectedRole === 'admin' ? 3 : 2;
 
+  // Teachers using ?code= link skip Step 1 (name/email/password) — go direct to Step 2
+  useEffect(() => {
+    if ((selectedRole === 'teacher' || selectedRole === 'hod') && defaultCollegeCode) {
+      setCurrentStep(2);
+    }
+  }, [selectedRole, defaultCollegeCode]);
+
   const handleNext = async () => {
     let fieldsToValidate = [];
     if (currentStep === 1) {
+      // Skip name/email/password validation for teachers — they go straight to Step 2
+      if (selectedRole === 'teacher' || selectedRole === 'hod') {
+        setCurrentStep(2);
+        return;
+      }
       fieldsToValidate = ['name', 'email', 'password'];
     } else if (currentStep === 2) {
       if (selectedRole === 'admin') {
@@ -199,12 +211,26 @@ const Register = () => {
       return;
     }
 
-    // ── Teacher / HOD / Parent: no self-service registration endpoint ──
+    // ── Teacher / HOD: verify identity → send setup link to admin-registered email ──
     if (data.role === 'teacher' || data.role === 'hod') {
-      setIsLoading(false);
-      setError('Teacher accounts are created by the college admin. Please check your email for a staff setup invitation link.');
+      try {
+        const collegeId = codeCollegeId || fetchedCollegeId || data.collegeCode;
+        const resp = await api.post('/auth/teacher-send-setup', {
+          teacherId: data.teacherId?.trim(),
+          collegeId,
+        });
+        setIsLoading(false);
+        const maskedEmail = resp?.data?.maskedEmail || resp?.maskedEmail || 'your registered email';
+        setError('');
+        navigate(`/login?notice=setup_sent&email=${encodeURIComponent(maskedEmail)}`);
+      } catch (err) {
+        setIsLoading(false);
+        const msg = err?.response?.data?.error?.message || err?.message || 'Could not send setup link. Please contact your admin.';
+        setError(msg);
+      }
       return;
     }
+
 
     if (data.role === 'parent') {
       setIsLoading(false);

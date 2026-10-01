@@ -12,8 +12,9 @@ import {
   forgotPasswordSchema, 
   resetPasswordSchema,
   staffSetupSchema,
+  teacherRegisterSchema,
 } from './auth.schema.js';
-import { verifyStaffSetupToken } from './staffSetupToken.js';
+import { verifyStaffSetupToken, verifyTeacherRegistrationToken, createStaffSetupToken } from './staffSetupToken.js';
 import { sendDynamicMail } from '../../services/email/email.service.js';
 import { getNextCollegeCode } from '../../lib/collegeCodeGenerator.js';
 
@@ -964,6 +965,355 @@ export const getMe = async (req, res) => {
     res.json({ success: true, data: safeUser });
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+/**
+ * POST /auth/teacher-send-setup
+ * Powers the OLD /register/teacher?code=<collegeId> flow.
+ *
+ * Teacher provides:
+ *   - teacherId   : their assigned Teacher ID (e.g. "TCH011")
+ *   - collegeId   : the college UUID from the URL ?code= parameter
+ *
+ * System:
+ *   1. Finds the teacher by teacherId + collegeId
+ *   2. Verifies their account is still pending_setup (not already active)
+ *   3. Generates a Setup Link (staff-setup JWT with teacher.emailId)
+ *   4. Emails the Setup Link to teacher.emailId (admin-registered email)
+ *   5. Returns a masked email so frontend can show "sent to j***@gmail.com"
+ *
+ * This does NOT require a registration token — teacher proves identity by TeacherID alone.
+ * The admin-registered email is used as the destination — teacher does not provide their email here.
+ */
+export const teacherSendSetup = async (req, res) => {
+  try {
+    const { teacherId, collegeId } = req.body;
+
+    if (!teacherId?.trim() || !collegeId?.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'MISSING_FIELDS', message: 'Teacher ID and College ID are required.' }
+      });
+    }
+
+    // Find teacher by teacherId + collegeId
+    const teacher = await prisma.teacher.findFirst({
+      where: {
+        teacherId: teacherId.trim().toUpperCase(),
+        collegeId: collegeId.trim(),
+        deletedAt: null,
+      },
+      include: {
+        user: { select: { id: true, accountStatus: true, passwordHash: true, email: true } },
+        college: { select: { id: true, name: true, slug: true } },
+      },
+    });
+
+    // Security: don't reveal whether a teacher exists or not — generic error
+    if (!teacher || !teacher.user) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'TEACHER_NOT_FOUND', message: 'No teacher found with this ID in the specified college. Please verify your Teacher ID and try again.' }
+      });
+    }
+
+    // If already active, no setup needed
+    if (teacher.user.accountStatus === 'active' && teacher.user.passwordHash) {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'ALREADY_ACTIVE', message: 'Your account is already set up. Please log in directly.' }
+      });
+    }
+
+    // The admin-registered email — this is where the setup link is sent
+    const teacherEmail = teacher.emailId || teacher.user?.email;
+
+    if (!teacherEmail || teacherEmail.includes('@pending.local')) {
+      // Admin didn't provide an email — teacher must use the new /teacher/register?token= flow
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'NO_EMAIL_REGISTERED',
+          message: 'No email address is registered for your account. Please contact your college administrator to get your registration link.',
+        }
+      });
+    }
+
+    // Generate the staff-setup JWT with the admin-registered email
+    const setupToken = createStaffSetupToken({
+      teacherRecordId: teacher.id,
+      teacherId: teacher.teacherId,
+      userId: teacher.user.id,
+      collegeId: teacher.collegeId,
+      email: teacherEmail,
+    });
+
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
+    const setupUrl = `${frontendUrl}/teacher/setup?token=${encodeURIComponent(setupToken)}`;
+
+    logger.info(`[TEACHER-SETUP] Sending Setup Link | teacherId=${teacher.teacherId} email=${teacherEmail} college=${teacher.collegeId}`);
+
+    // Send the Setup Link email to the admin-registered email
+    const emailResult = await sendDynamicMail({
+      to: teacherEmail,
+      templateName: 'Teacher Account Setup',
+      variables: {
+        name: teacher.user?.email?.split('@')[0] || teacherId,
+        email: teacherEmail,
+        teacherId: teacher.teacherId,
+        collegeName: teacher.college?.name || '',
+        setupUrl,
+        loginUrl: `${frontendUrl}/login`,
+      },
+    });
+
+    if (emailResult.success) {
+      logger.info(`[TEACHER-SETUP] Setup email sent to ${teacherEmail} | messageId=${emailResult.messageId}`);
+    } else {
+      logger.warn(`[TEACHER-SETUP] Setup email failed for ${teacherEmail}: ${emailResult.error}`);
+    }
+
+    // Mask email for display: j***@gmail.com
+    const [localPart, domain] = teacherEmail.split('@');
+    const maskedEmail = `${localPart.charAt(0)}***@${domain}`;
+
+    res.json({
+      success: true,
+      message: `Setup link sent to ${maskedEmail}. Please check your inbox.`,
+      data: {
+        maskedEmail,
+        emailSent: emailResult.success,
+      },
+    });
+  } catch (error) {
+    logger.warn({ errorName: error.name, errorCode: error.code }, 'teacherSendSetup failed');
+    res.status(error.statusCode || 400).json({
+      success: false,
+      error: { message: error.message || 'Failed to send setup link.' }
+    });
+  }
+};
+
+/**
+ * GET /auth/teacher-register/verify?token=
+ * Validates a teacher Registration Link token (type: teacher-registration).
+ * Returns teacher info (teacherId, collegeName, collegeSlug) for the form pre-fill.
+ * Does NOT reveal any admin-provided email — teacher enters their own.
+ */
+export const verifyTeacherRegistration = async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ success: false, error: { message: 'Token is required' } });
+
+    const claims = verifyTeacherRegistrationToken(token);
+
+    // Find the teacher record (must be in pending_setup state with no password yet)
+    const teacher = await prisma.teacher.findFirst({
+      where: {
+        id: claims.teacherRecordId,
+        teacherId: claims.teacherId,
+        userId: claims.userId,
+        collegeId: claims.collegeId,
+        deletedAt: null,
+      },
+      include: {
+        user: { select: { accountStatus: true, passwordHash: true } },
+        college: { select: { id: true, name: true, slug: true } },
+        department: { select: { name: true } },
+      },
+    });
+
+    if (!teacher || !teacher.user) {
+      return res.status(400).json({ success: false, error: { message: 'Invalid or expired registration link.' } });
+    }
+
+    // The link is valid only while the account has not been fully activated yet.
+    // A teacher who completed registration but hasn't set up yet will have pending_setup.
+    // A teacher who has already registered (but not set up password) will have pending_setup.
+    // A teacher who has completed everything will have active.
+    if (teacher.user.accountStatus === 'active') {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'ALREADY_REGISTERED', message: 'This teacher account has already been registered. Please log in or check your email for the setup link.' }
+      });
+    }
+
+    // Return only teacher's institutional info — NO email shown (teacher enters their own)
+    res.json({
+      success: true,
+      data: {
+        teacherId: teacher.teacherId,
+        collegeName: teacher.college?.name,
+        collegeSlug: teacher.college?.slug,
+        department: teacher.department?.name,
+      }
+    });
+  } catch {
+    res.status(400).json({ success: false, error: { message: 'Invalid or expired registration link.' } });
+  }
+};
+
+/**
+ * POST /auth/teacher-register
+ * Step 1 of the new teacher flow.
+ * Teacher opens Registration Link → provides their own name + email.
+ * System:
+ *   1. Validates the teacher-registration token
+ *   2. Updates user account with teacher's real email and name
+ *   3. Generates a Setup Link (staff-setup JWT)
+ *   4. Emails the Setup Link to teacher.email (the email the teacher just entered)
+ * The Setup Link is NEVER sent to the admin or any hardcoded email.
+ */
+export const teacherRegister = async (req, res) => {
+  let stage = 'validate-request';
+  try {
+    const payload = teacherRegisterSchema.parse(req.body);
+    stage = 'verify-registration-token';
+    const claims = verifyTeacherRegistrationToken(payload.token);
+
+    logger.info(
+      `[TEACHER-REG] Step 1 started | teacher_record_id=${claims.teacherRecordId} ` +
+      `teacherId=${claims.teacherId} college=${claims.collegeId}`
+    );
+
+    const teacherEmail = payload.email.trim().toLowerCase();
+    const fullName = `${payload.firstName} ${payload.lastName || ''}`.trim();
+
+    stage = 'update-teacher-user-email';
+
+    let collegeName;
+    let teacherRecord;
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Find the teacher record
+      const teacher = await tx.teacher.findFirst({
+        where: {
+          id: claims.teacherRecordId,
+          teacherId: claims.teacherId,
+          userId: claims.userId,
+          collegeId: claims.collegeId,
+          deletedAt: null,
+        },
+        include: {
+          user: { select: { id: true, accountStatus: true, passwordHash: true, email: true } },
+          college: { select: { id: true, name: true, slug: true } },
+        },
+      });
+
+      if (!teacher || !teacher.user) {
+        const err = new Error('Teacher record not found for this registration link.');
+        err.statusCode = 400;
+        err.code = 'TEACHER_NOT_FOUND';
+        throw err;
+      }
+
+      if (teacher.user.accountStatus === 'active') {
+        const err = new Error('This teacher account has already been registered. Please check your email for the setup link or log in.');
+        err.statusCode = 409;
+        err.code = 'ALREADY_REGISTERED';
+        throw err;
+      }
+
+      collegeName = teacher.college?.name;
+      teacherRecord = teacher;
+
+      // 2. Check the teacher-provided email is not already used by another active user in this college
+      const existingActiveUser = await tx.user.findFirst({
+        where: {
+          email: teacherEmail,
+          collegeId: claims.collegeId,
+          NOT: { id: claims.userId }, // allow the same user to use their own email
+        },
+      });
+      if (existingActiveUser) {
+        const err = new Error('An account with this email address already exists in this college. Please use a different email.');
+        err.statusCode = 409;
+        err.code = 'EMAIL_ALREADY_EXISTS';
+        throw err;
+      }
+
+      // 3. Update the User record with teacher's real email and name
+      await tx.user.update({
+        where: { id: claims.userId },
+        data: {
+          email: teacherEmail,
+          ...(fullName ? { name: fullName } : {}),
+        },
+      });
+
+      // 4. Update teacher.emailId with the teacher's own email
+      await tx.teacher.update({
+        where: { id: claims.teacherRecordId },
+        data: { emailId: teacherEmail },
+      });
+    });
+
+    stage = 'generate-setup-token';
+
+    // 5. Generate the Setup JWT (staff-setup token) with teacher's registered email
+    const setupToken = createStaffSetupToken({
+      teacherRecordId: claims.teacherRecordId,
+      teacherId: claims.teacherId,
+      userId: claims.userId,
+      collegeId: claims.collegeId,
+      email: teacherEmail,
+    });
+
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
+    const setupUrl = `${frontendUrl}/teacher/setup?token=${encodeURIComponent(setupToken)}`;
+
+    stage = 'send-setup-email';
+
+    logger.info(`[TEACHER-REG] Sending Setup Link to teacher.email=${teacherEmail}`);
+
+    const emailResult = await sendDynamicMail({
+      to: teacherEmail,          // ALWAYS teacher's own email, never admin email
+      templateName: 'Teacher Account Setup',
+      variables: {
+        name: fullName || teacherEmail.split('@')[0],
+        email: teacherEmail,
+        teacherId: claims.teacherId,
+        collegeName: collegeName || '',
+        setupUrl,
+        loginUrl: `${frontendUrl}/login`,
+      },
+    });
+
+    if (emailResult.success) {
+      logger.info(`[TEACHER-REG] Setup email sent to ${teacherEmail} | messageId=${emailResult.messageId}`);
+    } else {
+      logger.warn(`[TEACHER-REG] Setup email FAILED for ${teacherEmail}: ${emailResult.error}`);
+    }
+
+    logger.info(
+      `[TEACHER-REG] Step 1 complete | teacher_record_id=${claims.teacherRecordId} ` +
+      `email=${teacherEmail} setup_email_sent=${emailResult.success}`
+    );
+
+    res.json({
+      success: true,
+      message: 'Registration successful! A setup link has been sent to your email. Please check your inbox to complete your account setup.',
+      data: {
+        email: teacherEmail,
+        emailSent: emailResult.success,
+      }
+    });
+  } catch (error) {
+    logger.warn({
+      stage,
+      errorName: error.name,
+      errorCode: error.code || error.statusCode || 'UNKNOWN',
+    }, 'Teacher registration step 1 failed');
+    const isValidationError = error.name === 'ZodError';
+    const status = error.statusCode || (isValidationError ? 400 : 400);
+    res.status(status).json({
+      success: false,
+      error: {
+        code: error.code || 'TEACHER_REGISTER_FAILED',
+        message: isValidationError ? error.message : (error.message || 'Registration failed. The link may be invalid or expired.')
+      }
+    });
   }
 };
 

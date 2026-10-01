@@ -92,10 +92,22 @@ export const resetPasswordSchema = z.object({
 export const staffSetupSchema = z.object({
   token: z.string().min(1, 'Setup token is required.'),
   firstName: z.string().trim().min(1, 'First name is required.'),
-  lastName: z.string().trim().min(1, 'Last name is required.'),
+  lastName: z.string().trim().optional().default(''),
   password: z.string().min(6, 'Password must be at least 6 characters.'),
   confirmPassword: z.string().min(6, 'Confirm password must be at least 6 characters.'),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Passwords do not match.',
   path: ['confirmPassword'],
+});
+
+/**
+ * Schema for Step 1 of the new teacher flow:
+ * Teacher opens Registration Link and provides their own name + email.
+ * No password at this stage — password is set via the Setup Link (Step 2).
+ */
+export const teacherRegisterSchema = z.object({
+  token: z.string().min(1, 'Registration token is required.'),
+  firstName: z.string().trim().min(1, 'First name is required.'),
+  lastName: z.string().trim().optional().default(''),
+  email: z.string().trim().email('A valid email address is required.').toLowerCase(),
 });

@@ -114,14 +114,13 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
             />
             <div className="space-y-1.5">
               <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Email Address <span className="text-red-500">*</span>
+                Email Address <span className="text-slate-400 text-xs font-normal">(optional)</span>
               </label>
               <input
                 id="email"
                 type="email"
-                placeholder="teacher@gmail.com"
+                placeholder="Leave blank — teacher will enter their own"
                 {...register('email', {
-                  required: 'Email is required.',
                   pattern: {
                     value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
                     message: 'Please enter a valid email address.'
@@ -133,7 +132,10 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
                     : 'border-slate-200 dark:border-white/10 focus:border-primary-500 focus:ring-primary-500/50'
                 }`}
               />
-              {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
+              {errors.email
+                ? <p className="text-sm text-red-500">{errors.email.message}</p>
+                : <p className="text-xs text-slate-400 dark:text-slate-500">Teacher will enter their own email when they open the Registration Link.</p>
+              }
             </div>
             <Input 
               label="Phone Number" 

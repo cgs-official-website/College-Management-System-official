@@ -1,42 +1,25 @@
 import { prisma, logger } from '../../server.js';
 import { createStaffSchema, updateStaffSchema } from './staff.schema.js';
 import { redis } from '../../lib/cache.js';
-import { createStaffSetupToken } from '../auth/staffSetupToken.js';
+import { createTeacherRegistrationToken } from '../auth/staffSetupToken.js';
+import { sendDynamicMail } from '../../services/email/email.service.js';
 
-const buildTeacherSetupEmail = (teacher, email) => {
-  const token = createStaffSetupToken({
+/**
+ * Builds the Registration Link given to the Admin after creating a teacher.
+ * The teacher opens this link to register with their own details and email.
+ * NOTE: This is NOT the setup link — email is NOT embedded in this token.
+ */
+const buildTeacherRegistrationLink = (teacher) => {
+  const token = createTeacherRegistrationToken({
     teacherRecordId: teacher.id,
     teacherId: teacher.teacherId,
     userId: teacher.userId,
     collegeId: teacher.collegeId,
-    email,
   });
   const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
   return {
     token,
-    setupUrl: `${frontendUrl}/teacher/register?token=${encodeURIComponent(token)}`,
-  };
-};
-
-/**
- * Builds the post-registration welcome email payload sent to a teacher
- * AFTER they have successfully completed their account setup.
- * Contains their login link — NO password.
- */
-const buildTeacherWelcomeEmail = (teacher, email, collegeName) => {
-  const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
-  const loginUrl = `${frontendUrl}/login`;
-  return {
-    to: email,
-    templateName: 'Teacher Account Setup',
-    variables: {
-      name: teacher.user?.name || email.split('@')[0],
-      email,
-      teacherId: teacher.teacherId,
-      collegeName: collegeName || teacher.college?.name || '',
-      setupUrl: loginUrl,        // re-uses setupUrl variable in the email template as the login link
-      loginUrl,
-    },
+    registrationUrl: `${frontendUrl}/teacher/register?token=${encodeURIComponent(token)}`,
   };
 };
 
@@ -185,24 +168,31 @@ export const createStaff = async (req, res) => {
     accountRole = TEACHER_TIER_ROLES.includes(payload.role) ? payload.role : 'teacher';
   }
 
-  const setupEmail = payload.email.trim();
-  const email = setupEmail.toLowerCase();
+  // Email is optional — the teacher will provide their own during registration.
+  // If admin provides an email, use it as the initial user account email.
+  // If not, use a unique placeholder that won't clash with real emails.
+  const adminProvidedEmail = payload.email && payload.email.trim() ? payload.email.trim().toLowerCase() : null;
+  // Placeholder format: teacher+<teacherId>+<collegeId_prefix>@pending.local
+  // This placeholder can never be used to log in (no password, pending_setup status).
+  const placeholderEmail = adminProvidedEmail || `teacher+${teacherId.toLowerCase()}+${collegeId.slice(0, 8)}@pending.local`;
 
   const teacher = await prisma.$transaction(async (tx) => {
-    const existingUser = await tx.user.findFirst({
-      where: { email, collegeId }
-    });
-
-    if (existingUser) {
-      const error = new Error('An account with this email already exists in this college.');
-      error.statusCode = 409;
-      error.code = 'STAFF_ACCOUNT_EXISTS';
-      throw error;
+    if (adminProvidedEmail) {
+      // Only check for duplicate if admin actually provided an email
+      const existingUser = await tx.user.findFirst({
+        where: { email: adminProvidedEmail, collegeId }
+      });
+      if (existingUser) {
+        const error = new Error('An account with this email already exists in this college.');
+        error.statusCode = 409;
+        error.code = 'STAFF_ACCOUNT_EXISTS';
+        throw error;
+      }
     }
 
     const user = await tx.user.create({
       data: {
-        email,
+        email: placeholderEmail,
         ...(payload.name ? { name: payload.name } : {}),
         collegeId,
         role: accountRole,
@@ -221,7 +211,8 @@ export const createStaff = async (req, res) => {
         joiningDate: payload.joiningDate ? new Date(payload.joiningDate) : new Date(),
         salaryGrade: payload.salaryGrade || 'Grade A',
         mobileNumber: payload.phone || null,
-        emailId: setupEmail,
+        // emailId stores the admin-provided email (if any) — updated to teacher's real email after registration
+        emailId: adminProvidedEmail || null,
         teacherId,
       },
       include: {
@@ -237,15 +228,14 @@ export const createStaff = async (req, res) => {
   // Invalidate Redis staff cache for this college
   await invalidateStaffCache(collegeId);
 
-  // Build and log the registration link (Admin copies this link and shares it with the teacher)
-  const { token, setupUrl } = buildTeacherSetupEmail(teacher, setupEmail);
+  // Build the Registration Link (Admin copies this and shares it with the teacher)
+  // NOTE: Email is NOT embedded in this token. The teacher will enter their own
+  // email during registration. Setup Link is sent automatically after registration.
+  const { registrationUrl } = buildTeacherRegistrationLink(teacher);
   logger.info(
     `[TEACHER] Registration link generated | teacher_record_id=${teacher.id} teacherId=${teacherId} ` +
-    `college=${collegeId} actor=${actorId} url=${setupUrl}`
+    `college=${collegeId} actor=${actorId} url=${registrationUrl}`
   );
-
-  // NOTE: Email is NOT sent here. The teacher will receive a welcome email
-  // only AFTER they complete registration through the link.
 
   res.status(201).json({
     success: true,
@@ -253,44 +243,78 @@ export const createStaff = async (req, res) => {
       id: teacher.id,
       teacherId: teacher.teacherId || null,
       name: payload.name,
-      email: teacher.emailId || teacher.user?.email,
+      email: teacher.emailId || teacher.user?.email || null,
       phone: teacher.mobileNumber || '',
       department: teacher.department?.name,
       designation: teacher.designation,
       joiningDate: teacher.joiningDate,
       role: teacher.user?.role,
-      // Return the registration URL so the Admin Panel can display/copy it
-      registrationUrl: setupUrl,
+      // Return the Registration URL so the Admin Panel can display/copy it
+      registrationUrl,
     }
   });
 };
 
-export const generateSetupLink = async (req, res) => {
+/**
+ * GET /staff/:id/registration-link
+ * Admin endpoint to regenerate a fresh Registration Link for a pending teacher.
+ * This is useful when:
+ *   - Teacher lost the original link
+ *   - Teacher was created before the new flow and has a stale/wrong link
+ *   - Admin needs to re-share the link
+ *
+ * Returns the registration URL — admin copies it and shares with the teacher.
+ * The teacher then opens it to enter their own name + email.
+ * The Setup Link (password creation) is sent automatically AFTER registration.
+ */
+export const getRegistrationLink = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const { id } = req.params;
 
-  const teacher = await prisma.teacher.findUnique({
-    where: { id, collegeId },
-    include: { user: true, college: { select: { name: true } } }
+  if (!collegeId) {
+    return res.status(400).json({ success: false, error: { code: 'COLLEGE_REQUIRED', message: 'College context required.' } });
+  }
+
+  const teacher = await prisma.teacher.findFirst({
+    where: { id, collegeId, deletedAt: null },
+    include: {
+      user: { select: { id: true, accountStatus: true, passwordHash: true, email: true } },
+      college: { select: { name: true } },
+    },
   });
 
-  if (!teacher) {
-    return res.status(404).json({ success: false, error: { message: 'Staff member not found' } });
+  if (!teacher || !teacher.user) {
+    return res.status(404).json({ success: false, error: { code: 'TEACHER_NOT_FOUND', message: 'Teacher not found.' } });
   }
 
-  if (teacher.user.accountStatus !== 'pending_setup' || teacher.user.passwordHash !== null || !teacher.teacherId) {
-    return res.status(409).json({ success: false, error: { message: 'This account is not awaiting setup.' } });
+  if (teacher.user.accountStatus === 'active' && teacher.user.passwordHash) {
+    return res.status(409).json({
+      success: false,
+      error: {
+        code: 'TEACHER_ALREADY_ACTIVE',
+        message: 'This teacher has already completed registration and account setup. No registration link needed.',
+      },
+    });
   }
 
-  const email = teacher.emailId || teacher.user.email;
-  const { token, setupUrl } = buildTeacherSetupEmail(teacher, email);
+  // For old teachers (null teacherId), we still generate a valid token using the record ID.
+  // The teacherRegister handler matches on teacher record ID, so this still works.
+  const { registrationUrl, token } = buildTeacherRegistrationLink(teacher);
 
   logger.info(
-    `[TEACHER] Registration link regenerated | teacher_record_id=${teacher.id} teacherId=${teacher.teacherId} ` +
-    `college=${collegeId} actor=${req.user?.id || req.user?.userId}`
+    `[TEACHER] Registration link regenerated by admin | teacher_record_id=${teacher.id} ` +
+    `teacherId=${teacher.teacherId} college=${collegeId} actor=${req.user?.id}`
   );
 
-  res.json({ success: true, data: { token, registrationUrl: setupUrl } });
+  res.json({
+    success: true,
+    data: {
+      registrationUrl,
+      token,
+      teacherId: teacher.teacherId,
+      collegeName: teacher.college?.name,
+    },
+  });
 };
 
 export const updateStaff = async (req, res) => {
@@ -518,13 +542,15 @@ export const bulkImportStaff = async (req, res) => {
       });
 
       if (importedTeacher.user.accountStatus === 'pending_setup' && importedTeacher.user.passwordHash === null) {
-        const { setupUrl } = buildTeacherSetupEmail(importedTeacher, setupEmail);
+        const { registrationUrl } = buildTeacherRegistrationLink(importedTeacher);
         logger.info(
           `[TEACHER] Registration link generated (bulk import) | teacher_record_id=${importedTeacher.id} ` +
-          `teacherId=${importedTeacher.teacherId} email=${setupEmail} college=${collegeId} url=${setupUrl}`
+          `teacherId=${importedTeacher.teacherId} email=${setupEmail} college=${collegeId} url=${registrationUrl}`
         );
-        // NOTE: Email is NOT sent here either — teacher receives welcome email only after completing registration.
+        // NOTE: Email is NOT sent here. Teacher receives the Setup Link automatically
+        // only AFTER they complete registration through the Registration Link.
       }
+
 
       results.successful++;
     } catch (error) {
