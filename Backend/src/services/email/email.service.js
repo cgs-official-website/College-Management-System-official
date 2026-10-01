@@ -6,19 +6,29 @@ dotenv.config();
 // ---------------------------------------------------------------------------
 // Transporter setup
 // ---------------------------------------------------------------------------
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '465', 10),
-  secure: parseInt(process.env.SMTP_PORT || '465', 10) === 465, // true for 465, false for 587
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-  // Fail fast: don't hang the HTTP request if SMTP is unreachable
-  connectionTimeout: 10000,  // 10s — time to establish TCP connection
-  greetingTimeout: 10000,    // 10s — time to receive SMTP greeting banner
-  socketTimeout: 20000,      // 20s — time for each SMTP command/data
-});
+// ---------------------------------------------------------------------------
+// Transporter — lazy singleton
+// Port 587 + STARTTLS is used because cloud hosts (Railway, Render, etc.)
+// typically block outbound port 465 (SMTPS / implicit TLS).
+// Port 587 with `secure:false` + STARTTLS is the correct production setup.
+// ---------------------------------------------------------------------------
+const createTransporter = () =>
+  nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: false,           // false = STARTTLS on port 587 (do NOT use true here)
+    requireTLS: true,        // Force upgrade to TLS — reject plain connections
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+    // Fail fast: don't hang the HTTP request if SMTP is unreachable
+    connectionTimeout: 15000, // 15s — time to establish TCP connection
+    greetingTimeout: 15000,   // 15s — time to receive SMTP greeting banner
+    socketTimeout: 30000,     // 30s — time for each SMTP command/data
+  });
+
+let transporter = createTransporter();
 
 // Verify SMTP connection at startup (non-blocking, safe log only — NO credentials ever logged)
 transporter.verify((err) => {
@@ -45,20 +55,25 @@ transporter.verify((err) => {
 
       console.error('[EmailService] SMTP failure category:', category);
       console.error('[EmailService] SMTP host:', process.env.SMTP_HOST || 'smtp.gmail.com');
-      console.error('[EmailService] SMTP port:', process.env.SMTP_PORT || '465');
+      console.error('[EmailService] SMTP port:', process.env.SMTP_PORT || '587');
       console.error('[EmailService] SMTP user configured:', Boolean(process.env.SMTP_USER));
       console.error('[EmailService] SMTP password configured:', Boolean(process.env.SMTP_PASS));
       console.error('[EmailService] SMTP error code:', err.code || 'NONE');
       console.error('[EmailService] SMTP error command:', err.command || 'NONE');
       console.error('[EmailService] SMTP error message:', redactCredentials(err.message));
+    } else {
+      // In production: always log SMTP errors (without credentials)
+      console.error('[EmailService] SMTP error code:', err.code || 'NONE');
+      console.error('[EmailService] SMTP error message:', err.message?.replace(process.env.SMTP_PASS || '', '[redacted]') || 'unknown');
     }
   } else {
     console.log('[EmailService] ✅ SMTP transporter is ready to send emails.');
     console.log('[EmailService]   SMTP host :', process.env.SMTP_HOST || 'smtp.gmail.com');
-    console.log('[EmailService]   SMTP port :', process.env.SMTP_PORT || '465');
+    console.log('[EmailService]   SMTP port :', process.env.SMTP_PORT || '587');
     console.log('[EmailService]   SMTP user configured:', Boolean(process.env.SMTP_USER));
   }
 });
+
 
 // ---------------------------------------------------------------------------
 // Base HTML layout (used as fallback when DB template is missing)
@@ -239,7 +254,12 @@ export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo }) =>
     if (bcc) mailOptions.bcc = bcc;
     if (replyTo) mailOptions.replyTo = replyTo;
 
-    const info = await transporter.sendMail(mailOptions);
+    // Always use a fresh transporter per send — avoids stale/closed connections
+    // on cloud hosts (Railway) which have aggressive TCP idle timeouts.
+    const freshTransporter = createTransporter();
+    const info = await freshTransporter.sendMail(mailOptions);
+    freshTransporter.close();
+
     console.log(`[EmailService] ✅ Email sent successfully to: ${to} | Subject: "${subject}" | MessageId: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
@@ -253,6 +273,7 @@ export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo }) =>
     return { success: false, error: error.message };
   }
 };
+
 
 // ---------------------------------------------------------------------------
 // sendDynamicMail — loads template from DB, falls back to built-in if missing
