@@ -14,6 +14,10 @@ const transporter = nodemailer.createTransport({
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  // Fail fast: don't hang the HTTP request if SMTP is unreachable
+  connectionTimeout: 10000,  // 10s — time to establish TCP connection
+  greetingTimeout: 10000,    // 10s — time to receive SMTP greeting banner
+  socketTimeout: 20000,      // 20s — time for each SMTP command/data
 });
 
 // Verify SMTP connection at startup (non-blocking, safe log only — NO credentials ever logged)

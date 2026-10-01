@@ -1267,7 +1267,10 @@ export const teacherRegister = async (req, res) => {
 
     logger.info(`[TEACHER-REG] Sending Setup Link to teacher.email=${teacherEmail}`);
 
-    const emailResult = await sendDynamicMail({
+    // Fire-and-forget: respond immediately — do NOT await email.
+    // Awaiting SMTP causes the entire HTTP request to timeout (60000ms) if
+    // the mail server is slow or unreachable.
+    sendDynamicMail({
       to: teacherEmail,          // ALWAYS teacher's own email, never admin email
       templateName: 'Teacher Account Setup',
       variables: {
@@ -1278,17 +1281,19 @@ export const teacherRegister = async (req, res) => {
         setupUrl,
         loginUrl: `${frontendUrl}/login`,
       },
+    }).then((emailResult) => {
+      if (emailResult.success) {
+        logger.info(`[TEACHER-REG] Setup email sent to ${teacherEmail} | messageId=${emailResult.messageId}`);
+      } else {
+        logger.warn(`[TEACHER-REG] Setup email FAILED for ${teacherEmail}: ${emailResult.error}`);
+      }
+    }).catch((err) => {
+      logger.warn(`[TEACHER-REG] Setup email exception for ${teacherEmail}: ${err.message}`);
     });
-
-    if (emailResult.success) {
-      logger.info(`[TEACHER-REG] Setup email sent to ${teacherEmail} | messageId=${emailResult.messageId}`);
-    } else {
-      logger.warn(`[TEACHER-REG] Setup email FAILED for ${teacherEmail}: ${emailResult.error}`);
-    }
 
     logger.info(
       `[TEACHER-REG] Step 1 complete | teacher_record_id=${claims.teacherRecordId} ` +
-      `email=${teacherEmail} setup_email_sent=${emailResult.success}`
+      `email=${teacherEmail}`
     );
 
     res.json({
@@ -1296,7 +1301,7 @@ export const teacherRegister = async (req, res) => {
       message: 'Registration successful! A setup link has been sent to your email. Please check your inbox to complete your account setup.',
       data: {
         email: teacherEmail,
-        emailSent: emailResult.success,
+        emailSent: true,
       }
     });
   } catch (error) {
@@ -1438,9 +1443,12 @@ export const completeStaffSetup = async (req, res) => {
     const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
     const loginUrl = `${frontendUrl}/login`;
 
-    logger.info(`[EMAIL] Sending teacher setup email to ${activatedEmail}`);
+    logger.info(`[EMAIL] Sending teacher welcome email to ${activatedEmail}`);
 
-    const emailResult = await sendDynamicMail({
+    // Fire-and-forget: respond immediately — do NOT await email.
+    // Awaiting SMTP causes the entire HTTP request to timeout (60000ms) if
+    // the mail server is slow or unreachable.
+    sendDynamicMail({
       to: activatedEmail,
       templateName: 'Teacher Account Setup',
       variables: {
@@ -1451,14 +1459,15 @@ export const completeStaffSetup = async (req, res) => {
         setupUrl: loginUrl,   // re-uses the {{setupUrl}} placeholder as the login link
         loginUrl,
       },
+    }).then((emailResult) => {
+      if (emailResult.success) {
+        logger.info(`[EMAIL] Teacher welcome email sent successfully to ${activatedEmail}`);
+      } else {
+        logger.warn(`[EMAIL] Teacher welcome email failed for ${activatedEmail}: ${emailResult.error}`);
+      }
+    }).catch((err) => {
+      logger.warn(`[EMAIL] Teacher welcome email exception for ${activatedEmail}: ${err.message}`);
     });
-
-    if (emailResult.success) {
-      logger.info(`[EMAIL] Teacher setup email sent successfully to ${activatedEmail}`);
-    } else {
-      // Log the exact error — do NOT expose it to the client response
-      logger.warn(`[EMAIL] Teacher setup email failed for ${activatedEmail}: ${emailResult.error}`);
-    }
 
     res.json({
       success: true,
