@@ -1,12 +1,12 @@
 import { prisma, logger } from '../../server.js';
 import { redis, redisKeys } from '../../lib/cache.js';
 import { processStudentProfileImageBuffer, extractBufferFromBase64Payload } from '../../lib/imageProcessor.js';
+import { parseProofMeta, buildProofPayload, toSafeLeave, discardProof } from '../leaves/leaves.controller.js';
 
 export const getStudentProfile = async (req, res) => {
   try {
     const student = req.student;
     
-    // Split name
     const nameParts = (student.user?.name || '').split(' ');
     const firstName = nameParts[0] || 'Student';
     const lastName = nameParts.slice(1).join(' ') || '';
@@ -56,7 +56,6 @@ export const getStudentDashboard = async (req, res) => {
     const collegeId = student.collegeId;
     const studentId = student.id;
 
-    // Cache-aside for student dashboard metrics
     const cacheKey = `student:dashboard:${collegeId}:${studentId}`;
     if (redis.status === 'ready') {
       const cached = await redis.get(cacheKey).catch(() => null);
@@ -65,7 +64,6 @@ export const getStudentDashboard = async (req, res) => {
       }
     }
 
-    // 1. Attendance calculation
     const attendanceRecords = await prisma.attendance.findMany({
       where: { studentId }
     });
@@ -73,7 +71,6 @@ export const getStudentDashboard = async (req, res) => {
     const presentDays = attendanceRecords.filter(a => a.status === 'present' || a.status === 'late').length;
     const attendancePercentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 100;
 
-    // 2. Courses
     const coursesCount = await prisma.course.count({
       where: {
         collegeId,
@@ -82,7 +79,6 @@ export const getStudentDashboard = async (req, res) => {
       }
     });
 
-    // 3. Assignments & Pending Submissions
     const assignments = await prisma.assignment.findMany({
       where: { collegeId },
       include: {
@@ -93,7 +89,6 @@ export const getStudentDashboard = async (req, res) => {
     });
     const pendingAssignments = assignments.filter(a => a.submissions.length === 0).length;
 
-    // 4. Upcoming Exams
     const upcomingExams = await prisma.exam.count({
       where: {
         collegeId,
@@ -101,7 +96,6 @@ export const getStudentDashboard = async (req, res) => {
       }
     });
 
-    // 5. Fees summary
     const fees = await prisma.fee.findMany({
       where: { studentId }
     });
@@ -109,7 +103,6 @@ export const getStudentDashboard = async (req, res) => {
     const paidFees = fees.reduce((acc, f) => acc + (f.amountPaid || (f.status === 'paid' ? f.amountDue : 0)), 0);
     const dueFees = Math.max(0, totalFees - paidFees);
 
-    // 6. Recent Notices
     const recentNotices = await prisma.notice.findMany({
       where: {
         collegeId,
@@ -307,7 +300,13 @@ export const getStudentLeaveRequests = async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    res.json({ success: true, data: leaves });
+    const data = leaves.map((l) => {
+      const proofMeta = parseProofMeta(l.medicalCertUrl);
+      const { medicalCertUrl, ...rest } = l;
+      return { ...rest, ...proofMeta };
+    });
+
+    res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
   }
@@ -316,25 +315,51 @@ export const getStudentLeaveRequests = async (req, res) => {
 export const createStudentLeaveRequest = async (req, res) => {
   try {
     const student = req.student;
-    const { fromDate, toDate, reason, leaveType } = req.body;
+    const { fromDate, toDate, reason, leaveType, proofFileName, proofMimeType, proofDataUrl } = req.body;
 
-    if (!fromDate || !toDate || !reason) {
+    if (!fromDate || !toDate || !reason?.trim()) {
       return res.status(400).json({ success: false, error: { message: 'From date, to date, and reason are required' } });
     }
 
-    const leave = await prisma.leaveRequest.create({
+    const from = new Date(fromDate);
+    const to = new Date(toDate);
+
+    if (isNaN(from) || isNaN(to)) {
+      return res.status(400).json({ success: false, error: { message: 'Invalid date supplied' } });
+    }
+    if (to < from) {
+      return res.status(400).json({ success: false, error: { message: 'To date cannot be before from date' } });
+    }
+
+    const { proof, error: proofError } = await buildProofPayload({
+      proofFileName, proofMimeType, proofDataUrl, collegeId: student.collegeId
+    });
+    if (proofError) {
+      return res.status(400).json({ success: false, error: { message: proofError } });
+    }
+
+  let leave;
+  try {
+    leave = await prisma.leaveRequest.create({
       data: {
         collegeId: student.collegeId,
         requesterUserId: student.userId,
         requesterRole: 'student',
-        fromDate: new Date(fromDate),
-        toDate: new Date(toDate),
-        reason: `${leaveType ? `[${leaveType}] ` : ''}${reason}`,
+        fromDate: from,
+        toDate: to,
+        reason: `${leaveType ? `[${leaveType}] ` : ''}${reason.trim()}`,
+        medicalCertUrl: proof,
         status: 'pending'
       }
     });
+  } catch (dbErr) {
+    await discardProof(proof);
+    throw dbErr;
+  }
 
-    res.status(201).json({ success: true, data: leave });
+  res.status(201).json({ success: true, data: toSafeLeave(leave) });
+
+   
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
   }
@@ -345,7 +370,6 @@ export const getStudentTimetable = async (req, res) => {
     const student = req.student;
     let slots = [];
 
-    // 1. Try section-specific timetable if student is assigned to a section
     if (student.sectionId) {
       slots = await prisma.timetableSlot.findMany({
         where: {
@@ -365,7 +389,6 @@ export const getStudentTimetable = async (req, res) => {
       });
     }
 
-    // 2. Fallback: Query by department or course if no section-specific slots found
     if (!slots || slots.length === 0) {
       slots = await prisma.timetableSlot.findMany({
         where: {
@@ -392,7 +415,6 @@ export const getStudentTimetable = async (req, res) => {
       });
     }
 
-    // 3. Fallback: General college timetable slots
     if (!slots || slots.length === 0) {
       slots = await prisma.timetableSlot.findMany({
         where: { collegeId: student.collegeId },
@@ -644,7 +666,6 @@ export const getStudentLibrary = async (req, res) => {
       },
       orderBy: { title: 'asc' }
     });
-
     res.json({ success: true, data: books });
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
@@ -790,12 +811,10 @@ export const getStudentDocuments = async (req, res) => {
   try {
     const student = req.student;
     
-    // 1. Institutional vault documents
     const institutionalDocs = await prisma.documentVault.findMany({
       where: { collegeId: student.collegeId }
     });
 
-    // 2. Student's uploaded personal documents from customFields
     const currentRecord = await prisma.student.findUnique({
       where: { id: student.id },
       select: { customFields: true, createdAt: true }
@@ -966,7 +985,6 @@ export const uploadStudentProfileImage = async (req, res) => {
       }
     });
 
-    // Invalidate Redis profile cache if available
     try {
       if (redis && redis.status === 'ready') {
         const cacheKey = `student_profile:${collegeId}:${studentId}`;

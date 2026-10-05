@@ -9,7 +9,8 @@ import {
   X, 
   Clock, 
   AlertCircle,
-  Loader2 
+  Loader2,
+  Paperclip
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useStudentAttendance, useStudentLeaveRequests } from '../../hooks/useStudentPortal';
@@ -25,10 +26,36 @@ const StudentAttendanceDashboard = () => {
     toDate: '',
     reason: ''
   });
-
+  const [proofFile, setProofFile] = useState(null);
   const attendance = attendanceData?.data || { percentage: 100, totalDays: 0, presentDays: 0, absentDays: 0, records: [] };
   const leaveRequests = leaveData?.data || [];
+    const ALLOWED_PROOF_TYPES = [
+    'image/jpeg', 'image/png', 'image/webp', 'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ];
 
+  const handleProofChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) { setProofFile(null); return; }
+
+    if (!ALLOWED_PROOF_TYPES.includes(file.type)) {
+      toast.error('Proof must be an image, PDF, or Word document');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Proof file must be under 5 MB');
+      e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setProofFile({ name: file.name, mimeType: file.type, dataUrl: reader.result });
+    };
+    reader.readAsDataURL(file);
+  };
   const handleApplyLeave = async (e) => {
     e.preventDefault();
     if (!leaveForm.fromDate || !leaveForm.toDate || !leaveForm.reason.trim()) {
@@ -36,11 +63,22 @@ const StudentAttendanceDashboard = () => {
       return;
     }
 
+    if (leaveForm.toDate < leaveForm.fromDate) {
+      toast.error('To date cannot be before from date');
+      return;
+    }
+
     try {
-      await createLeaveRequest(leaveForm);
+      await createLeaveRequest({
+        ...leaveForm,
+        proofFileName: proofFile?.name || undefined,
+        proofMimeType: proofFile?.mimeType || undefined,
+        proofDataUrl: proofFile?.dataUrl || undefined
+      });
       toast.success('Leave application submitted successfully!');
       setIsModalOpen(false);
       setLeaveForm({ leaveType: 'Sick Leave', fromDate: '', toDate: '', reason: '' });
+      setProofFile(null);
     } catch (err) {
       toast.error(err.response?.data?.error?.message || 'Failed to submit leave application');
     }
@@ -210,18 +248,24 @@ const StudentAttendanceDashboard = () => {
                     className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white"
                   >
                     <option>Sick Leave</option>
-                    <option>Personal Reason</option>
-                    <option>Family Emergency</option>
                     <option>Academic Event / Competition</option>
+                    <option>Other</option>
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
+                <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">From Date</label>
                     <input 
                       type="date" 
                       value={leaveForm.fromDate}
-                      onChange={(e) => setLeaveForm({ ...leaveForm, fromDate: e.target.value })}
+                      onChange={(e) => {
+                        const from = e.target.value;
+                        setLeaveForm({
+                          ...leaveForm,
+                          fromDate: from,
+                          toDate: leaveForm.toDate && leaveForm.toDate < from ? '' : leaveForm.toDate
+                        });
+                      }}
                       className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white" 
                       required 
                     />
@@ -230,6 +274,7 @@ const StudentAttendanceDashboard = () => {
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">To Date</label>
                     <input 
                       type="date" 
+                      min={leaveForm.fromDate || undefined}
                       value={leaveForm.toDate}
                       onChange={(e) => setLeaveForm({ ...leaveForm, toDate: e.target.value })}
                       className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white" 
@@ -247,6 +292,32 @@ const StudentAttendanceDashboard = () => {
                     className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-white resize-none" 
                     required
                   ></textarea>
+                </div>
+                                <div>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Proof (optional)
+                  </label>
+                  <label className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-white/5 border border-dashed border-slate-300 dark:border-white/20 rounded-xl cursor-pointer hover:border-primary-500 transition-colors">
+                    <Paperclip className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="text-sm text-slate-500 dark:text-slate-400 truncate">
+                      {proofFile ? proofFile.name : 'Attach image, PDF, or Word doc (max 5 MB)'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf,.doc,.docx"
+                      onChange={handleProofChange}
+                      className="hidden"
+                    />
+                  </label>
+                  {proofFile && (
+                    <button
+                      type="button"
+                      onClick={() => setProofFile(null)}
+                      className="text-xs font-bold text-rose-500 hover:underline mt-1"
+                    >
+                      Remove file
+                    </button>
+                  )}
                 </div>
                 <div className="pt-4 flex justify-end gap-3">
                   <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-sm font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">

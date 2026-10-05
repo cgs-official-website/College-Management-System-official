@@ -1,5 +1,6 @@
 import { prisma, logger } from '../../server.js';
 import { createTimetableSlotSchema, updateTimetableSlotSchema } from './timetable.schema.js';
+import { findClashes, validateTimeRange } from './timetable.clash.js';
 
 const DAY_MAP_TO_NAME = {
   1: 'Monday',
@@ -21,7 +22,6 @@ const DAY_NAME_TO_INT = {
   'Sunday': 0
 };
 
-// Helper to ensure dummy/default foreign keys if not provided
 async function ensureDefaultAcademicEntities(collegeId) {
   let dept = await prisma.department.findFirst({ where: { collegeId } });
   if (!dept) {
@@ -158,13 +158,20 @@ export const scheduleSlot = async (req, res) => {
   const actorId = req.user?.id || req.user?.userId;
   const payload = createTimetableSlotSchema.parse(req.body);
 
+  const timeError = validateTimeRange(payload.startTime, payload.endTime);
+  if (timeError) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_TIME_RANGE', message: timeError }
+    });
+  }
+
   const defaults = await ensureDefaultAcademicEntities(collegeId);
 
   const dayInt = typeof payload.dayOfWeek === 'string'
     ? (DAY_NAME_TO_INT[payload.dayOfWeek] !== undefined ? DAY_NAME_TO_INT[payload.dayOfWeek] : 1)
     : Number(payload.dayOfWeek);
 
-  // If a specific course was requested, validate ownership
   let targetCourseId = defaults.courseId;
   let targetDeptId = defaults.deptId;
   let targetSectionId = defaults.sectionId;
@@ -187,7 +194,6 @@ export const scheduleSlot = async (req, res) => {
     }
   }
 
-  // If a specific subject name was provided, ensure the course accurately represents the subject
   if (payload.subject && payload.subject.trim()) {
     const trimmedSubject = payload.subject.trim();
     let subjectCourse = await prisma.course.findFirst({
@@ -219,7 +225,6 @@ export const scheduleSlot = async (req, res) => {
     }
   }
 
-  // If a specific teacher was requested, validate ownership
   let targetTeacherId = defaults.teacherId;
   if (payload.teacherId) {
     const teacher = await prisma.teacher.findFirst({
@@ -241,6 +246,26 @@ export const scheduleSlot = async (req, res) => {
 
     targetTeacherId = teacher.id;
   }
+  
+    const clashes = await findClashes(prisma, {
+    collegeId,
+    dayOfWeek: dayInt,
+    startTime: payload.startTime,
+    endTime: payload.endTime,
+    teacherId: targetTeacherId,
+    room: payload.room.trim()
+  });
+
+  if (clashes.length > 0) {
+    return res.status(409).json({
+      success: false,
+      error: {
+        code: 'TIMETABLE_CLASH',
+        message: clashes.map((c) => c.message).join(' '),
+        details: clashes
+      }
+    });
+  }
 
   const slot = await prisma.timetableSlot.create({
     data: {
@@ -252,7 +277,7 @@ export const scheduleSlot = async (req, res) => {
       dayOfWeek: dayInt,
       startTime: payload.startTime,
       endTime: payload.endTime,
-      room: payload.room
+      room: payload.room.trim()
     },
     include: {
       course: true,
@@ -326,7 +351,6 @@ export const updateSlot = async (req, res) => {
         }
       });
     }
-
     updateData.courseId = subjectCourse.id;
   } else if (payload.courseId) {
     const course = await prisma.course.findFirst({
@@ -370,11 +394,39 @@ export const updateSlot = async (req, res) => {
   }
   if (payload.startTime) updateData.startTime = payload.startTime;
   if (payload.endTime) updateData.endTime = payload.endTime;
-  if (payload.room) updateData.room = payload.room;
+  if (payload.room) updateData.room = payload.room.trim();
   if (payload.dayOfWeek !== undefined) {
     updateData.dayOfWeek = typeof payload.dayOfWeek === 'string'
       ? (DAY_NAME_TO_INT[payload.dayOfWeek] !== undefined ? DAY_NAME_TO_INT[payload.dayOfWeek] : 1)
       : Number(payload.dayOfWeek);
+  }
+  
+  const merged = {
+    dayOfWeek: updateData.dayOfWeek ?? existing.dayOfWeek,
+    startTime: updateData.startTime ?? existing.startTime,
+    endTime: updateData.endTime ?? existing.endTime,
+    teacherId: updateData.teacherId ?? existing.teacherId,
+    room: updateData.room ?? existing.room
+  };
+
+  const timeError = validateTimeRange(merged.startTime, merged.endTime);
+  if (timeError) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_TIME_RANGE', message: timeError }
+    });
+  }
+
+  const clashes = await findClashes(prisma, { collegeId, ...merged, excludeId: id });
+  if (clashes.length > 0) {
+    return res.status(409).json({
+      success: false,
+      error: {
+        code: 'TIMETABLE_CLASH',
+        message: clashes.map((c) => c.message).join(' '),
+        details: clashes
+      }
+    });
   }
 
   const updated = await prisma.timetableSlot.update({
@@ -435,7 +487,6 @@ export const getTodayTimetable = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const userId = req.user?.id || req.user?.userId;
   
-  // Find teacher profile for the current user
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: { teacherProfile: true }
@@ -452,7 +503,7 @@ export const getTodayTimetable = async (req, res) => {
     where: { 
       collegeId, 
       teacherId: user.teacherProfile.id,
-      dayOfWeek: dayName
+      dayOfWeek: todayInt
     },
     include: {
       course: true,
@@ -463,7 +514,6 @@ export const getTodayTimetable = async (req, res) => {
     }
   });
 
-  // Map to frontend expected format
   const formattedSlots = slots.map(slot => ({
     id: slot.id,
     subject: slot.subject || slot.course?.name || 'Subject',
@@ -471,7 +521,7 @@ export const getTodayTimetable = async (req, res) => {
     time: `${slot.startTime} - ${slot.endTime}`,
     room: slot.room || 'TBA',
     type: slot.type || 'Lecture',
-    status: 'upcoming' // Mock status
+    status: 'upcoming' 
   }));
 
   res.json({ success: true, data: formattedSlots });

@@ -85,10 +85,6 @@ export default function Timetable() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-slate-900 via-slate-800 to-[#043324] text-white p-6 sm:p-8 rounded-3xl shadow-xl relative overflow-hidden border border-primary-500/10">
         <div className="absolute right-0 top-0 translate-x-12 -translate-y-8 w-64 h-64 bg-primary-500/15 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary-500/10 backdrop-blur-md border border-primary-500/20 text-xs font-semibold text-primary-300 mb-3">
-            <Sparkles className="w-3.5 h-3.5 text-primary-400" />
-            Academic Schedule Management
-          </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">Timetable & Scheduling</h1>
           <p className="text-slate-300 text-sm mt-1 max-w-xl">
             Coordinate weekly class periods, faculty allocations, and lab/room assignments seamlessly.

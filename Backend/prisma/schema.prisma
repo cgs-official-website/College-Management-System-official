@@ -7,91 +7,93 @@ datasource db {
 }
 
 model College {
-  name                String
-  slug                String                 @unique
-  registrationNo      String?                @unique
-  address             String?
-  status              String                 @default("trial")
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
-  academicYear        String?
-  affiliationCode     String?
-  aicteNumber         String?
-  aicteCode           String?
-  logoUrl             String?
-  ugcCode             String?
-  pan                 String?
-  tan                 String?
-  affiliationType     AffiliationType?
-  contactEmail        String?
-  contactPhone        String?
-  website             String?
-  id                  String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  admissions          Admission[]
-  assignments         Assignment[]
-  assignmentSubs      AssignmentSubmission[]
-  attendance          Attendance[]
-  billingSubscription BillingSubscription?
-  complaints          Complaint[]
-  courses             Course[]
-  departments         Department[]
-  documents           DocumentVault[]
-  enrollments         Enrollment[]
-  exams               Exam[]
-  fees                Fee[]
-  feeStructures       FeeStructure[]
-  hostelBlocks        HostelBlock[]
-  infrastructure      InfrastructureAsset[]
-  leaveRequests       LeaveRequest[]
-  libraryItems        LibraryItem[]
-  marks               Mark[]
-  notices             Notice[]
-  parents             Parent[]
-  paymentTransactions PaymentTransaction[]
-  payrollRecords      PayrollRecord[]
-  payrolls            Payroll[]
-  placements          Placement[]
-  roles               Role[]
-  scholarships        Scholarship[]
-  sections            Section[]
-  storeItems          StoreItem[]
-  students            Student[]
-  teachers            Teacher[]
-  timetableSlots      TimetableSlot[]
-  transportRoutes     TransportRoute[]
-  users               User[]
-  projects            Project[]
-  apiIntegrations     ApiIntegration[]
-  inventoryItems      InventoryItem[]
-  productCategories   ProductCategory[]
-  inventoryAuditLogs  InventoryAuditLog[]
-  hostelRooms         HostelRoom[]
-  vehicles            Vehicle[]
-  customEntities      CustomEntity[]
-  customFieldDefs     CustomFieldDef[]
-  customSections      CustomSection[]
-  customRecords       CustomRecord[]
-  emailTemplates      EmailTemplate[]
+  name                     String
+  slug                     String                    @unique
+  registrationNo           String?                   @unique
+  address                  String?
+  status                   String                    @default("trial")
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  academicYear             String?
+  affiliationCode          String?
+  aicteNumber              String?
+  aicteCode                String?
+  logoUrl                  String?
+  ugcCode                  String?
+  pan                      String?
+  tan                      String?
+  affiliationType          AffiliationType?
+  contactEmail             String?
+  contactPhone             String?
+  website                  String?
+  id                       String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  admissions               Admission[]
+  assignments              Assignment[]
+  assignmentSubs           AssignmentSubmission[]
+  attendance               Attendance[]
+  billingSubscription      BillingSubscription?
+  complaints               Complaint[]
+  courses                  Course[]
+  departments              Department[]
+  documents                DocumentVault[]
+  enrollments              Enrollment[]
+  exams                    Exam[]
+  fees                     Fee[]
+  feeStructures            FeeStructure[]
+  hostelBlocks             HostelBlock[]
+  infrastructure           InfrastructureAsset[]
+  leaveRequests            LeaveRequest[]
+  libraryItems             LibraryItem[]
+  marks                    Mark[]
+  notices                  Notice[]
+  parents                  Parent[]
+  paymentTransactions      PaymentTransaction[]
+  payrollRecords           PayrollRecord[]
+  payrolls                 Payroll[]
+  placements               Placement[]
+  roles                    Role[]
+  scholarships             Scholarship[]
+  sections                 Section[]
+  storeItems               StoreItem[]
+  students                 Student[]
+  teachers                 Teacher[]
+  timetableSlots           TimetableSlot[]
+  transportRoutes          TransportRoute[]
+  users                    User[]
+  projects                 Project[]
+  apiIntegrations          ApiIntegration[]
+  inventoryItems           InventoryItem[]
+  productCategories        ProductCategory[]
+  inventoryAuditLogs       InventoryAuditLog[]
+  hostelRooms              HostelRoom[]
+  vehicles                 Vehicle[]
+  customEntities           CustomEntity[]
+  customFieldDefs          CustomFieldDef[]
+  customSections           CustomSection[]
+  customRecords            CustomRecord[]
+  emailTemplates           EmailTemplate[]
   studentRegistrationLinks StudentRegistrationLink[]
   infrastructureBookings   InfrastructureBooking[]
   notifications            Notification[]
+  libraryTransactions      LibraryTransaction[]
+  librarySettings          LibrarySettings?
 }
 
 model BillingSubscription {
-  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId        String    @unique @db.Uuid
-  planTier         String
-  pricePerStudent  Float
-  maxStudents      Int
-  storageLimitGb   Int
-  status           String
-  trialExpiresAt   DateTime?
-  currentPeriodEnd DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  subscriptionPlanId String?   @db.Uuid
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId          String            @unique @db.Uuid
+  planTier           String
+  pricePerStudent    Float
+  maxStudents        Int
+  storageLimitGb     Int
+  status             String
+  trialExpiresAt     DateTime?
+  currentPeriodEnd   DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  subscriptionPlanId String?           @db.Uuid
   subscriptionPlan   SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id], onDelete: SetNull)
-  college          College   @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  college            College           @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 }
 
 model Lead {
@@ -118,6 +120,7 @@ model PlatformTicket {
 }
 
 model User {
+<<<<<<< HEAD
   email          String
   name           String?
   role           String
@@ -144,6 +147,34 @@ model User {
   facilityRequests    InfrastructureBooking[] @relation("BookingRequester")
   reviewedBookings    InfrastructureBooking[] @relation("BookingReviewer")
   notifications       Notification[]
+=======
+  email              String
+  name               String?
+  role               String
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  accountStatus      String                  @default("pending")
+  lastLoginAt        DateTime?
+  passwordHash       String
+  id                 String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId          String?                 @db.Uuid
+  customRoleId       String?                 @db.Uuid
+  customRole         Role?                   @relation("UserCustomRole", fields: [customRoleId], references: [id])
+  parentProfile      Parent?
+  tickets            PlatformTicket[]
+  refreshTokens      RefreshToken[]
+  studentProfile     Student?
+  teacherProfile     Teacher?
+  college            College?                @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  complaints         Complaint[]
+  payrollRecords     PayrollRecord[]
+  timesheets         Timesheet[]
+  inventoryAuditLogs InventoryAuditLog[]
+  payrolls           Payroll[]
+  facilityRequests   InfrastructureBooking[] @relation("BookingRequester")
+  reviewedBookings   InfrastructureBooking[] @relation("BookingReviewer")
+  notifications      Notification[]
+>>>>>>> e053987 (fix: Leave Request, Inventory, Payslip, API Integration)
 
   @@unique([collegeId, email])
 }
@@ -194,20 +225,20 @@ model RefreshToken {
 }
 
 model Department {
-  name       String
-  code       String
-  createdAt  DateTime    @default(now())
-  hodUserId  String?     @db.Uuid
-  updatedAt  DateTime    @updatedAt
-  id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId  String      @db.Uuid
-  admissions Admission[]
-  courses    Course[]
-  college    College     @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  students   Student[]
-  teachers   Teacher[]
+  name             String
+  code             String
+  createdAt        DateTime                @default(now())
+  hodUserId        String?                 @db.Uuid
+  updatedAt        DateTime                @updatedAt
+  id               String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId        String                  @db.Uuid
+  admissions       Admission[]
+  courses          Course[]
+  college          College                 @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  students         Student[]
+  teachers         Teacher[]
   facilityRequests InfrastructureBooking[]
-  customFields Json?
+  customFields     Json?
 
   @@index([collegeId])
 }
@@ -273,6 +304,7 @@ model Teacher {
   timetable    TimetableSlot[]
   sections     Section[]       @relation("TeacherSections")
 
+<<<<<<< HEAD
   teacherId               String?  // Required for new teachers; nullable for existing records without an assigned ID.
   gender                  String?
   dateOfBirth             DateTime?
@@ -292,6 +324,26 @@ model Teacher {
   emergencyContactName    String?
   emergencyContactNumber  String?
   customFields            Json?
+=======
+  gender                 String?
+  dateOfBirth            DateTime?
+  employmentType         String?
+  qualification          String?
+  experienceYears        Int?
+  mobileNumber           String?
+  emailId                String?
+  aadhaarNumber          String?
+  panNumber              String?
+  bloodGroup             String?
+  address                String?
+  city                   String?
+  district               String?
+  state                  String?
+  pincode                String?
+  emergencyContactName   String?
+  emergencyContactNumber String?
+  customFields           Json?
+>>>>>>> e053987 (fix: Leave Request, Inventory, Payslip, API Integration)
 
   @@index([collegeId])
   @@unique([collegeId, teacherId])
@@ -353,6 +405,8 @@ model Student {
 
   profileImageData     String? @db.Text
   profileImageMimeType String?
+
+  libraryTransactions LibraryTransaction[]
 
   @@unique([collegeId, admissionNumber])
   @@index([collegeId])
@@ -625,47 +679,93 @@ model AssignmentSubmission {
 }
 
 model LibraryItem {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId       String   @db.Uuid
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId       String               @db.Uuid
   title           String
   author          String?
   isbn            String?
   category        String?
-  totalCopies     Int      @default(1)
-  availableCopies Int      @default(1)
+  totalCopies     Int                  @default(1)
+  availableCopies Int                  @default(1)
   location        String?
-  college         College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  college         College              @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   edition         String?
   department      String?
   price           Float?
   rackNo          String?
   purchaseDate    DateTime?
   vendorName      String?
+  transactions    LibraryTransaction[]
+
+  @@index([collegeId])
+}
+
+model LibraryTransaction {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId     String    @db.Uuid
+  libraryItemId String    @db.Uuid
+  studentId     String    @db.Uuid
+  issuedAt      DateTime  @default(now())
+  dueDate       DateTime
+  returnedAt    DateTime?
+  status        String    @default("ISSUED") // ISSUED, RETURNED, LOST
+  renewCount    Int       @default(0)
+  fineAmount    Float     @default(0)
+  fineReason    String? // OVERDUE, LOST, DAMAGED
+  finePaid      Boolean   @default(false)
+  issuedById    String?   @db.Uuid
+  receivedById  String?   @db.Uuid
+  remarks       String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  college     College     @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  libraryItem LibraryItem @relation(fields: [libraryItemId], references: [id])
+  student     Student     @relation(fields: [studentId], references: [id])
+
+  @@index([collegeId, status])
+  @@index([collegeId, studentId, status])
+  @@index([libraryItemId, status])
+  @@index([collegeId, dueDate])
+}
+
+model LibrarySettings {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId          String   @unique @db.Uuid
+  loanDays           Int      @default(14)
+  maxBooksPerStudent Int      @default(3)
+  finePerDay         Float    @default(2)
+  maxRenewals        Int      @default(1)
+  blockIfOverdue     Boolean  @default(true)
+  lostFineMultiplier Float    @default(1)
+  updatedAt          DateTime @updatedAt
+
+  college College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 }
 
 model HostelBlock {
-  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId String  @db.Uuid
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId String       @db.Uuid
   name      String
-  college   College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  college   College      @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   students  Student[]
   rooms     HostelRoom[]
 }
 
 model HostelRoom {
-  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId     String       @db.Uuid
-  hostelBlockId String       @db.Uuid
+  id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId     String  @db.Uuid
+  hostelBlockId String  @db.Uuid
   roomNo        String
   roomType      String?
   capacity      Int?
   floor         String?
   wardenName    String?
   wardenContact String?
-  
-  college       College      @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  hostelBlock   HostelBlock  @relation(fields: [hostelBlockId], references: [id])
-  
+
+  college     College     @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  hostelBlock HostelBlock @relation(fields: [hostelBlockId], references: [id])
+
   @@unique([hostelBlockId, roomNo])
 }
 
@@ -677,43 +777,43 @@ model TransportRoute {
 }
 
 model InfrastructureAsset {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId String   @db.Uuid
+  id        String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId String                  @db.Uuid
   name      String
-  type      String   @default("other")
-  capacity  Int      @default(0)
-  location  String   @default("")
-  status    String   @default("active")
-  createdAt DateTime @default(now())
-  college   College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  type      String                  @default("other")
+  capacity  Int                     @default(0)
+  location  String                  @default("")
+  status    String                  @default("active")
+  createdAt DateTime                @default(now())
+  college   College                 @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   bookings  InfrastructureBooking[]
 }
 
 model InfrastructureBooking {
-  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId           String              @db.Uuid
-  facilityId          String              @db.Uuid
-  departmentId        String?             @db.Uuid
-  requesterUserId     String              @db.Uuid
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId           String    @db.Uuid
+  facilityId          String    @db.Uuid
+  departmentId        String?   @db.Uuid
+  requesterUserId     String    @db.Uuid
   eventName           String
   purpose             String?
-  eventDate           DateTime            @db.Date
+  eventDate           DateTime  @db.Date
   startTime           String
   endTime             String
-  expectedAttendees   Int                 @default(0)
+  expectedAttendees   Int       @default(0)
   specialRequirements String?
-  status              String              @default("pending") // pending, approved, rejected, cancelled
-  reviewedByUserId    String?             @db.Uuid
+  status              String    @default("pending") // pending, approved, rejected, cancelled
+  reviewedByUserId    String?   @db.Uuid
   adminRemarks        String?
   reviewedAt          DateTime?
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  college             College             @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  facility            InfrastructureAsset @relation(fields: [facilityId], references: [id], onDelete: Cascade)
-  department          Department?         @relation(fields: [departmentId], references: [id])
-  requester           User                @relation("BookingRequester", fields: [requesterUserId], references: [id])
-  reviewer            User?               @relation("BookingReviewer", fields: [reviewedByUserId], references: [id])
+  college    College             @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  facility   InfrastructureAsset @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  department Department?         @relation(fields: [departmentId], references: [id])
+  requester  User                @relation("BookingRequester", fields: [requesterUserId], references: [id])
+  reviewer   User?               @relation("BookingReviewer", fields: [reviewedByUserId], references: [id])
 
   @@index([collegeId, status])
   @@index([collegeId, facilityId, eventDate])
@@ -723,7 +823,7 @@ model Notification {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   collegeId  String   @db.Uuid
   userId     String?  @db.Uuid
-  targetRole String?  // 'admin', 'hod', 'teacher', 'student', 'all'
+  targetRole String? // 'admin', 'hod', 'teacher', 'student', 'all'
   title      String
   message    String
   type       String   @default("info") // info, success, warning, booking_request, booking_approval, booking_rejection
@@ -732,8 +832,8 @@ model Notification {
   readBy     String[] @default([])
   createdAt  DateTime @default(now())
 
-  college    College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  user       User?    @relation(fields: [userId], references: [id])
+  college College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
 
   @@index([collegeId, userId])
   @@index([collegeId, targetRole])
@@ -751,56 +851,56 @@ model Notice {
 }
 
 model Complaint {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId   String   @db.Uuid
-  userId      String   @db.Uuid
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId   String    @db.Uuid
+  userId      String    @db.Uuid
   subject     String
   description String
   category    String
-  priority    String   @default("medium")
-  status      String   @default("open")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  priority    String    @default("medium")
+  status      String    @default("open")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   resolvedAt  DateTime?
 
-  college     College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  user        User     @relation(fields: [userId], references: [id])
+  college College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
 
   @@index([collegeId, status])
   @@index([userId])
 }
 
 model PayrollRecord {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId   String   @db.Uuid
-  userId      String   @db.Uuid
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId   String    @db.Uuid
+  userId      String    @db.Uuid
   month       String
   basicSalary Float
-  allowances  Float    @default(0)
-  deductions  Float    @default(0)
+  allowances  Float     @default(0)
+  deductions  Float     @default(0)
   netSalary   Float
-  status      String   @default("pending") // pending, paid
+  status      String    @default("pending") // pending, paid
   paidAt      DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  college     College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  user        User     @relation(fields: [userId], references: [id])
+  college College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
 
   @@index([collegeId, userId])
 }
 
 model Project {
-  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId   String      @db.Uuid
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId   String   @db.Uuid
   name        String
   description String?
-  status      String      @default("active") // active, completed
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  status      String   @default("active") // active, completed
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  college     College     @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  timesheets  Timesheet[]
+  college    College     @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  timesheets Timesheet[]
 
   @@index([collegeId])
 }
@@ -815,8 +915,8 @@ model Timesheet {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user                User     @relation(fields: [userId], references: [id])
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
 
   @@index([projectId])
   @@index([userId])
@@ -845,33 +945,34 @@ model DocumentVault {
 }
 
 model ApiIntegration {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId     String   @db.Uuid
-  provider      String   // e.g., 'whatsapp'
-  apiKey        String?
-  apiSecret     String?
-  webhookUrl    String?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  college       College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId  String   @db.Uuid
+  provider   String // e.g., 'whatsapp'
+  apiKey     String?
+  apiSecret  String?
+  webhookUrl String?
+  isActive   Boolean  @default(true)
+  config     Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  college    College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+
   @@unique([collegeId, provider])
   @@index([collegeId])
 }
 
 model InventoryItem {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId   String   @db.Uuid
-  name        String
-  sku         String?
-  category    String?
-  categoryId  String?  @db.Uuid
-  quantity    Int      @default(0)
-  isArchived  Boolean  @default(false)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId          String              @db.Uuid
+  name               String
+  sku                String?
+  category           String?
+  categoryId         String?             @db.Uuid
+  quantity           Int                 @default(0)
+  isArchived         Boolean             @default(false)
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
   departmentLocation String?
   unitOfMeasure      String?
   reorderLevel       Int?
@@ -880,9 +981,9 @@ model InventoryItem {
   warrantyExpiry     DateTime?
   assetTagNo         String?
   remarks            String?
-  college     College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  productCategory ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  auditLogs   InventoryAuditLog[]
+  college            College             @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  productCategory    ProductCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  auditLogs          InventoryAuditLog[]
 
   @@index([collegeId])
   @@index([collegeId, categoryId])
@@ -924,10 +1025,10 @@ model InventoryAuditLog {
   performedById   String?               @db.Uuid
   createdAt       DateTime              @default(now())
 
-  college         College               @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  inventoryItem   InventoryItem         @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
-  category        ProductCategory?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  performedBy     User?                 @relation(fields: [performedById], references: [id], onDelete: SetNull)
+  college       College          @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem    @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  category      ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  performedBy   User?            @relation(fields: [performedById], references: [id], onDelete: SetNull)
 
   @@index([collegeId, movementType])
   @@index([collegeId, inventoryItemId])
@@ -936,8 +1037,8 @@ model InventoryAuditLog {
 }
 
 model Vehicle {
-  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId           String   @db.Uuid
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId           String    @db.Uuid
   vehicleNo           String
   vehicleType         String?
   seatingCapacity     Int?
@@ -948,11 +1049,11 @@ model Vehicle {
   driverName          String?
   driverLicenseNo     String?
   driverContact       String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  
-  college             College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  college College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+
   @@index([collegeId])
 }
 
@@ -965,66 +1066,66 @@ model CustomEntity {
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
-  fields      CustomFieldDef[]
-  sections    CustomSection[]
-  records     CustomRecord[]
-  college     College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+
+  fields   CustomFieldDef[]
+  sections CustomSection[]
+  records  CustomRecord[]
+  college  College          @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 
   @@unique([collegeId, slug])
 }
 
 model CustomSection {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId       String   @db.Uuid
-  entityId        String?  @db.Uuid // null if attaching to a hardcoded model
-  hardcodedModel  String?  // e.g., 'Student', 'Teacher'
-  name            String
-  order           Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId      String   @db.Uuid
+  entityId       String?  @db.Uuid // null if attaching to a hardcoded model
+  hardcodedModel String? // e.g., 'Student', 'Teacher'
+  name           String
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  entity          CustomEntity? @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  college         College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  fields          CustomFieldDef[]
+  entity  CustomEntity?    @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  college College          @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  fields  CustomFieldDef[]
 
   @@unique([collegeId, entityId, name])
   @@unique([collegeId, hardcodedModel, name])
 }
 
 model CustomFieldDef {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId       String   @db.Uuid
-  entityId        String?  @db.Uuid // null if attaching to a hardcoded model
-  hardcodedModel  String?  // e.g., 'Student', 'Teacher'. Null if attaching to CustomEntity
-  sectionId       String?  @db.Uuid
-  name            String
-  key             String
-  type            String   // text, number, date, select, boolean
-  options         Json?    // For select fields
-  isRequired      Boolean  @default(false)
-  order           Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId      String   @db.Uuid
+  entityId       String?  @db.Uuid // null if attaching to a hardcoded model
+  hardcodedModel String? // e.g., 'Student', 'Teacher'. Null if attaching to CustomEntity
+  sectionId      String?  @db.Uuid
+  name           String
+  key            String
+  type           String // text, number, date, select, boolean
+  options        Json? // For select fields
+  isRequired     Boolean  @default(false)
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  entity          CustomEntity? @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  section         CustomSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  college         College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  
+  entity  CustomEntity?  @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  section CustomSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  college College        @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+
   @@unique([collegeId, entityId, key])
   @@unique([collegeId, hardcodedModel, key])
 }
 
 model CustomRecord {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId   String   @db.Uuid
-  entityId    String   @db.Uuid
-  data        Json     // Stores field values { "fieldName": "value" }
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId String   @db.Uuid
+  entityId  String   @db.Uuid
+  data      Json // Stores field values { "fieldName": "value" }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  entity      CustomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  college     College      @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  entity  CustomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  college College      @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 }
 
 model EmailTemplate {
@@ -1042,46 +1143,47 @@ model EmailTemplate {
 }
 
 model Payroll {
-  id            String    @id @default(uuid())
-  collegeId     String    @db.Uuid
-  staffId       String    @db.Uuid
-  month         Int       // 1-12
-  year          Int
-  basicPay      Float
-  hra           Float     @default(0)
-  da            Float     @default(0)
-  specialAllowance Float  @default(0)
-  grossPay      Float
-  pf            Float     @default(0)
-  esi           Float     @default(0)
-  pt            Float     @default(0)
-  tds           Float     @default(0)
-  otherDeductions Float   @default(0)
-  netPay        Float
-  status        String    @default("Pending") // Pending, Paid, Cancelled
-  paymentDate   DateTime?
-  paymentMethod String?
-  remarks       String?
+  id               String    @id @default(uuid())
+  collegeId        String    @db.Uuid
+  staffId          String    @db.Uuid
+  month            Int // 1-12
+  year             Int
+  basicPay         Float
+  hra              Float     @default(0)
+  da               Float     @default(0)
+  specialAllowance Float     @default(0)
+  grossPay         Float
+  pf               Float     @default(0)
+  esi              Float     @default(0)
+  pt               Float     @default(0)
+  tds              Float     @default(0)
+  otherDeductions  Float     @default(0)
+  netPay           Float
+  status           String    @default("Pending") // Pending, Paid, Cancelled
+  paymentDate      DateTime?
+  paymentMethod    String?
+  remarks          String?
 
-  staff         User      @relation(fields: [staffId], references: [id])
-  college       College   @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  staff   User    @relation(fields: [staffId], references: [id])
+  college College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([staffId, month, year])
 }
+
 enum AffiliationType {
   AUTONOMOUS
   UNIVERSITY
 }
 
 model LandingPageContent {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  heroBadge    String   @default("Next-Gen Campus OS")
-  heroTitle    String   @default("Architect Your Future.")
-  heroSubtitle String   @default("The most powerful, beautifully animated, and strictly secured digital environment for educational institutions worldwide.")
-  aboutText    String?
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  heroBadge      String   @default("Next-Gen Campus OS")
+  heroTitle      String   @default("Architect Your Future.")
+  heroSubtitle   String   @default("The most powerful, beautifully animated, and strictly secured digital environment for educational institutions worldwide.")
+  aboutText      String?
   features       Json?
   stats          Json?
   contactEmail   String?  @default("support@zuna.edu")
@@ -1091,16 +1193,16 @@ model LandingPageContent {
 }
 
 model SubscriptionPlan {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name         String
-  price        String
-  duration     String
-  storage      String
-  studentCount String
-  status       String   @default("active")
-  order        Int      @default(0)
-  modules      String[] @default([])
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                 String
+  price                String
+  duration             String
+  storage              String
+  studentCount         String
+  status               String                @default("active")
+  order                Int                   @default(0)
+  modules              String[]              @default([])
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
   billingSubscriptions BillingSubscription[]
 }

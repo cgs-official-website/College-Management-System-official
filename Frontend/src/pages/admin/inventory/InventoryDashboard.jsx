@@ -908,11 +908,13 @@ export default function InventoryDashboard() {
                 className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none text-slate-900 dark:text-white text-sm"
               >
                 <option value="">Select Category (Optional)</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name} ({cat.code})
-                  </option>
-                ))}
+                {categories
+                  .filter((cat) => cat.isActive !== false)
+                  .map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name} ({cat.code}){cat.isActive === false ? ' - Inactive' : ''}
+                    </option>
+                  ))}
               </select>
             </div>
           </div>

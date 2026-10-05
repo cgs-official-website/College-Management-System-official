@@ -76,6 +76,17 @@ const templatesToSeed = [
     
     <p>Please review the inventory and initiate a restock process as soon as possible.</p>
     `
+  },
+    {
+    name: 'Salary Processed',
+    subject: 'Your salary for {{month}} {{year}} has been processed',
+    contentHtml: `
+    <h2 style="color: #0f172a; margin-top: 0;">Hello {{staffName}},</h2>
+    <p>Your salary for <strong>{{month}} {{year}}</strong> has been processed on {{paymentDate}}.</p>
+    <p>Net pay: <strong>{{netPay}}</strong></p>
+    <p>Your payslip is attached to this email.</p>
+    <p>Regards,<br/>{{collegeName}}</p>
+    `
   }
 ];
 

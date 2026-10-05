@@ -124,7 +124,7 @@ export function TimetableFormModal({ isOpen, onClose, onSubmit, initialData = nu
           <Select 
             label="Assign Teacher" 
             placeholder={teacherPlaceholder}
-            {...register('teacherId')}
+            {...register('teacherId', { required: "Teacher is required" })}
             error={errors.teacherId?.message || (staffError ? 'Failed to load teachers' : undefined)}
             options={[{ value: '', label: teacherPlaceholder }, ...teacherOptions]}
           />

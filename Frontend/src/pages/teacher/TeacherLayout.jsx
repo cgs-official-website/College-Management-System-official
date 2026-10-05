@@ -20,7 +20,9 @@ import {
   MessageSquareWarning,
   FolderKanban,
   Banknote,
-  Building
+  Building,
+  CalendarClock,
+  CalendarOff
 } from 'lucide-react';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
@@ -35,7 +37,9 @@ import TeacherAttendance from './TeacherAttendance';
 import TeacherSchedule from './TeacherSchedule';
 import TeacherGrades from './TeacherGrades';
 import TeacherSettings from './TeacherSettings';
+import TeacherMyLeaves from './TeacherMyLeaves';
 import Timetable from '../admin/timetable/Timetable';
+import LeaveRequestsDashboard from '../admin/leaves/LeaveRequestsDashboard';
 
 const TeacherLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -65,6 +69,8 @@ const TeacherLayout = () => {
     { name: 'Complaints', path: '/teacher/complaints', icon: MessageSquareWarning },
     { name: 'Projects', path: '/teacher/projects', icon: FolderKanban },
     { name: 'Payroll', path: '/teacher/payroll', icon: Banknote },
+    { name: 'My Leaves', path: '/teacher/my-leaves', icon: CalendarClock },
+    { name: 'Student Leaves', path: '/teacher/student-leaves', icon: CalendarOff },
     { name: 'Settings', path: '/teacher/settings', icon: SettingsIcon },
   ];
 
@@ -221,6 +227,8 @@ const TeacherLayout = () => {
               <Route path="/complaints" element={<TeacherComplaints />} />
               <Route path="/projects" element={<ProjectTimesheetDashboard />} />
               <Route path="/payroll" element={<PayrollDashboard />} />
+              <Route path="/my-leaves" element={<TeacherMyLeaves />} />
+              <Route path="/student-leaves" element={<LeaveRequestsDashboard />} />
               <Route path="/settings" element={<TeacherSettings />} />
               <Route path="/facility-requests" element={<HODFacilityRequests />} />
               {userData?.role === 'hod' && <Route path="/timetable" element={<Timetable />} />}

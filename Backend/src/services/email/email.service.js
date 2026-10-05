@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import { prisma } from '../../server.js';
 dotenv.config();
 
+<<<<<<< HEAD
 // ---------------------------------------------------------------------------
 // Transporter setup
 // ---------------------------------------------------------------------------
@@ -79,6 +80,48 @@ transporter.verify((err) => {
 // Base HTML layout (used as fallback when DB template is missing)
 // ---------------------------------------------------------------------------
 const baseTemplate = (content) => `
+=======
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '465', 10),
+  secure: true, 
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo, attachments }) => {
+  try {
+    const textContent = text || (html ? html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '');
+    
+    const mailOptions = {
+      from: process.env.FROM_EMAIL,
+      to,
+      subject,
+      html,
+      text: textContent,
+    };
+
+    if (cc) mailOptions.cc = cc;
+    if (bcc) mailOptions.bcc = bcc;
+    if (replyTo) mailOptions.replyTo = replyTo;
+    if (attachments) mailOptions.attachments = attachments; 
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`[EmailService] Sent mail to ${to} (MessageId: ${info.messageId})`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error(`[EmailService] Failed to send mail to ${to}: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+};
+
+const escapeHtml = (s = '') =>
+  String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+const baseTemplate = (content, title = 'Zuna ERP') => `
+>>>>>>> e053987 (fix: Leave Request, Inventory, Payslip, API Integration)
 <!DOCTYPE html>
 <html>
 <head>
@@ -151,20 +194,20 @@ const baseTemplate = (content) => `
 <body>
   <div class="container">
     <div class="header">
-      <h1>Zuna ERP</h1>
+      <h1>${escapeHtml(title)}</h1>
     </div>
     <div class="content">
       ${content}
     </div>
     <div class="footer">
       <p>This is an automated message from Zuna ERP College Management System.</p>
-      <p>&copy; ${new Date().getFullYear()} Carrezza Global Solutions. All rights reserved.</p>
     </div>
   </div>
 </body>
 </html>
 `;
 
+<<<<<<< HEAD
 // ---------------------------------------------------------------------------
 // Built-in fallback templates
 // These are used when the EmailTemplate record doesn't exist in the database.
@@ -249,11 +292,27 @@ export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo }) =>
       html,
       text: textContent,
     };
+=======
+export const sendDynamicMail = async ({ to, templateName, variables = {}, headerTitle, cc, bcc, replyTo, attachments }) => {  try {
+    const template = await prisma.emailTemplate.findFirst({
+      where: { name: templateName }
+    });
+
+    if (!template) {
+      throw new Error(`EmailTemplate not found: ${templateName}`);
+    }
+    
+    if (template.status !== 'Active') {
+      console.log(`[EmailService] Template ${templateName} is not active. Skipping email.`);
+      return { success: false, error: 'Template is not active' };
+    }
+>>>>>>> e053987 (fix: Leave Request, Inventory, Payslip, API Integration)
 
     if (cc) mailOptions.cc = cc;
     if (bcc) mailOptions.bcc = bcc;
     if (replyTo) mailOptions.replyTo = replyTo;
 
+<<<<<<< HEAD
     // Always use a fresh transporter per send — avoids stale/closed connections
     // on cloud hosts (Railway) which have aggressive TCP idle timeouts.
     const freshTransporter = createTransporter();
@@ -262,6 +321,17 @@ export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo }) =>
 
     console.log(`[EmailService] ✅ Email sent successfully to: ${to} | Subject: "${subject}" | MessageId: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
+=======
+    for (const [key, value] of Object.entries(variables)) {
+      const regex = new RegExp(`{{${key}}}`, 'g');
+      subject = subject.replace(regex, value);
+      htmlContent = htmlContent.replace(regex, value);
+    }
+
+    const fullHtml = baseTemplate(htmlContent, headerTitle || 'Zuna ERP');
+    return await sendMail({ to, subject, html: fullHtml, cc, bcc, replyTo, attachments });
+
+>>>>>>> e053987 (fix: Leave Request, Inventory, Payslip, API Integration)
   } catch (error) {
     // Log the Nodemailer error code/message for debugging — never log credentials
     console.error(

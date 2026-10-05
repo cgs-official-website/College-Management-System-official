@@ -1,12 +1,12 @@
 import { prisma, logger } from '../../server.js';
 import { createPayslipSchema, bulkImportPayrollSchema, updatePayrollStatusSchema } from './payroll.schema.js';
 import { sendDynamicMail } from '../../services/email/email.service.js';
+import { generatePayslipPDF, MONTH_NAMES } from '../../services/pdf/payslipPdf.service.js';
 
 export const createPayslip = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const data = createPayslipSchema.parse(req.body);
   
-  // Verify staff exists and is active / valid
   let targetUserId = data.staffId;
   let staff = await prisma.user.findFirst({
     where: {
@@ -16,7 +16,6 @@ export const createPayslip = async (req, res) => {
     }
   });
 
-  // If not found by User ID, check if data.staffId is a Teacher ID
   if (!staff) {
     const teacher = await prisma.teacher.findFirst({
       where: {
@@ -36,7 +35,6 @@ export const createPayslip = async (req, res) => {
     return res.status(404).json({ success: false, message: 'Active staff member not found.' });
   }
 
-  // Check if payslip already exists for this staff, month, and year
   const existing = await prisma.payroll.findUnique({
     where: {
       staffId_month_year: {
@@ -54,7 +52,6 @@ export const createPayslip = async (req, res) => {
     });
   }
 
-  // Calculate totals (double check server side)
   const grossPay = data.basicPay + data.hra + data.da + data.specialAllowance;
   const totalDeductions = data.pf + data.esi + data.pt + data.tds + data.otherDeductions;
   const netPay = grossPay - totalDeductions;
@@ -241,19 +238,66 @@ export const updatePayrollStatus = async (req, res) => {
     }
   });
 
-  // Optional: Send Email Notification
   if (status === 'Paid') {
     try {
+      const college = await prisma.college.findUnique({ where: { id: collegeId } });
+      const teacherProfile = await prisma.teacher
+        .findFirst({ where: { userId: existing.staffId }, include: { department: true } })
+        .catch(() => null);
+
+      const monthName = MONTH_NAMES[existing.month - 1] || existing.month;
+      const grossDeduction = existing.pf + existing.esi + existing.pt + existing.tds + existing.otherDeductions;
+      const netPayFormatted = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(updated.netPay);
+
+      const pdfBuffer = await generatePayslipPDF({
+        collegeName: college?.name || 'College / Institution',
+        logoUrl: college?.logoUrl,
+        officeAddress: college?.address,
+        month: existing.month,
+        year: existing.year,
+
+        staffName: existing.staff.name,
+        department: teacherProfile?.department?.name,
+        designation: teacherProfile?.designation,
+        joiningDate: teacherProfile?.joiningDate
+          ? new Date(teacherProfile.joiningDate).toISOString().slice(0, 10)
+          : undefined,
+        grade: teacherProfile?.salaryGrade,
+        gender: teacherProfile?.gender,
+        panNo: teacherProfile?.panNumber,
+
+        basicPay: existing.basicPay,
+        hra: existing.hra,
+        da: existing.da,
+        specialAllowance: existing.specialAllowance,
+        grossPay: existing.grossPay,
+
+        pf: existing.pf,
+        esi: existing.esi,
+        pt: existing.pt,
+        tds: existing.tds,
+        otherDeductions: existing.otherDeductions,
+        grossDeduction,
+        netPay: updated.netPay
+});
+
       await sendDynamicMail({
+        to: existing.staff.email,
         templateName: 'Salary Processed',
-        recipientEmail: existing.staff.email,
-        collegeId: collegeId,
+        headerTitle: college?.name,
         variables: {
           staffName: existing.staff.name || 'Staff',
-          month: existing.month.toString(),
+          month: monthName,
           year: existing.year.toString(),
-          netPay: updated.netPay.toString(),
-        }
+          netPay: netPayFormatted,
+          paymentDate: new Date().toLocaleDateString('en-IN'),
+          collegeName: college?.name || 'the college'
+        },
+        attachments: [{
+          filename: `Payslip_${monthName}_${existing.year}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf'
+        }]
       });
     } catch (err) {
       logger.error(`[error] req=${req.id || ''} college=${collegeId} Failed to send payroll email: ${err.message}`);

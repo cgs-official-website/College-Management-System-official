@@ -6,4 +6,5 @@ export const integrationSchema = z.object({
   apiSecret: z.string().optional().nullable(),
   webhookUrl: z.string().url().optional().nullable().or(z.literal('')),
   isActive: z.boolean().default(true),
+  config: z.record(z.string(), z.any()).optional(),
 });

@@ -36,7 +36,8 @@ export const saveIntegration = async (req, res) => {
       apiKey: payload.apiKey,
       apiSecret: payload.apiSecret,
       webhookUrl: payload.webhookUrl,
-      isActive: payload.isActive
+      isActive: payload.isActive,
+      config: payload.config
     },
     create: {
       collegeId,
@@ -44,7 +45,8 @@ export const saveIntegration = async (req, res) => {
       apiKey: payload.apiKey,
       apiSecret: payload.apiSecret,
       webhookUrl: payload.webhookUrl,
-      isActive: payload.isActive
+      isActive: payload.isActive,
+      config: payload.config
     }
   });
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import ChatWidget from '../../components/ui/ChatWidget';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDashboardStats } from '../../hooks/useDashboardStats';
 import { 
@@ -44,7 +45,9 @@ import {
   IndianRupee,
   Files,
   CalendarOff,
-  FileEdit
+  FileEdit,
+  CalendarClock,
+  ChevronDown
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { api } from '../../services/api';
@@ -78,7 +81,7 @@ import MobileAppsDashboard from './apps/MobileAppsDashboard';
 import ApiIntegrations from './integrations/ApiIntegrations';
 import InventoryDashboard from './inventory/InventoryDashboard';
 import PayrollDashboard from './payroll/PayrollDashboard';
-
+import TeacherMyLeaves from '../teacher/TeacherMyLeaves';
 import CustomDashboard from '../../modules/custom/CustomDashboard';
 import ModuleBuilder from '../../modules/builder/ModuleBuilder';
 import DynamicDashboard from '../../modules/dynamic/DynamicDashboard';
@@ -89,6 +92,7 @@ import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showTicketModal, setShowTicketModal] = useState(false);
+  const [openGroups, setOpenGroups] = useState({});
   const location = useLocation();
   const navigate = useNavigate();
   const { logout, userData, userRole, permissions } = useAuth();
@@ -108,7 +112,6 @@ const AdminLayout = () => {
   };
 
   const hasAccess = (moduleKey) => {
-    // Check if the college subscription plan restricts this module
     if (moduleKey && userData?.allowedModules && Array.isArray(userData.allowedModules)) {
       if (!userData.allowedModules.includes(moduleKey)) {
         return false;
@@ -116,22 +119,30 @@ const AdminLayout = () => {
     }
 
     if (userRole === 'admin' || userRole === 'superadmin') return true;
-    if (!moduleKey) return true; // Everyone can see dashboard
+    if (!moduleKey) return true; 
     return permissions?.[moduleKey]?.canRead === true;
   };
+  
+  const isAdmin = userRole === 'admin' || userRole === 'superadmin';
 
   const navLinks = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard, moduleKey: null },
-
     { name: 'Admission', path: '/admin/admission', icon: UserPlus, moduleKey: 'admission' },
-    { name: 'Students', path: '/admin/students', icon: GraduationCap, moduleKey: 'students' },
-    { name: 'Student Documents', path: '/admin/student-documents', icon: Files, moduleKey: 'students' },
+    {
+      name: 'Students',
+      icon: GraduationCap,
+      children: [
+        { name: 'Student Directory', path: '/admin/students', icon: GraduationCap, moduleKey: 'students' },
+        { name: 'Student Documents', path: '/admin/student-documents', icon: Files, moduleKey: 'students' }
+      ]
+    },
     { name: 'HR & Staff', path: '/admin/hr', icon: Users, moduleKey: 'staff' },
     { name: 'Academic Structure', path: '/admin/academic-structure', icon: BookOpen, moduleKey: 'academic' },
     { name: 'Assignments', path: '/admin/assignments', icon: FileEdit, moduleKey: 'academic' },
     { name: 'Timetable', path: '/admin/timetable', icon: Calendar, moduleKey: 'timetable' },
     { name: 'Attendance', path: '/admin/attendance', icon: Clock, moduleKey: 'attendance' },
-    { name: 'Leave Requests', path: '/admin/leave-requests', icon: CalendarOff, moduleKey: 'attendance' },
+    { name: 'Leave Requests', path: '/admin/leave-requests', icon: CalendarOff, moduleKey: isAdmin ? 'attendance' : null },
+    { name: 'MyLeaves', path: '/admin/my-leaves', icon: CalendarClock, moduleKey: null, staffOnly: true },
     { name: 'Exams', path: '/admin/exams', icon: ClipboardList, moduleKey: 'exams' },
     { name: 'Fees & Finance', path: '/admin/fees', icon: Calculator, moduleKey: 'fees' },
     { name: 'Library', path: '/admin/library', icon: LibraryIcon, moduleKey: 'library' },
@@ -144,8 +155,7 @@ const AdminLayout = () => {
     { name: 'Reports', path: '/admin/reports', icon: FileText, moduleKey: 'reports' },
     { name: 'Inventory', path: '/admin/inventory', icon: Package, moduleKey: 'inventory' },
     { name: 'Payroll', path: '/admin/payroll', icon: IndianRupee, moduleKey: 'payroll' },
-
-    // { name: 'API Integrations', path: '/admin/api-integrations', icon: Zap, moduleKey: 'api_integration' },
+    { name: 'API Integrations', path: '/admin/api-integrations', icon: Zap, moduleKey: 'api_integration' },
     // { name: 'Module Builder', path: '/admin/builder', icon: Settings2, moduleKey: 'custom' },
     // ...(customEntitiesData?.map(ent => ({
     //   name: ent.name,
@@ -155,7 +165,33 @@ const AdminLayout = () => {
     // })) || []),
     { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon, moduleKey: 'settings' },
     { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck, moduleKey: 'roles' },
-  ].filter(link => hasAccess(link.moduleKey));
+  ]
+     .map(link => {
+      if (link.children) {
+        return { ...link, children: link.children.filter(child => hasAccess(child.moduleKey)) };
+      }
+      return link;
+    })
+    .filter(link => (link.children ? link.children.length > 0 : hasAccess(link.moduleKey)))
+    .filter(link => !link.adminOnly || isAdmin)
+    .filter(link => !link.staffOnly || !isAdmin);
+
+  useEffect(() => {
+    const activeGroup = navLinks.find(link =>
+      link.children?.some(child => location.pathname === child.path || location.pathname.startsWith(child.path))
+    );
+    if (activeGroup) {
+      setOpenGroups(prev => (prev[activeGroup.name] ? prev : { ...prev, [activeGroup.name]: true }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
+  const toggleGroup = (name) => {
+    setOpenGroups(prev => ({ ...prev, [name]: !prev[name] }));
+  };
+
+  const searchableLinks = navLinks.flatMap(link => (link.children ? link.children : [link]));
+
 
   if (userData?.college?.status === 'pending') {
     return (
@@ -222,8 +258,90 @@ const AdminLayout = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
+                <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
           {navLinks.map((link) => {
+            if (link.children) {
+              const isGroupActive = link.children.some(
+                (child) => location.pathname === child.path || location.pathname.startsWith(child.path)
+              );
+              const isOpen = openGroups[link.name] ?? isGroupActive;
+              const Icon = link.icon;
+
+              return (
+                <div key={link.name}>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(link.name)}
+                    className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group relative ${
+                      isGroupActive
+                        ? 'text-primary-700 dark:text-white font-bold'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    {isGroupActive && (
+                      <motion.div
+                        layoutId="activeAdminTab"
+                        className="absolute inset-0 bg-primary-50 dark:bg-primary-500/10 rounded-xl border border-primary-100 dark:border-primary-500/20"
+                        initial={false}
+                      />
+                    )}
+                    <Icon
+                      className={`w-5 h-5 relative z-10 transition-colors ${
+                        isGroupActive
+                          ? 'text-primary-600 dark:text-primary-400'
+                          : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'
+                      }`}
+                    />
+                    <span className="relative z-10 flex-1 text-left">{link.name}</span>
+                    <ChevronDown
+                      className={`w-4 h-4 relative z-10 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} ${
+                        isGroupActive ? 'text-primary-600 dark:text-primary-400' : 'text-slate-400'
+                      }`}
+                    />
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="pl-4 py-1 space-y-1">
+                          {link.children.map((child) => {
+                            const isChildActive =
+                              location.pathname === child.path || location.pathname.startsWith(child.path);
+                            const ChildIcon = child.icon;
+                            return (
+                              <Link
+                                key={child.name}
+                                to={child.path}
+                                onClick={() => setSidebarOpen(false)}
+                                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-sm ${
+                                  isChildActive
+                                    ? 'text-primary-700 dark:text-white font-bold bg-primary-50 dark:bg-primary-500/10 border border-primary-100 dark:border-primary-500/20'
+                                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
+                                }`}
+                              >
+                                <ChildIcon
+                                  className={`w-4 h-4 ${
+                                    isChildActive ? 'text-primary-600 dark:text-primary-400' : 'text-slate-400'
+                                  }`}
+                                />
+                                <span>{child.name}</span>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            }
+
             const isActive = location.pathname === link.path || (link.path !== '/admin' && location.pathname.startsWith(link.path));
             const Icon = link.icon;
             
@@ -283,7 +401,7 @@ const AdminLayout = () => {
             </button>
 
             <div className="hidden md:flex relative group">
-              <SearchBar links={navLinks} />
+              <SearchBar links={searchableLinks} />
             </div>
           </div>
 
@@ -354,7 +472,8 @@ const AdminLayout = () => {
               <Route path="/assignments/*" element={hasAccess('academic') ? <AssignmentsDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/timetable/*" element={hasAccess('timetable') ? <Timetable /> : <Navigate to="/404" replace />} />
               <Route path="/attendance/*" element={hasAccess('attendance') ? <Attendance /> : <Navigate to="/404" replace />} />
-              <Route path="/leave-requests/*" element={hasAccess('attendance') ? <LeaveRequestsDashboard /> : <Navigate to="/404" replace />} />
+              <Route path="/leave-requests/*" element={hasAccess(isAdmin ? 'attendance' : null) ? <LeaveRequestsDashboard /> : <Navigate to="/404" replace />} />
+              <Route path="/my-leaves" element={!isAdmin ? <TeacherMyLeaves /> : <Navigate to="/admin/leave-requests" replace />} />
               <Route path="/exams/*" element={hasAccess('exams') ? <Exams /> : <Navigate to="/404" replace />} />
               <Route path="/fees/*" element={hasAccess('fees') ? <Fees /> : <Navigate to="/404" replace />} />
               <Route path="/library/*" element={hasAccess('library') ? <Library /> : <Navigate to="/404" replace />} />
@@ -368,7 +487,6 @@ const AdminLayout = () => {
               <Route path="/inventory/*" element={hasAccess('inventory') ? <InventoryDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/api-integrations/*" element={hasAccess('api_integration') ? <ApiIntegrations /> : <Navigate to="/404" replace />} />
               <Route path="/payroll/*" element={hasAccess('payroll') ? <PayrollDashboard /> : <Navigate to="/404" replace />} />
-
               <Route path="/builder/*" element={hasAccess('custom') ? <ModuleBuilder /> : <Navigate to="/404" replace />} />
               <Route path="/dynamic/:entitySlug/*" element={hasAccess('custom') ? <DynamicDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/custom/*" element={hasAccess('custom') ? <CustomDashboard /> : <Navigate to="/404" replace />} />
@@ -378,6 +496,7 @@ const AdminLayout = () => {
           </div>
         </main>
       </div>
+      {/* <ChatWidget /> */}
     </div>
   );
 };
@@ -385,11 +504,12 @@ const AdminLayout = () => {
 const AdminDashboardHome = () => {
   const { userData } = useAuth();
   const stats = useDashboardStats(userData?.collegeId);
-  const [copiedLink, setCopiedLink] = useState(null); // 'student', 'teacher', 'parent'
+  const [copiedLink, setCopiedLink] = useState(null); 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const handleGenerateLink = async (role) => {
     if (!userData?.collegeId && !userData?.collegeSlug) return;
+<<<<<<< HEAD
 
     const baseUrl = window.location.origin;
     let inviteLink = '';
@@ -434,6 +554,14 @@ const AdminDashboardHome = () => {
     console.log(`[AdminLayout] Generated ${role} invite link. Route: ${new URL(inviteLink).pathname}`);
 
     // Copy to clipboard with fallback
+=======
+    
+    const baseUrl = window.location.origin;
+    const inviteLink = userData?.collegeSlug 
+      ? `${baseUrl}/register/${role}/${userData.collegeSlug}` 
+      : `${baseUrl}/register/${role}?code=${userData.collegeId}`;
+    
+>>>>>>> e053987 (fix: Leave Request, Inventory, Payslip, API Integration)
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(inviteLink);
@@ -606,7 +734,6 @@ const AdminDashboardHome = () => {
                 const color = item.type === 'student' ? 'text-emerald-500' : 'text-amber-500';
                 const bg = item.type === 'student' ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-amber-50 dark:bg-amber-500/10';
                 
-                // Format relative time like "2 hours ago"
                 const date = new Date(item.time);
                 const now = new Date();
                 const diffMs = now - date;
@@ -642,7 +769,6 @@ const AdminDashboardHome = () => {
             )}
           </div>
         </div>
-
       </div>
     </div>
   );
