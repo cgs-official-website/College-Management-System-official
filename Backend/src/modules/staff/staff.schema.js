@@ -45,11 +45,11 @@ export const updateStaffSchema = createStaffSchema
   })
   .partial()
   .extend({
-    // email stays optional in updates but must be valid if provided
+    // Keep email optional during edits; validate it when supplied.
     email: z
       .string()
       .trim()
-      .min(1, 'Email is required.')
       .email('Please enter a valid email address.')
-      .optional(),
+      .optional()
+      .or(z.literal('')),
   });

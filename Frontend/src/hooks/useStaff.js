@@ -17,7 +17,6 @@ export function useStaff(collegeId) {
 
   const addStaff = useMutation({
     mutationFn: (newStaff) => api.post('/staff', newStaff),
-    // NOTE: No toast here — HRManagement.jsx shows the Registration Link toast instead
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['staff', collegeId] });
     },

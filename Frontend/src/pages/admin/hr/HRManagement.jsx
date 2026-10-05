@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, Filter, Mail, Phone, MoreVertical, Edit, Trash2, Building, Shield, Eye, Link2 } from 'lucide-react';
+import { Plus, Search, Filter, Mail, Phone, MoreVertical, Edit, Trash2, Building, Shield, Eye } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useStaff } from '../../../hooks/useStaff';
 import { Button } from '../../../components/ui/Button';
@@ -7,7 +7,6 @@ import { Input } from '../../../components/ui/Input';
 import { StaffFormModal } from './StaffFormModal';
 import { StaffDetailsModal } from './StaffDetailsModal';
 import { useConfirm } from '../../../contexts/ConfirmContext';
-import apiClient from '../../../services/apiClient';
 import toast from 'react-hot-toast';
 import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
 
@@ -43,33 +42,8 @@ export default function HRManagement() {
   };
 
   const handleDelete = async (id) => {
-    if (await confirm({ message: "Are you sure you want to completely remove this staff member? This action cannot be undone." })) {
+    if (await confirm({ message: "Are you sure you want to delete this user?" })) {
       await deleteStaff(id);
-    }
-  };
-
-  // Copy Registration Link — generates a fresh /teacher/register?token=... link for pending teachers
-  const handleCopyRegistrationLink = async (memberId, memberName) => {
-    const toastId = toast.loading('Generating registration link...');
-    try {
-      const response = await apiClient.get(`/staff/${memberId}/registration-link`);
-      const url = response?.data?.registrationUrl || response?.registrationUrl;
-      if (!url) throw new Error('No registration URL returned from server.');
-      try {
-        await navigator.clipboard.writeText(url);
-        toast.success(
-          `Registration link copied!\nShare this link with ${memberName || 'the teacher'} so they can register:\n${url}`,
-          { id: toastId, duration: 10000 }
-        );
-      } catch {
-        toast.success(
-          `Share this registration link with ${memberName || 'the teacher'}:\n${url}`,
-          { id: toastId, duration: 10000 }
-        );
-      }
-    } catch (error) {
-      const msg = error.response?.data?.error?.message || error.message || 'Failed to generate link';
-      toast.error(msg, { id: toastId });
     }
   };
 
@@ -79,26 +53,9 @@ export default function HRManagement() {
         await updateStaff({ id: editingStaff.id, data });
         setIsFormOpen(false);
       } else {
-        const result = await addStaff(data);
+        await addStaff(data);
         setIsFormOpen(false);
-        // Show the registration link immediately after creating a new teacher
-        const registrationUrl = result?.data?.registrationUrl || result?.registrationUrl;
-        if (registrationUrl) {
-          try {
-            await navigator.clipboard.writeText(registrationUrl);
-            toast.success(
-              `Teacher created! Registration link copied to clipboard.\n\n` +
-              `Share this link with the teacher:\n${registrationUrl}`,
-              { duration: 8000 }
-            );
-          } catch {
-            // Clipboard may not be available (non-HTTPS, permissions)
-            toast.success(
-              `Teacher created! Share this registration link:\n${registrationUrl}`,
-              { duration: 10000 }
-            );
-          }
-        }
+        toast.success('Teacher created successfully.');
       }
     } catch (error) {
       console.error(error);
@@ -238,16 +195,6 @@ export default function HRManagement() {
                         <button onClick={() => setViewingStaff(member)} className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="View Profile">
                           <Eye className="w-4 h-4" />
                         </button>
-                        {/* Copy Registration Link — only for pending teachers (not yet registered) */}
-                        {(member.status || member.accountStatus) !== 'active' && (
-                          <button
-                            onClick={() => handleCopyRegistrationLink(member.id, member.name)}
-                            className="p-2 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm"
-                            title="Copy Registration Link (share with teacher so they can register)"
-                          >
-                            <Link2 className="w-4 h-4" />
-                          </button>
-                        )}
                         <button onClick={() => handleOpenEdit(member)} className="p-2 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="Edit">
                           <Edit className="w-4 h-4" />
                         </button>

@@ -49,7 +49,7 @@ export default function StudentList() {
   };
 
   const handleDelete = async (id) => {
-    if (await confirm({ message: "Are you sure you want to delete this student?" })) {
+    if (await confirm({ message: "Are you sure you want to delete this user?" })) {
       await deleteStudent(id);
     }
   };

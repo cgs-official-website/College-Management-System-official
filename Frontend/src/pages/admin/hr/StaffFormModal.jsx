@@ -134,7 +134,7 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
               />
               {errors.email
                 ? <p className="text-sm text-red-500">{errors.email.message}</p>
-                : <p className="text-xs text-slate-400 dark:text-slate-500">Teacher will enter their own email when they open the Registration Link.</p>
+                : <p className="text-xs text-slate-400 dark:text-slate-500">Optional; leave blank if the teacher's email is not available yet.</p>
               }
             </div>
             <Input 

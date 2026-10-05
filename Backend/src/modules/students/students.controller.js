@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { prisma, logger } from '../../server.js';
 import bcrypt from 'bcryptjs';
 import { createStudentSchema, updateStudentSchema } from './students.schema.js';
+import { deleteStudentProfile } from '../users/deleteUserRecords.js';
 
 export const getStudents = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId || req.query.collegeId;
@@ -151,6 +152,7 @@ export const getStudentById = async (req, res) => {
   const student = await prisma.student.findFirst({
     where: {
       id,
+      deletedAt: null,
       ...(collegeId ? { collegeId } : {})
     },
     include: {
@@ -293,6 +295,7 @@ export const createStudent = async (req, res) => {
   const existingStudentByEmail = await prisma.student.findFirst({
     where: {
       collegeId,
+      deletedAt: null,
       user: { email }
     }
   });
@@ -308,7 +311,7 @@ export const createStudent = async (req, res) => {
   }
 
   const existingStudentByAdm = await prisma.student.findFirst({
-    where: { collegeId, admissionNumber }
+    where: { collegeId, admissionNumber, deletedAt: null }
   });
 
   if (existingStudentByAdm) {
@@ -329,6 +332,19 @@ export const createStudent = async (req, res) => {
   try {
     student = await prisma.$transaction(async (tx) => {
       const fullName = `${payload.firstName} ${payload.lastName || ''}`.trim();
+      const softDeletedById = await tx.student.findMany({
+        where: { collegeId, admissionNumber: admissionNo, deletedAt: { not: null } },
+        select: { id: true, userId: true },
+      });
+      const softDeletedByEmail = await tx.student.findMany({
+        where: { collegeId, deletedAt: { not: null }, user: { is: { email } } },
+        select: { id: true, userId: true },
+      });
+      const staleStudents = new Map([...softDeletedById, ...softDeletedByEmail].map((stale) => [stale.id, stale]));
+      for (const stale of staleStudents.values()) {
+        await deleteStudentProfile(tx, stale);
+      }
+
       // Check if user already exists
       let user = await tx.user.findFirst({
         where: { email, collegeId }
@@ -402,7 +418,7 @@ export const createStudent = async (req, res) => {
       });
 
       return newStudent;
-    });
+    }, { maxWait: 15000, timeout: 30000 });
   } catch (err) {
     if (err.code === 'P2002' || err.statusCode === 409) {
       return res.status(409).json({
@@ -440,6 +456,7 @@ export const updateStudent = async (req, res) => {
   const student = await prisma.student.findFirst({
     where: {
       id,
+      deletedAt: null,
       ...(collegeId ? { collegeId } : {})
     },
     include: { user: true }
@@ -449,81 +466,121 @@ export const updateStudent = async (req, res) => {
     return res.status(404).json({ success: false, error: { code: 'STUDENT_NOT_FOUND', message: 'Student not found' } });
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    // 1. Update linked User record (status, name, email)
-    if (student.userId) {
-      const userUpdateData = {};
-      if (payload.status !== undefined) {
-        userUpdateData.accountStatus = payload.status;
-      }
-      if (payload.email !== undefined && payload.email) {
-        userUpdateData.email = payload.email.toLowerCase().trim();
-      }
-      if (payload.firstName !== undefined || payload.lastName !== undefined) {
-        const existingCustom = (typeof student.customFields === 'object' && student.customFields !== null && !Array.isArray(student.customFields)) ? student.customFields : {};
-        const currentFName = payload.firstName !== undefined ? payload.firstName : (existingCustom.firstName || (student.user?.name ? student.user.name.split(' ')[0] : ''));
-        const currentLName = payload.lastName !== undefined ? payload.lastName : (existingCustom.lastName || (student.user?.name ? student.user.name.split(' ').slice(1).join(' ') : ''));
-        userUpdateData.name = `${currentFName || ''} ${currentLName || ''}`.trim();
-      }
-      if (Object.keys(userUpdateData).length > 0) {
-        await tx.user.update({
-          where: { id: student.userId },
-          data: userUpdateData
-        });
-      }
-    }
-
-
-    let deptId = payload.departmentId;
-    if (!deptId && payload.courseId) {
-      const course = await tx.course.findUnique({
-        where: { id: payload.courseId }
-      });
-      if (course) {
-        deptId = course.departmentId;
-      }
-    }
-
-    // 2. Non-destructive customFields merge
-    const existingCustom = (typeof student.customFields === 'object' && student.customFields !== null && !Array.isArray(student.customFields)) ? student.customFields : {};
-    const mergedCustom = {
-      ...existingCustom,
-      ...(payload.firstName !== undefined ? { firstName: payload.firstName } : {}),
-      ...(payload.lastName !== undefined ? { lastName: payload.lastName } : {}),
-      ...(payload.gender !== undefined ? { gender: payload.gender } : {}),
-      ...(payload.dob !== undefined || payload.dateOfBirth !== undefined ? { dob: payload.dob || payload.dateOfBirth, dateOfBirth: payload.dob || payload.dateOfBirth } : {})
-    };
-
-    const s = await tx.student.update({
-      where: { id },
-      data: {
-        ...(payload.admissionNo || payload.admissionNumber ? { admissionNumber: payload.admissionNo || payload.admissionNumber } : {}),
-        ...(payload.rollNo || payload.rollNumber ? { rollNumber: payload.rollNo || payload.rollNumber } : {}),
-        ...(payload.batchYear !== undefined ? { batchYear: payload.batchYear } : {}),
-        ...(payload.bloodGroup !== undefined ? { bloodGroup: payload.bloodGroup || null } : {}),
-        ...(payload.phone !== undefined ? { studentMobile: payload.phone || null } : {}),
-        ...(payload.parentPhone !== undefined ? { parentMobile: payload.parentPhone || null } : {}),
-        ...(payload.parentName !== undefined ? { fatherName: payload.parentName || null } : {}),
-        ...(payload.address !== undefined ? { address: payload.address || null } : {}),
-        ...(payload.emergencyContact !== undefined ? { emergencyContact: payload.emergencyContact || null } : {}),
-        ...(payload.residenceType !== undefined ? { residenceType: payload.residenceType } : {}),
-        ...(payload.hostelBlockId !== undefined ? { hostelBlockId: payload.hostelBlockId || null } : {}),
-        ...(payload.hostelRoom !== undefined ? { hostelRoom: payload.hostelRoom || null } : {}),
-        ...(deptId !== undefined ? { departmentId: deptId } : {}),
-        ...(payload.courseId !== undefined ? { courseId: payload.courseId || null } : {}),
-        ...(payload.sectionId !== undefined ? { sectionId: payload.sectionId || null } : {}),
-        customFields: mergedCustom
-      },
-      include: {
-        user: true,
-        department: true,
-        course: true,
-        section: true
-      }
+  const admissionNumber = (payload.admissionNo ?? payload.admissionNumber)?.trim();
+  if (admissionNumber) {
+    const duplicateAdmission = await prisma.student.findFirst({
+      where: { collegeId, admissionNumber, deletedAt: null, NOT: { id } },
+      select: { id: true },
     });
+    if (duplicateAdmission) {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'ADMISSION_NUMBER_ALREADY_EXISTS', message: `Admission number '${admissionNumber}' already exists in this college.` }
+      });
+    }
+  }
 
-    return s;
-  });
+  const normalizedEmail = payload.email?.trim().toLowerCase();
+  if (normalizedEmail && student.userId) {
+    const duplicateEmail = await prisma.user.findFirst({
+      where: { email: normalizedEmail, collegeId, NOT: { id: student.userId } },
+      select: { id: true },
+    });
+    if (duplicateEmail) {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'STUDENT_EMAIL_ALREADY_EXISTS', message: 'A student with this email already exists in this college.' }
+      });
+    }
+  }
+
+  let updated;
+  try {
+    updated = await prisma.$transaction(async (tx) => {
+      // 1. Update linked User record (status, name, email)
+      if (student.userId) {
+        const userUpdateData = {};
+        if (payload.status !== undefined) {
+          userUpdateData.accountStatus = payload.status;
+        }
+        if (normalizedEmail) {
+          userUpdateData.email = normalizedEmail;
+        }
+        if (payload.firstName !== undefined || payload.lastName !== undefined) {
+          const existingCustom = (typeof student.customFields === 'object' && student.customFields !== null && !Array.isArray(student.customFields)) ? student.customFields : {};
+          const currentFName = payload.firstName !== undefined ? payload.firstName : (existingCustom.firstName || (student.user?.name ? student.user.name.split(' ')[0] : ''));
+          const currentLName = payload.lastName !== undefined ? payload.lastName : (existingCustom.lastName || (student.user?.name ? student.user.name.split(' ').slice(1).join(' ') : ''));
+          userUpdateData.name = `${currentFName || ''} ${currentLName || ''}`.trim();
+        }
+        if (Object.keys(userUpdateData).length > 0) {
+          await tx.user.update({
+            where: { id: student.userId },
+            data: userUpdateData
+          });
+        }
+      }
+
+
+      let deptId = payload.departmentId;
+      if (!deptId && payload.courseId) {
+        const course = await tx.course.findUnique({
+          where: { id: payload.courseId }
+        });
+        if (course) {
+          deptId = course.departmentId;
+        }
+      }
+
+      // 2. Non-destructive customFields merge
+      const existingCustom = (typeof student.customFields === 'object' && student.customFields !== null && !Array.isArray(student.customFields)) ? student.customFields : {};
+      const mergedCustom = {
+        ...existingCustom,
+        ...(payload.firstName !== undefined ? { firstName: payload.firstName } : {}),
+        ...(payload.lastName !== undefined ? { lastName: payload.lastName } : {}),
+        ...(payload.gender !== undefined ? { gender: payload.gender } : {}),
+        ...(payload.dob !== undefined || payload.dateOfBirth !== undefined ? { dob: payload.dob || payload.dateOfBirth, dateOfBirth: payload.dob || payload.dateOfBirth } : {})
+      };
+
+      const s = await tx.student.update({
+        where: { id },
+        data: {
+          ...(admissionNumber ? { admissionNumber } : {}),
+          ...(normalizedEmail ? { emailId: normalizedEmail } : {}),
+          ...(payload.rollNo || payload.rollNumber ? { rollNumber: payload.rollNo || payload.rollNumber } : {}),
+          ...(payload.batchYear !== undefined ? { batchYear: payload.batchYear } : {}),
+          ...(payload.bloodGroup !== undefined ? { bloodGroup: payload.bloodGroup || null } : {}),
+          ...(payload.phone !== undefined ? { studentMobile: payload.phone || null } : {}),
+          ...(payload.parentPhone !== undefined ? { parentMobile: payload.parentPhone || null } : {}),
+          ...(payload.parentName !== undefined ? { fatherName: payload.parentName || null } : {}),
+          ...(payload.address !== undefined ? { address: payload.address || null } : {}),
+          ...(payload.emergencyContact !== undefined ? { emergencyContact: payload.emergencyContact || null } : {}),
+          ...(payload.residenceType !== undefined ? { residenceType: payload.residenceType } : {}),
+          ...(payload.hostelBlockId !== undefined ? { hostelBlockId: payload.hostelBlockId || null } : {}),
+          ...(payload.hostelRoom !== undefined ? { hostelRoom: payload.hostelRoom || null } : {}),
+          ...(deptId !== undefined ? { departmentId: deptId } : {}),
+          ...(payload.courseId !== undefined ? { courseId: payload.courseId || null } : {}),
+          ...(payload.sectionId !== undefined ? { sectionId: payload.sectionId || null } : {}),
+          customFields: mergedCustom
+        },
+        include: {
+          user: true,
+          department: true,
+          course: true,
+          section: true
+        }
+      });
+
+      return s;
+    });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'STUDENT_UPDATE_CONFLICT', message: 'A student with that email or ID already exists in this college.' }
+      });
+    }
+    throw error;
+  }
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} studentId=${id} actor=${actorId} Updated student`);
   res.json({ success: true, data: updated });
@@ -537,19 +594,19 @@ export const deleteStudent = async (req, res) => {
   const student = await prisma.student.findFirst({
     where: {
       id,
+      deletedAt: null,
       ...(collegeId ? { collegeId } : {})
-    }
+    },
+    select: { id: true, userId: true }
   });
 
   if (!student) {
     return res.status(404).json({ success: false, error: { code: 'STUDENT_NOT_FOUND', message: 'Student not found' } });
   }
 
-  // Soft-delete student record
-  await prisma.student.update({
-    where: { id },
-    data: { deletedAt: new Date() }
-  });
+  await prisma.$transaction(async (tx) => {
+    await deleteStudentProfile(tx, student);
+  }, { maxWait: 15000, timeout: 30000 });
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} studentId=${id} actor=${actorId} Deleted student`);
   res.json({ success: true, message: 'Student deleted successfully' });
@@ -610,6 +667,21 @@ export const bulkImportStudents = async (req, res) => {
       const email = String(row['Email_ID'] || `${admissionNo.toLowerCase()}@example.com`).toLowerCase().trim();
 
       await prisma.$transaction(async (tx) => {
+        const staleStudents = await tx.student.findMany({
+          where: {
+            collegeId,
+            deletedAt: { not: null },
+            OR: [
+              { admissionNumber: admissionNo },
+              { user: { is: { email } } },
+            ],
+          },
+          select: { id: true, userId: true },
+        });
+        for (const stale of staleStudents) {
+          await deleteStudentProfile(tx, stale);
+        }
+
         let user = await tx.user.findFirst({
           where: { email, collegeId }
         });
@@ -665,7 +737,7 @@ export const bulkImportStudents = async (req, res) => {
             semesterFees: row['Semester Fees'] ? parseFloat(row['Semester Fees']) : null,
           }
         });
-      });
+      }, { maxWait: 15000, timeout: 30000 });
 
       results.successful++;
     } catch (error) {

@@ -1,27 +1,8 @@
 import { prisma, logger } from '../../server.js';
 import { createStaffSchema, updateStaffSchema } from './staff.schema.js';
 import { redis } from '../../lib/cache.js';
-import { createTeacherRegistrationToken } from '../auth/staffSetupToken.js';
 import { sendDynamicMail } from '../../services/email/email.service.js';
-
-/**
- * Builds the Registration Link given to the Admin after creating a teacher.
- * The teacher opens this link to register with their own details and email.
- * NOTE: This is NOT the setup link — email is NOT embedded in this token.
- */
-const buildTeacherRegistrationLink = (teacher) => {
-  const token = createTeacherRegistrationToken({
-    teacherRecordId: teacher.id,
-    teacherId: teacher.teacherId,
-    userId: teacher.userId,
-    collegeId: teacher.collegeId,
-  });
-  const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
-  return {
-    token,
-    registrationUrl: `${frontendUrl}/teacher/register?token=${encodeURIComponent(token)}`,
-  };
-};
+import { deleteTeacherProfile } from '../users/deleteUserRecords.js';
 
 /**
  * Invalidates the Redis staff list cache for a given college.
@@ -93,7 +74,6 @@ export const getStaff = async (req, res) => {
 
 export const createStaff = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
-  const actorId = req.user?.id || req.user?.userId;
   const payload = createStaffSchema.parse(req.body);
 
   if (!collegeId) {
@@ -177,6 +157,21 @@ export const createStaff = async (req, res) => {
   const placeholderEmail = adminProvidedEmail || `teacher+${teacherId.toLowerCase()}+${collegeId.slice(0, 8)}@pending.local`;
 
   const teacher = await prisma.$transaction(async (tx) => {
+    const softDeletedById = await tx.teacher.findMany({
+      where: { collegeId, teacherId, deletedAt: { not: null } },
+      select: { id: true, userId: true },
+    });
+    const softDeletedByEmail = adminProvidedEmail
+      ? await tx.teacher.findMany({
+        where: { collegeId, deletedAt: { not: null }, user: { is: { email: adminProvidedEmail } } },
+        select: { id: true, userId: true },
+      })
+      : [];
+    const staleTeachers = new Map([...softDeletedById, ...softDeletedByEmail].map((stale) => [stale.id, stale]));
+    for (const stale of staleTeachers.values()) {
+      await deleteTeacherProfile(tx, stale);
+    }
+
     if (adminProvidedEmail) {
       // Only check for duplicate if admin actually provided an email
       const existingUser = await tx.user.findFirst({
@@ -223,19 +218,10 @@ export const createStaff = async (req, res) => {
     });
 
     return newTeacher;
-  });
+  }, { maxWait: 15000, timeout: 30000 });
 
   // Invalidate Redis staff cache for this college
   await invalidateStaffCache(collegeId);
-
-  // Build the Registration Link (Admin copies this and shares it with the teacher)
-  // NOTE: Email is NOT embedded in this token. The teacher will enter their own
-  // email during registration. Setup Link is sent automatically after registration.
-  const { registrationUrl } = buildTeacherRegistrationLink(teacher);
-  logger.info(
-    `[TEACHER] Registration link generated | teacher_record_id=${teacher.id} teacherId=${teacherId} ` +
-    `college=${collegeId} actor=${actorId} url=${registrationUrl}`
-  );
 
   res.status(201).json({
     success: true,
@@ -249,70 +235,6 @@ export const createStaff = async (req, res) => {
       designation: teacher.designation,
       joiningDate: teacher.joiningDate,
       role: teacher.user?.role,
-      // Return the Registration URL so the Admin Panel can display/copy it
-      registrationUrl,
-    }
-  });
-};
-
-/**
- * GET /staff/:id/registration-link
- * Admin endpoint to regenerate a fresh Registration Link for a pending teacher.
- * This is useful when:
- *   - Teacher lost the original link
- *   - Teacher was created before the new flow and has a stale/wrong link
- *   - Admin needs to re-share the link
- *
- * Returns the registration URL — admin copies it and shares with the teacher.
- * The teacher then opens it to enter their own name + email.
- * The Setup Link (password creation) is sent automatically AFTER registration.
- */
-export const getRegistrationLink = async (req, res) => {
-  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
-  const { id } = req.params;
-
-  if (!collegeId) {
-    return res.status(400).json({ success: false, error: { code: 'COLLEGE_REQUIRED', message: 'College context required.' } });
-  }
-
-  const teacher = await prisma.teacher.findFirst({
-    where: { id, collegeId, deletedAt: null },
-    include: {
-      user: { select: { id: true, accountStatus: true, passwordHash: true, email: true } },
-      college: { select: { name: true } },
-    },
-  });
-
-  if (!teacher || !teacher.user) {
-    return res.status(404).json({ success: false, error: { code: 'TEACHER_NOT_FOUND', message: 'Teacher not found.' } });
-  }
-
-  if (teacher.user.accountStatus === 'active' && teacher.user.passwordHash) {
-    return res.status(409).json({
-      success: false,
-      error: {
-        code: 'TEACHER_ALREADY_ACTIVE',
-        message: 'This teacher has already completed registration and account setup. No registration link needed.',
-      },
-    });
-  }
-
-  // For old teachers (null teacherId), we still generate a valid token using the record ID.
-  // The teacherRegister handler matches on teacher record ID, so this still works.
-  const { registrationUrl, token } = buildTeacherRegistrationLink(teacher);
-
-  logger.info(
-    `[TEACHER] Registration link regenerated by admin | teacher_record_id=${teacher.id} ` +
-    `teacherId=${teacher.teacherId} college=${collegeId} actor=${req.user?.id}`
-  );
-
-  res.json({
-    success: true,
-    data: {
-      registrationUrl,
-      token,
-      teacherId: teacher.teacherId,
-      collegeName: teacher.college?.name,
     },
   });
 };
@@ -334,7 +256,7 @@ export const updateStaff = async (req, res) => {
   }
 
   const teacher = await prisma.teacher.findFirst({
-    where: { id, collegeId },
+    where: { id, collegeId, deletedAt: null },
     include: { user: true }
   });
 
@@ -359,37 +281,64 @@ export const updateStaff = async (req, res) => {
     }
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    if ((payload.name || payload.role || payload.customRoleId !== undefined || payload.status) && teacher.userId) {
-      await tx.user.update({
-        where: { id: teacher.userId },
-        data: {
-          ...(payload.name ? { name: payload.name } : {}),
-          ...(payload.role ? { role: payload.role } : {}),
-          ...(payload.customRoleId !== undefined ? { customRoleId: payload.customRoleId } : {}),
-          ...(payload.status ? { accountStatus: payload.status } : {})
-        }
+  const normalizedEmail = payload.email?.trim().toLowerCase();
+  if (normalizedEmail && teacher.userId) {
+    const duplicateEmail = await prisma.user.findFirst({
+      where: { email: normalizedEmail, collegeId, NOT: { id: teacher.userId } },
+      select: { id: true },
+    });
+    if (duplicateEmail) {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'STAFF_EMAIL_ALREADY_EXISTS', message: 'An account with this email already exists in this college.' }
       });
     }
+  }
 
-    const t = await tx.teacher.update({
-      where: { id }, // collegeId isolation enforced by findFirst pre-check above
-      data: {
-        ...(payload.designation ? { designation: payload.designation } : {}),
-        ...(payload.salaryGrade ? { salaryGrade: payload.salaryGrade } : {}),
-        ...(payload.joiningDate ? { joiningDate: new Date(payload.joiningDate) } : {}),
-        ...(payload.departmentId ? { departmentId: payload.departmentId } : {}),
-        ...(payload.phone !== undefined ? { mobileNumber: payload.phone || null } : {}),
-        ...(normalizedTeacherId !== undefined ? { teacherId: normalizedTeacherId } : {}),
-      },
-      include: {
-        user: true,
-        department: true
+  let updated;
+  try {
+    updated = await prisma.$transaction(async (tx) => {
+      if ((payload.name !== undefined || payload.role || payload.customRoleId !== undefined || payload.status || normalizedEmail) && teacher.userId) {
+        await tx.user.update({
+          where: { id: teacher.userId },
+          data: {
+            ...(payload.name !== undefined ? { name: payload.name } : {}),
+            ...(normalizedEmail ? { email: normalizedEmail } : {}),
+            ...(payload.role ? { role: payload.role } : {}),
+            ...(payload.customRoleId !== undefined ? { customRoleId: payload.customRoleId } : {}),
+            ...(payload.status ? { accountStatus: payload.status } : {})
+          }
+        });
       }
-    });
 
-    return t;
-  });
+      const t = await tx.teacher.update({
+        where: { id }, // collegeId isolation enforced by findFirst pre-check above
+        data: {
+          ...(payload.designation ? { designation: payload.designation } : {}),
+          ...(payload.salaryGrade ? { salaryGrade: payload.salaryGrade } : {}),
+          ...(payload.joiningDate ? { joiningDate: new Date(payload.joiningDate) } : {}),
+          ...(payload.departmentId ? { departmentId: payload.departmentId } : {}),
+          ...(payload.phone !== undefined ? { mobileNumber: payload.phone || null } : {}),
+          ...(normalizedEmail ? { emailId: normalizedEmail } : {}),
+          ...(normalizedTeacherId !== undefined ? { teacherId: normalizedTeacherId } : {}),
+        },
+        include: {
+          user: true,
+          department: true
+        }
+      });
+
+      return t;
+    });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'STAFF_UPDATE_CONFLICT', message: 'A teacher with that email or Teacher ID already exists in this college.' }
+      });
+    }
+    throw error;
+  }
 
   // Invalidate Redis staff cache for this college
   await invalidateStaffCache(collegeId);
@@ -411,22 +360,22 @@ export const deleteStaff = async (req, res) => {
   const { id } = req.params;
 
   const teacher = await prisma.teacher.findFirst({
-    where: { id, collegeId }
+    where: { id, collegeId, deletedAt: null },
+    select: { id: true, userId: true }
   });
 
   if (!teacher) {
     return res.status(404).json({ success: false, error: { code: 'STAFF_NOT_FOUND', message: 'Staff member not found' } });
   }
 
-  await prisma.teacher.update({
-    where: { id },
-    data: { deletedAt: new Date() }
-  });
+  await prisma.$transaction(async (tx) => {
+    await deleteTeacherProfile(tx, teacher);
+  }, { maxWait: 15000, timeout: 30000 });
 
   // Invalidate Redis staff cache for this college
   await invalidateStaffCache(collegeId);
 
-  logger.info(`[info] req=${req.id || ''} college=${collegeId} teacherId=${id} actor=${actorId} Soft-deleted staff`);
+  logger.info(`[info] req=${req.id || ''} college=${collegeId} teacherId=${id} actor=${actorId} Deleted staff`);
   res.json({ success: true, message: 'Staff member deleted successfully' });
 };
 
@@ -481,7 +430,22 @@ export const bulkImportStaff = async (req, res) => {
       }
       const email = setupEmail.toLowerCase();
 
-      const importedTeacher = await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx) => {
+        const staleTeachers = await tx.teacher.findMany({
+          where: {
+            collegeId,
+            deletedAt: { not: null },
+            OR: [
+              { teacherId: employeeId },
+              { user: { is: { email } } },
+            ],
+          },
+          select: { id: true, userId: true },
+        });
+        for (const stale of staleTeachers) {
+          await deleteTeacherProfile(tx, stale);
+        }
+
         let user = await tx.user.findFirst({
           where: { email, collegeId }
         });
@@ -538,19 +502,7 @@ export const bulkImportStaff = async (req, res) => {
           },
         });
 
-        return createdTeacher;
-      });
-
-      if (importedTeacher.user.accountStatus === 'pending_setup' && importedTeacher.user.passwordHash === null) {
-        const { registrationUrl } = buildTeacherRegistrationLink(importedTeacher);
-        logger.info(
-          `[TEACHER] Registration link generated (bulk import) | teacher_record_id=${importedTeacher.id} ` +
-          `teacherId=${importedTeacher.teacherId} email=${setupEmail} college=${collegeId} url=${registrationUrl}`
-        );
-        // NOTE: Email is NOT sent here. Teacher receives the Setup Link automatically
-        // only AFTER they complete registration through the Registration Link.
-      }
-
+      }, { maxWait: 15000, timeout: 30000 });
 
       results.successful++;
     } catch (error) {
