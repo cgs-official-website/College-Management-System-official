@@ -17,6 +17,7 @@ import {
 import { verifyStaffSetupToken, verifyTeacherRegistrationToken, createStaffSetupToken } from './staffSetupToken.js';
 import { sendDynamicMail } from '../../services/email/email.service.js';
 import { getNextCollegeCode } from '../../lib/collegeCodeGenerator.js';
+import { findUserWithMatchingPassword } from './auth.credentials.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret';
@@ -38,7 +39,7 @@ export const login = async (req, res) => {
     }
 
     const normalizedEmail = rawEmail.toLowerCase();
-    let user = null;
+    let matchingUsers = [];
 
     if (collegeSlug) {
       const college = await prisma.college.findUnique({
@@ -47,7 +48,7 @@ export const login = async (req, res) => {
       if (!college) {
         return res.status(401).json({ success: false, error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } });
       }
-      user = await prisma.user.findFirst({
+      matchingUsers = await prisma.user.findMany({
         where: { email: normalizedEmail, collegeId: college.id },
         include: {
           college: true,
@@ -55,7 +56,7 @@ export const login = async (req, res) => {
         }
       });
     } else {
-      user = await prisma.user.findFirst({
+      matchingUsers = await prisma.user.findMany({
         where: { email: normalizedEmail },
         include: {
           college: true,
@@ -65,7 +66,8 @@ export const login = async (req, res) => {
     }
 
     // Generic 401 on missing user or invalid password (zero account enumeration)
-    if (!user || !user.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
+    const user = await findUserWithMatchingPassword(matchingUsers, password);
+    if (!user) {
       return res.status(401).json({ success: false, error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } });
     }
 
