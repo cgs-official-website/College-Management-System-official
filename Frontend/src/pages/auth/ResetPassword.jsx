@@ -5,12 +5,32 @@ import { Lock, AlertCircle, Loader2, CheckCircle2, XCircle } from 'lucide-react'
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 
+const getUserIdFromToken = (jwtToken) => {
+  try {
+    if (!jwtToken) return null;
+    const parts = jwtToken.split('.');
+    if (parts.length < 2) return null;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const parsed = JSON.parse(jsonPayload);
+    return parsed.userId || parsed.id || null;
+  } catch {
+    return null;
+  }
+};
+
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   
-  const token = searchParams.get('token');
-  const userId = searchParams.get('id');
+  const token = searchParams.get('token') || '';
+  const paramUserId = searchParams.get('id') || searchParams.get('userId') || '';
+  const userId = paramUserId || getUserIdFromToken(token) || '';
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -20,11 +40,17 @@ const ResetPassword = () => {
   useEffect(() => {
     if (!token || !userId) {
       setError('Invalid or missing password reset token.');
+    } else {
+      setError('');
     }
   }, [token, userId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!token || !userId) {
+      setError('Invalid or missing password reset token.');
+      return;
+    }
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -49,7 +75,8 @@ const ResetPassword = () => {
       setTimeout(() => navigate('/login'), 2000);
     } catch (err) {
       setStatus('error');
-      setError(err.response?.data?.error?.message || 'Failed to reset password. The link might be expired.');
+      const backendMsg = err.response?.data?.error?.message || err.data?.error?.message || err.message;
+      setError(backendMsg || 'Failed to reset password. The link might be expired.');
     }
   };
 
