@@ -3,12 +3,9 @@ import dotenv from 'dotenv';
 import { prisma } from '../../lib/prisma.js';
 dotenv.config();
 
-<<<<<<< HEAD
 // ---------------------------------------------------------------------------
 // Transporter setup
 // ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
-// Transporter — lazy singleton
 // Port 587 + STARTTLS is used because cloud hosts (Railway, Render, etc.)
 // typically block outbound port 465 (SMTPS / implicit TLS).
 // Port 587 with `secure:false` + STARTTLS is the correct production setup.
@@ -75,53 +72,13 @@ transporter.verify((err) => {
   }
 });
 
+const escapeHtml = (s = '') =>
+  String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 // ---------------------------------------------------------------------------
 // Base HTML layout (used as fallback when DB template is missing)
 // ---------------------------------------------------------------------------
-const baseTemplate = (content) => `
-=======
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '465', 10),
-  secure: true, 
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
-export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo, attachments }) => {
-  try {
-    const textContent = text || (html ? html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '');
-    
-    const mailOptions = {
-      from: process.env.FROM_EMAIL,
-      to,
-      subject,
-      html,
-      text: textContent,
-    };
-
-    if (cc) mailOptions.cc = cc;
-    if (bcc) mailOptions.bcc = bcc;
-    if (replyTo) mailOptions.replyTo = replyTo;
-    if (attachments) mailOptions.attachments = attachments; 
-
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`[EmailService] Sent mail to ${to} (MessageId: ${info.messageId})`);
-    return { success: true, messageId: info.messageId };
-  } catch (error) {
-    console.error(`[EmailService] Failed to send mail to ${to}: ${error.message}`);
-    return { success: false, error: error.message };
-  }
-};
-
-const escapeHtml = (s = '') =>
-  String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
 const baseTemplate = (content, title = 'Zuna ERP') => `
->>>>>>> e053987 (fix: Leave Request, Inventory, Payslip, API Integration)
 <!DOCTYPE html>
 <html>
 <head>
@@ -207,19 +164,11 @@ const baseTemplate = (content, title = 'Zuna ERP') => `
 </html>
 `;
 
-<<<<<<< HEAD
 // ---------------------------------------------------------------------------
 // Built-in fallback templates
 // These are used when the EmailTemplate record doesn't exist in the database.
 // Run seed_templates.js to persist templates to the DB for runtime editing.
 // ---------------------------------------------------------------------------
-const escapeHtml = (value = '') => String(value)
-  .replaceAll('&', '&amp;')
-  .replaceAll('<', '&lt;')
-  .replaceAll('>', '&gt;')
-  .replaceAll('"', '&quot;')
-  .replaceAll("'", '&#39;');
-
 const FALLBACK_TEMPLATES = {
   'Teacher Account Setup': {
     subject: 'Set up your Zuna ERP teacher account',
@@ -258,21 +207,24 @@ const FALLBACK_TEMPLATES = {
       <p>We strongly recommend changing your password after your first login.</p>
 
       <div style="text-align: center;">
-        <a href="${vars.loginUrl}" class="button">Log In to Your Account</a>
+        <a href="${vars.loginUrl || '#'}" class="button">Log In to Your Account</a>
       </div>
     `
   },
   'Password Reset': {
     subject: 'Password Reset Request',
     buildHtml: (vars) => `
-      <h2 style="color: #0f172a; margin-top: 0;">Password Reset Request</h2>
-      <p>We received a request to reset your password. If you didn't make this request, you can safely ignore this email.</p>
-      <p>Click the button below to reset your password:</p>
+      <h2 style="color: #0f172a; margin-top: 0;">Reset Your Password</h2>
+      <p>Hello ${vars.name || ''},</p>
+      <p>We received a request to reset your password. Click the button below to choose a new password.</p>
 
       <div style="text-align: center;">
-        <a href="${vars.resetLink}" class="button">Reset Password</a>
+        <a href="${vars.resetUrl}" class="button">Reset Password</a>
       </div>
 
+      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
+        If you did not request a password reset, you can safely ignore this email.
+      </p>
       <p style="font-size: 13px; color: #64748b; margin-top: 24px;">This link will expire in 15 minutes.</p>
     `
   },
@@ -281,7 +233,7 @@ const FALLBACK_TEMPLATES = {
 // ---------------------------------------------------------------------------
 // Core sendMail — wraps nodemailer.sendMail with proper logging
 // ---------------------------------------------------------------------------
-export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo }) => {
+export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo, attachments }) => {
   try {
     const textContent = text || (html ? html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '');
 
@@ -292,27 +244,12 @@ export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo }) =>
       html,
       text: textContent,
     };
-=======
-export const sendDynamicMail = async ({ to, templateName, variables = {}, headerTitle, cc, bcc, replyTo, attachments }) => {  try {
-    const template = await prisma.emailTemplate.findFirst({
-      where: { name: templateName }
-    });
-
-    if (!template) {
-      throw new Error(`EmailTemplate not found: ${templateName}`);
-    }
-    
-    if (template.status !== 'Active') {
-      console.log(`[EmailService] Template ${templateName} is not active. Skipping email.`);
-      return { success: false, error: 'Template is not active' };
-    }
->>>>>>> e053987 (fix: Leave Request, Inventory, Payslip, API Integration)
 
     if (cc) mailOptions.cc = cc;
     if (bcc) mailOptions.bcc = bcc;
     if (replyTo) mailOptions.replyTo = replyTo;
+    if (attachments) mailOptions.attachments = attachments;
 
-<<<<<<< HEAD
     // Always use a fresh transporter per send — avoids stale/closed connections
     // on cloud hosts (Railway) which have aggressive TCP idle timeouts.
     const freshTransporter = createTransporter();
@@ -321,17 +258,6 @@ export const sendDynamicMail = async ({ to, templateName, variables = {}, header
 
     console.log(`[EmailService] ✅ Email sent successfully to: ${to} | Subject: "${subject}" | MessageId: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
-=======
-    for (const [key, value] of Object.entries(variables)) {
-      const regex = new RegExp(`{{${key}}}`, 'g');
-      subject = subject.replace(regex, value);
-      htmlContent = htmlContent.replace(regex, value);
-    }
-
-    const fullHtml = baseTemplate(htmlContent, headerTitle || 'Zuna ERP');
-    return await sendMail({ to, subject, html: fullHtml, cc, bcc, replyTo, attachments });
-
->>>>>>> e053987 (fix: Leave Request, Inventory, Payslip, API Integration)
   } catch (error) {
     // Log the Nodemailer error code/message for debugging — never log credentials
     console.error(
@@ -344,10 +270,6 @@ export const sendDynamicMail = async ({ to, templateName, variables = {}, header
   }
 };
 
-
-// ---------------------------------------------------------------------------
-// sendDynamicMail — loads template from DB, falls back to built-in if missing
-// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // PASSWORD SAFETY GUARD
 // Rejects any DB-stored email template whose subject or contentHtml contains
@@ -356,15 +278,15 @@ export const sendDynamicMail = async ({ to, templateName, variables = {}, header
 // ---------------------------------------------------------------------------
 const UNSAFE_TEMPLATE_PATTERN = /\{\{\s*password\s*\}\}/i;
 
-export const sendDynamicMail = async ({ to, templateName, variables = {}, cc, bcc, replyTo }) => {
+export const sendDynamicMail = async ({ to, templateName, variables = {}, headerTitle, cc, bcc, replyTo, attachments }) => {
   try {
     let subject;
     let htmlContent;
 
     // --- Try loading template from database first ---
     const template = await prisma.emailTemplate.findFirst({
-        where: { name: templateName }
-      }).catch(() => null); // DB failure should not crash email sending
+      where: { name: templateName }
+    }).catch(() => null); // DB failure should not crash email sending
 
     // Safety guard: refuse to send any DB template that contains a {{password}}
     // placeholder, regardless of template name. Fall through to built-in fallback.
@@ -399,10 +321,10 @@ export const sendDynamicMail = async ({ to, templateName, variables = {}, cc, bc
           htmlContent = htmlContent.replace(regex, String(value ?? ''));
         }
 
-        htmlContent = baseTemplate(htmlContent);
+        htmlContent = baseTemplate(htmlContent, headerTitle || 'Zuna ERP');
         console.log(`[EmailService] Using DB template: "${templateName}"`);
 
-        return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo });
+        return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo, attachments });
       }
     }
 
@@ -425,9 +347,9 @@ export const sendDynamicMail = async ({ to, templateName, variables = {}, cc, bc
     }
 
     subject = fallback.subject;
-    htmlContent = baseTemplate(fallback.buildHtml(variables));
+    htmlContent = baseTemplate(fallback.buildHtml(variables), headerTitle || 'Zuna ERP');
 
-    return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo });
+    return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo, attachments });
 
   } catch (error) {
     console.error(

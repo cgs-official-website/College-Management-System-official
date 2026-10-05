@@ -509,8 +509,6 @@ const AdminDashboardHome = () => {
 
   const handleGenerateLink = async (role) => {
     if (!userData?.collegeId && !userData?.collegeSlug) return;
-<<<<<<< HEAD
-
     const baseUrl = window.location.origin;
     let inviteLink = '';
 
@@ -554,14 +552,6 @@ const AdminDashboardHome = () => {
     console.log(`[AdminLayout] Generated ${role} invite link. Route: ${new URL(inviteLink).pathname}`);
 
     // Copy to clipboard with fallback
-=======
-    
-    const baseUrl = window.location.origin;
-    const inviteLink = userData?.collegeSlug 
-      ? `${baseUrl}/register/${role}/${userData.collegeSlug}` 
-      : `${baseUrl}/register/${role}?code=${userData.collegeId}`;
-    
->>>>>>> e053987 (fix: Leave Request, Inventory, Payslip, API Integration)
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(inviteLink);

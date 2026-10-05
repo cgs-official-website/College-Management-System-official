@@ -120,34 +120,6 @@ model PlatformTicket {
 }
 
 model User {
-<<<<<<< HEAD
-  email          String
-  name           String?
-  role           String
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  accountStatus  String           @default("pending")
-  lastLoginAt    DateTime?
-  passwordHash   String?
-  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId      String?          @db.Uuid
-  customRoleId   String?          @db.Uuid
-  customRole     Role?            @relation("UserCustomRole", fields: [customRoleId], references: [id])
-  parentProfile  Parent?
-  tickets        PlatformTicket[]
-  refreshTokens  RefreshToken[]
-  studentProfile Student?
-  teacherProfile Teacher?
-  college        College?         @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  complaints          Complaint[]
-  payrollRecords      PayrollRecord[]
-  timesheets          Timesheet[]
-  inventoryAuditLogs  InventoryAuditLog[]
-  payrolls            Payroll[]
-  facilityRequests    InfrastructureBooking[] @relation("BookingRequester")
-  reviewedBookings    InfrastructureBooking[] @relation("BookingReviewer")
-  notifications       Notification[]
-=======
   email              String
   name               String?
   role               String
@@ -155,7 +127,7 @@ model User {
   updatedAt          DateTime                @updatedAt
   accountStatus      String                  @default("pending")
   lastLoginAt        DateTime?
-  passwordHash       String
+  passwordHash       String?
   id                 String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   collegeId          String?                 @db.Uuid
   customRoleId       String?                 @db.Uuid
@@ -174,7 +146,6 @@ model User {
   facilityRequests   InfrastructureBooking[] @relation("BookingRequester")
   reviewedBookings   InfrastructureBooking[] @relation("BookingReviewer")
   notifications      Notification[]
->>>>>>> e053987 (fix: Leave Request, Inventory, Payslip, API Integration)
 
   @@unique([collegeId, email])
 }
@@ -304,8 +275,7 @@ model Teacher {
   timetable    TimetableSlot[]
   sections     Section[]       @relation("TeacherSections")
 
-<<<<<<< HEAD
-  teacherId               String?  // Required for new teachers; nullable for existing records without an assigned ID.
+  teacherId               String? // Required for new teachers; nullable for existing records without an assigned ID.
   gender                  String?
   dateOfBirth             DateTime?
   employmentType          String?
@@ -324,26 +294,6 @@ model Teacher {
   emergencyContactName    String?
   emergencyContactNumber  String?
   customFields            Json?
-=======
-  gender                 String?
-  dateOfBirth            DateTime?
-  employmentType         String?
-  qualification          String?
-  experienceYears        Int?
-  mobileNumber           String?
-  emailId                String?
-  aadhaarNumber          String?
-  panNumber              String?
-  bloodGroup             String?
-  address                String?
-  city                   String?
-  district               String?
-  state                  String?
-  pincode                String?
-  emergencyContactName   String?
-  emergencyContactNumber String?
-  customFields           Json?
->>>>>>> e053987 (fix: Leave Request, Inventory, Payslip, API Integration)
 
   @@index([collegeId])
   @@unique([collegeId, teacherId])
