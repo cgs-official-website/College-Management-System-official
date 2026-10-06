@@ -156,13 +156,13 @@ const AdminLayout = () => {
     { name: 'Inventory', path: '/admin/inventory', icon: Package, moduleKey: 'inventory' },
     { name: 'Payroll', path: '/admin/payroll', icon: IndianRupee, moduleKey: 'payroll' },
     { name: 'API Integrations', path: '/admin/api-integrations', icon: Zap, moduleKey: 'api_integration' },
-    // { name: 'Module Builder', path: '/admin/builder', icon: Settings2, moduleKey: 'custom' },
-    // ...(customEntitiesData?.map(ent => ({
-    //   name: ent.name,
-    //   path: `/admin/dynamic/${ent.slug}`,
-    //   icon: FileText,
-    //   moduleKey: 'custom'
-    // })) || []),
+    { name: 'Module Builder', path: '/admin/builder', icon: Settings2, moduleKey: 'custom' },
+    ...(customEntitiesData?.map(ent => ({
+      name: ent.name,
+      path: `/admin/dynamic/${ent.slug}`,
+      icon: FileText,
+      moduleKey: 'custom'
+    })) || []),
     { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon, moduleKey: 'settings' },
     { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck, moduleKey: 'roles' },
   ]
