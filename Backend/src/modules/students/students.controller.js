@@ -629,6 +629,7 @@ export const bulkImportStudents = async (req, res) => {
 
   // Fetch or create a default department if none specified
   const departmentsCache = {};
+  const defaultHashedPassword = await bcrypt.hash('Student@123', 10);
   
   for (const [index, row] of data.entries()) {
     try {
@@ -687,13 +688,12 @@ export const bulkImportStudents = async (req, res) => {
         });
 
         if (!user) {
-          const defaultPassword = await bcrypt.hash('Student@123', 10);
           user = await tx.user.create({
             data: {
               email,
               collegeId,
               role: 'student',
-              passwordHash: defaultPassword,
+              passwordHash: defaultHashedPassword,
               accountStatus: 'active'
             }
           });

@@ -1156,3 +1156,28 @@ model SubscriptionPlan {
   updatedAt            DateTime              @updatedAt
   billingSubscriptions BillingSubscription[]
 }
+
+model AuditLog {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId   String?  @db.Uuid
+  userId      String?  @db.Uuid
+  userName    String?
+  userEmail   String?
+  userRole    String?
+  action      String
+  module      String
+  entity      String?
+  entityId    String?
+  description String?
+  oldValue    Json?
+  newValue    Json?
+  ipAddress   String?
+  userAgent   String?
+  status      String   @default("SUCCESS")
+  createdAt   DateTime @default(now())
+
+  @@index([collegeId])
+  @@index([module])
+  @@index([action])
+  @@index([createdAt])
+}

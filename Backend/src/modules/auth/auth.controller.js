@@ -19,6 +19,7 @@ import { verifyStaffSetupToken, verifyTeacherRegistrationToken, createStaffSetup
 import { sendDynamicMail } from '../../services/email/email.service.js';
 import { getNextCollegeCode } from '../../lib/collegeCodeGenerator.js';
 import { findUserWithMatchingPassword } from './auth.credentials.js';
+import { createAuditLog } from '../audit/audit.service.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret';
@@ -131,6 +132,23 @@ export const login = async (req, res) => {
     });
 
     logger.info(`[info] User ${user.email} (id=${user.id}, role=${user.role}) logged in successfully`);
+
+    createAuditLog({
+      collegeId: user.collegeId,
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      userRole: user.role,
+      action: 'LOGIN',
+      module: 'AUTH',
+      entity: 'UserSession',
+      entityId: user.id,
+      description: `User ${user.email} (${user.role}) logged in successfully`,
+      ipAddress: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'Unknown',
+      status: 'SUCCESS'
+    }).catch(() => {});
+
     res.json({
       success: true,
       data: {

@@ -30,10 +30,13 @@ const formatFeeRecord = (fee) => {
 };
 
 export const getFees = async (req, res) => {
-  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId || req.query?.collegeId;
   const { status, studentId } = req.query;
 
-  const where = { collegeId };
+  const where = {};
+  if (collegeId && collegeId !== 'default_college_id') {
+    where.collegeId = collegeId;
+  }
   if (status) where.status = status;
   if (studentId) where.studentId = studentId;
 
@@ -184,6 +187,9 @@ export const createFee = async (req, res) => {
       ...fee,
       transactions: createdTx ? [createdTx] : []
     };
+  }, {
+    maxWait: 15000,
+    timeout: 30000
   });
 
   const formatted = formatFeeRecord(createdFee);
@@ -216,63 +222,84 @@ export const updateFee = async (req, res) => {
       ? Number(payload.amountPaid) 
       : (isPaid ? (existing.amountPaid > 0 ? existing.amountPaid : newAmountDue) : (newStatus === 'pending' || newStatus === 'overdue' ? 0 : existing.amountPaid));
 
+    // Fast write without heavy multi-table relation locks
     const fee = await tx.fee.update({
       where: { id },
       data: {
         status: newStatus,
         amountDue: newAmountDue,
         amountPaid: newAmountPaid
-      },
-      include: {
-        student: {
-          include: {
-            user: { select: { id: true, name: true, email: true } },
-            course: { select: { id: true, name: true, code: true } },
-            section: { select: { id: true, name: true } }
-          }
-        },
-        feeStructure: true,
-        transactions: true
       }
     });
 
+    const subTasks = [];
+
     if (payload.dueDate && existing.feeStructureId) {
-      await tx.feeStructure.update({
-        where: { id: existing.feeStructureId },
-        data: { dueDate: payload.dueDate }
-      });
+      subTasks.push(
+        tx.feeStructure.update({
+          where: { id: existing.feeStructureId },
+          data: { dueDate: payload.dueDate }
+        })
+      );
     }
 
     const existingTx = existing.transactions?.[0];
     if (existingTx) {
-      await tx.paymentTransaction.update({
-        where: { id: existingTx.id },
-        data: {
-          ...(payload.paymentMethod && { gateway: payload.paymentMethod }),
-          ...(payload.feeType && { gatewayRef: payload.feeType }),
-          status: isPaid ? 'success' : existingTx.status,
-          amount: isPaid ? newAmountDue : existingTx.amount,
-          paidAt: isPaid ? (existingTx.paidAt || new Date()) : existingTx.paidAt
-        }
-      });
+      subTasks.push(
+        tx.paymentTransaction.update({
+          where: { id: existingTx.id },
+          data: {
+            ...(payload.paymentMethod && { gateway: payload.paymentMethod }),
+            ...(payload.feeType && { gatewayRef: payload.feeType }),
+            status: isPaid ? 'success' : existingTx.status,
+            amount: isPaid ? newAmountDue : existingTx.amount,
+            paidAt: isPaid ? (existingTx.paidAt || new Date()) : existingTx.paidAt
+          }
+        })
+      );
     } else if (payload.feeType || payload.paymentMethod || isPaid) {
-      await tx.paymentTransaction.create({
-        data: {
-          collegeId,
-          feeId: fee.id,
-          gateway: payload.paymentMethod || (isPaid ? 'Cash' : 'Invoice'),
-          gatewayRef: payload.feeType || 'Tuition Fee',
-          amount: isPaid ? newAmountDue : 0,
-          status: isPaid ? 'success' : 'pending',
-          paidAt: isPaid ? new Date() : null
-        }
-      });
+      subTasks.push(
+        tx.paymentTransaction.create({
+          data: {
+            collegeId,
+            feeId: fee.id,
+            gateway: payload.paymentMethod || (isPaid ? 'Cash' : 'Invoice'),
+            gatewayRef: payload.feeType || 'Tuition Fee',
+            amount: isPaid ? newAmountDue : 0,
+            status: isPaid ? 'success' : 'pending',
+            paidAt: isPaid ? new Date() : null
+          }
+        })
+      );
+    }
+
+    if (subTasks.length > 0) {
+      await Promise.all(subTasks);
     }
 
     return fee;
+  }, {
+    maxWait: 15000,
+    timeout: 30000
   });
 
-  const formatted = formatFeeRecord(updatedFee);
+  // Fetch full populated record outside the transaction lock for instantaneous performance
+  const fullFee = await prisma.fee.findUnique({
+    where: { id },
+    include: {
+      student: {
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          course: { select: { id: true, name: true, code: true } },
+          section: { select: { id: true, name: true } }
+        }
+      },
+      feeStructure: true,
+      transactions: true
+    }
+  });
+
+  const formatted = formatFeeRecord(fullFee || updatedFee);
   logger.info(`[info] req=${req.id || ''} college=${collegeId} feeId=${id} actor=${actorId} Updated fee record`);
   res.json({ success: true, data: formatted });
 };
@@ -297,6 +324,9 @@ export const deleteFee = async (req, res) => {
     });
 
     await tx.fee.delete({ where: { id } });
+  }, {
+    maxWait: 15000,
+    timeout: 30000
   });
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} feeId=${id} actor=${actorId} Deleted fee record`);
