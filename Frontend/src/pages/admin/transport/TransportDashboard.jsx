@@ -19,6 +19,58 @@ import { Modal } from '../../../components/ui/Modal';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
 
+const TRANSPORT_IMPORT_FIELDS = [
+  {
+    name: 'Route_Name',
+    required: true,
+    type: 'String',
+    description: 'Name or title of the transport route',
+    example: 'Route 1 - North Campus'
+  },
+  {
+    name: 'Bus_Number',
+    required: true,
+    type: 'String',
+    description: 'Vehicle / Bus registration number',
+    example: 'TN-01-AB-1234'
+  },
+  {
+    name: 'Driver_Name',
+    required: false,
+    type: 'String',
+    description: 'Name of the designated driver',
+    example: 'Rajesh Kumar'
+  },
+  {
+    name: 'Driver_Phone',
+    required: false,
+    type: 'String',
+    description: 'Contact number of the driver',
+    example: '+91 98765 43210'
+  },
+  {
+    name: 'Stops',
+    required: false,
+    type: 'String',
+    description: 'Comma-separated route stops or waypoints',
+    example: 'City Gate, Metro Station, Main Campus'
+  },
+  {
+    name: 'Capacity',
+    required: false,
+    type: 'Number',
+    description: 'Total seating capacity',
+    example: '45'
+  },
+  {
+    name: 'Status',
+    required: false,
+    type: 'String',
+    description: 'Status: On Time, Delayed, Maintenance',
+    example: 'On Time'
+  }
+];
+
 export default function TransportDashboard() {
   const confirm = useConfirm();
   const { items: routes, stats, isLoading, isAdding, createItem, deleteItem, bulkImport, isImporting } = useTransport();
@@ -118,6 +170,11 @@ export default function TransportDashboard() {
           <ExcelUploadButton 
             onUpload={bulkImport} 
             isLoading={isImporting} 
+            title="Import Transport Routes & Buses"
+            description="Upload an Excel sheet (.xlsx, .xls) or CSV file with your route and bus data."
+            fields={TRANSPORT_IMPORT_FIELDS}
+            showFieldsTable={false}
+            sampleFileName="transport_routes_template.xlsx"
           />
           <Button 
             onClick={() => setIsModalOpen(true)}
