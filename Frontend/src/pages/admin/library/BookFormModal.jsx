@@ -34,10 +34,9 @@ export function BookFormModal({ isOpen, onClose, onSubmit, initialData = null, i
   }, [isOpen, initialData, reset]);
 
   const onFormSubmit = (data) => {
-    // Ensure numbers are properly parsed
     const total = Number(data.totalCopies);
     const available = initialData 
-      ? initialData.availableCopies + (total - initialData.totalCopies) // Adjust available based on difference
+      ? initialData.availableCopies + (total - initialData.totalCopies) 
       : total; 
       
     const finalData = {

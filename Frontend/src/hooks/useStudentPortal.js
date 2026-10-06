@@ -337,3 +337,29 @@ export const useDeleteStudentProfileImage = () => {
     }
   });
 };
+
+export const useStudentMyBooks = () => {
+  return useQuery({
+    queryKey: ['student', 'library', 'my-books'],
+    queryFn: async () => {
+      const response = await api.get('/student/library/my-books');
+      return response;
+    },
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+  });
+};
+
+export const useStudentBookHistory = (page = 1) => {
+  return useQuery({
+    queryKey: ['student', 'library', 'my-history', page],
+    queryFn: async () => {
+      const response = await api.get(`/student/library/my-history?page=${page}&limit=10`);
+      return response;
+    },
+    placeholderData: (previous) => previous,
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
+};

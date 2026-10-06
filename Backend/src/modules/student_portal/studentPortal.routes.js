@@ -23,6 +23,8 @@ import {
   payStudentFee,
   getStudentNotices,
   getStudentLibrary,
+  getStudentMyBooks,
+  getStudentBookHistory,
   getStudentPlacements,
   getStudentComplaints,
   createStudentComplaint,
@@ -64,6 +66,8 @@ router.get('/fees', catchAsync(getStudentFees));
 router.post('/fees/pay', catchAsync(payStudentFee));
 router.get('/notices', catchAsync(getStudentNotices));
 router.get('/library', catchAsync(getStudentLibrary));
+router.get('/library/my-books', catchAsync(getStudentMyBooks));
+router.get('/library/my-history', catchAsync(getStudentBookHistory));
 router.get('/placements', catchAsync(getStudentPlacements));
 router.get('/complaints', catchAsync(getStudentComplaints));
 router.post('/complaints', catchAsync(createStudentComplaint));

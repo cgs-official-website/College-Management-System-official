@@ -84,5 +84,5 @@ export function useLibrary(collegeId) {
     }
   };
 
-  return { books, isLoading, isAdding, isUpdating, addBook, updateBook, deleteBook, bulkImport };
+  return { books, isLoading, isAdding, isUpdating, addBook, updateBook, deleteBook, bulkImport, refetch: fetchBooks };
 }
