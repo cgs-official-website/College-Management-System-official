@@ -6,6 +6,7 @@ import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { useStaff } from '../../../hooks/useStaff';
 import { useAuth } from '../../../contexts/AuthContext';
+import { CustomFieldsSection } from '../../../modules/builder/CustomFieldsSection';
 
 export function CourseFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading }) {
   const { userData } = useAuth();
@@ -14,7 +15,8 @@ export function CourseFormModal({ isOpen, onClose, onSubmit, initialData = null,
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     defaultValues: initialData ? {
       ...initialData,
-      sections: initialData.sections ? initialData.sections.join(', ') : ''
+      sections: initialData.sections ? initialData.sections.join(', ') : '',
+      customFields: initialData.customFields || {}
     } : {
       name: '',
       code: '',
@@ -22,7 +24,8 @@ export function CourseFormModal({ isOpen, onClose, onSubmit, initialData = null,
       hodId: '',
       description: '',
       sections: '',
-      assignedTeacher: ''
+      assignedTeacher: '',
+      customFields: {}
     }
   });
 
@@ -30,7 +33,8 @@ export function CourseFormModal({ isOpen, onClose, onSubmit, initialData = null,
     if (isOpen) {
       reset(initialData ? {
         ...initialData,
-        sections: initialData.sections ? initialData.sections.join(', ') : ''
+        sections: initialData.sections ? initialData.sections.join(', ') : '',
+        customFields: initialData.customFields || {}
       } : {
         name: '',
         code: '',
@@ -38,7 +42,8 @@ export function CourseFormModal({ isOpen, onClose, onSubmit, initialData = null,
         hodId: '',
         description: '',
         sections: '',
-        assignedTeacher: ''
+        assignedTeacher: '',
+        customFields: {}
       });
     }
   }, [isOpen, initialData, reset]);
@@ -124,6 +129,9 @@ export function CourseFormModal({ isOpen, onClose, onSubmit, initialData = null,
             placeholder="Brief description of the class..."
           />
         </div>
+
+        {/* Custom Fields (Module Builder) */}
+        <CustomFieldsSection model="Course" register={register} errors={errors} />
 
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-white/10 mt-6">
           <Button variant="secondary" type="button" onClick={onClose}>

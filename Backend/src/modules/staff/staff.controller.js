@@ -66,6 +66,7 @@ export const getStaff = async (req, res) => {
       status: t.user?.accountStatus || 'active',
       staffType: ['teacher', 'hod', 'faculty'].includes(t.user?.role) ? 'teaching' : 'non-teaching',
       createdAt: t.createdAt,
+      customFields: (typeof t.customFields === 'object' && t.customFields !== null && !Array.isArray(t.customFields)) ? t.customFields : {},
     };
   });
 
@@ -209,6 +210,7 @@ export const createStaff = async (req, res) => {
         // emailId stores the admin-provided email (if any) — updated to teacher's real email after registration
         emailId: adminProvidedEmail || null,
         teacherId,
+        customFields: payload.customFields || {},
       },
       include: {
         user: true,
@@ -311,6 +313,8 @@ export const updateStaff = async (req, res) => {
         });
       }
 
+      const existingCustom = (typeof teacher.customFields === 'object' && teacher.customFields !== null && !Array.isArray(teacher.customFields)) ? teacher.customFields : {};
+
       const t = await tx.teacher.update({
         where: { id }, // collegeId isolation enforced by findFirst pre-check above
         data: {
@@ -321,6 +325,7 @@ export const updateStaff = async (req, res) => {
           ...(payload.phone !== undefined ? { mobileNumber: payload.phone || null } : {}),
           ...(normalizedEmail ? { emailId: normalizedEmail } : {}),
           ...(normalizedTeacherId !== undefined ? { teacherId: normalizedTeacherId } : {}),
+          customFields: { ...existingCustom, ...(payload.customFields || {}) },
         },
         include: {
           user: true,
@@ -349,7 +354,8 @@ export const updateStaff = async (req, res) => {
     data: {
       ...updated,
       teacherId: updated.teacherId || null,
-      phone: updated.mobileNumber || ''
+      phone: updated.mobileNumber || '',
+      customFields: (typeof updated.customFields === 'object' && updated.customFields !== null && !Array.isArray(updated.customFields)) ? updated.customFields : {},
     }
   });
 };

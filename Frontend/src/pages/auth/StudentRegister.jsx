@@ -130,6 +130,10 @@ export default function StudentRegister() {
   const [linkError, setLinkError] = useState('');
   const [isValidatingLink, setIsValidatingLink] = useState(false);
 
+  // ── Courses from admin panel ───────────────────────────────────────────────
+  const [courses, setCourses] = useState([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+
   // ── Form fields ────────────────────────────────────────────────────────────
   const [form, setForm] = useState({
     firstName: '',
@@ -201,6 +205,25 @@ export default function StudentRegister() {
     };
     fetch();
   }, [tokenFromUrl, collegeSlugParam, collegeName]);
+
+  // ── Fetch courses from admin panel once college identifier is known ────────
+  useEffect(() => {
+    const identifier = collegeId || collegeSlug || collegeSlugParam;
+    if (!identifier) return;
+    const fetchCourses = async () => {
+      setCoursesLoading(true);
+      try {
+        const resp = await api.get(`/colleges/registration-context/${encodeURIComponent(identifier)}/courses`);
+        const data = resp.data?.data || resp.data || [];
+        setCourses(Array.isArray(data) ? data : []);
+      } catch {
+        setCourses([]);
+      } finally {
+        setCoursesLoading(false);
+      }
+    };
+    fetchCourses();
+  }, [collegeId, collegeSlug, collegeSlugParam]);
 
   // ── Form validation ────────────────────────────────────────────────────────
   const validate = () => {
@@ -407,17 +430,21 @@ export default function StudentRegister() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
 
                 <Field label="Class / Course" error={errors.course}>
-                  <SelectInput icon={BookOpen} value={form.course} onChange={set('course')}>
-                    <option value="">Select Course</option>
-                    <option value="Accounting">Accounting</option>
-                    <option value="C++">C++</option>
-                    <option value="DBMS">DBMS</option>
-                    <option value="DSA">DSA</option>
-                    <option value="Java">Java</option>
-                    <option value="Networks">Networks</option>
-                    <option value="OOP">OOP</option>
-                    <option value="OS">OS</option>
-                  </SelectInput>
+                  {coursesLoading ? (
+                    <div className="flex items-center gap-2 pl-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-400">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading courses...
+                    </div>
+                  ) : courses.length > 0 ? (
+                    <SelectInput icon={BookOpen} value={form.course} onChange={set('course')}>
+                      <option value="">Select Course</option>
+                      {courses.map(c => (
+                        <option key={c.id} value={c.name}>{c.name}{c.code ? ` (${c.code})` : ''}</option>
+                      ))}
+                    </SelectInput>
+                  ) : (
+                    <TextInput icon={BookOpen} type="text" placeholder="e.g. B.Tech Computer Science" value={form.course} onChange={set('course')} />
+                  )}
                 </Field>
 
                 <Field label="Section" error={errors.section}>

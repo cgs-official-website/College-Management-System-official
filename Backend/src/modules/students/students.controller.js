@@ -101,6 +101,7 @@ export const getStudents = async (req, res) => {
       customRole: s.user?.customRole?.name || null,
       customRoleId: s.user?.customRoleId || null,
       createdAt: s.createdAt,
+      customFields: custom,
     };
   });
 
@@ -236,6 +237,7 @@ export const getStudentById = async (req, res) => {
       hostelBlockId: student.hostelBlockId,
       hostelRoom: student.hostelRoom,
       createdAt: student.createdAt,
+      customFields: custom,
     }
   });
 };
@@ -381,6 +383,7 @@ export const createStudent = async (req, res) => {
       }
 
       const customFields = {
+        ...(payload.customFields || {}),
         firstName: payload.firstName,
         lastName: payload.lastName || '',
         gender: payload.gender || null,
@@ -535,6 +538,7 @@ export const updateStudent = async (req, res) => {
       const existingCustom = (typeof student.customFields === 'object' && student.customFields !== null && !Array.isArray(student.customFields)) ? student.customFields : {};
       const mergedCustom = {
         ...existingCustom,
+        ...(payload.customFields || {}),
         ...(payload.firstName !== undefined ? { firstName: payload.firstName } : {}),
         ...(payload.lastName !== undefined ? { lastName: payload.lastName } : {}),
         ...(payload.gender !== undefined ? { gender: payload.gender } : {}),

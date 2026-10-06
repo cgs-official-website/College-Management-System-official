@@ -7,6 +7,7 @@ import { Search, Plus, Trash2, Edit2, Building2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
+import { CustomFieldsSection } from '../../../modules/builder/CustomFieldsSection';
 
 export default function DepartmentsTab({ onSelect }) {
   const { departments, isLoading, createDepartment, updateDepartment, deleteDepartment, bulkImport } = useDepartments();
@@ -27,20 +28,20 @@ export default function DepartmentsTab({ onSelect }) {
   const handleCloseForm = () => {
     setIsFormOpen(false);
     setEditingDept(null);
-    reset({ name: '', code: '' });
+    reset({ name: '', code: '', customFields: {} });
   };
 
   const paginatedDepts = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const handleOpenAdd = () => {
     setEditingDept(null);
-    reset({ name: '', code: '' });
+    reset({ name: '', code: '', customFields: {} });
     setIsFormOpen(true);
   };
 
   const handleOpenEdit = (dept) => {
     setEditingDept(dept);
-    reset({ name: dept.name, code: dept.code });
+    reset({ name: dept.name, code: dept.code, customFields: dept.customFields || {} });
     setIsFormOpen(true);
   };
 
@@ -49,6 +50,7 @@ export default function DepartmentsTab({ onSelect }) {
       const payload = {
         name: data.name?.trim(),
         code: data.code?.trim().toUpperCase(),
+        customFields: data.customFields || {},
       };
 
       if (editingDept) {
@@ -112,6 +114,8 @@ export default function DepartmentsTab({ onSelect }) {
                 error={errors.code?.message} 
               />
             </div>
+            {/* Custom Fields (Module Builder) */}
+            <CustomFieldsSection model="Department" register={register} errors={errors} />
             <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="outline" onClick={handleCloseForm}>Cancel</Button>
               <Button type="submit" isLoading={createDepartment.isPending || updateDepartment.isPending}>

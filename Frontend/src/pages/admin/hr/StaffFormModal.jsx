@@ -5,7 +5,7 @@ import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { useDepartments } from '../../../hooks/useDepartments';
-
+import { CustomFieldsSection } from '../../../modules/builder/CustomFieldsSection';
 import { api } from '../../../services/apiClient';
 
 export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading }) {
@@ -34,7 +34,8 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
       staffType: 'teaching',
       department: '',
       joinDate: new Date().toISOString().split('T')[0],
-      status: 'active'
+      status: 'active',
+      customFields: {}
     }
   });
 
@@ -47,7 +48,8 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
         teacherId: initialData.teacherId || '',
         customRoleId: initialData.customRoleId || '',
         // Detect teaching staff: has a departmentId, or existing staffType field
-        staffType: initialData.staffType || (initialData.departmentId ? 'teaching' : 'non-teaching')
+        staffType: initialData.staffType || (initialData.departmentId ? 'teaching' : 'non-teaching'),
+        customFields: initialData.customFields || {},
       } : {
         firstName: '',
         lastName: '',
@@ -59,7 +61,8 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
         staffType: 'teaching',
         department: '',
         joinDate: new Date().toISOString().split('T')[0],
-        status: 'active'
+        status: 'active',
+        customFields: {}
       });
     }
   }, [isOpen, initialData, reset]);
@@ -235,6 +238,9 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
             />
           </div>
         </div>
+
+        {/* Custom Fields (Module Builder) */}
+        <CustomFieldsSection model="Teacher" register={register} errors={errors} />
 
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-white/10 mt-6">
           <Button variant="secondary" type="button" onClick={onClose}>

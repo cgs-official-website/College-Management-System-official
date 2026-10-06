@@ -6,6 +6,7 @@ import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { useCourses } from '../../../hooks/useCourses';
 import { useAuth } from '../../../contexts/AuthContext';
+import { CustomFieldsSection } from '../../../modules/builder/CustomFieldsSection';
 
 export function AdmissionFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading }) {
   const { userData } = useAuth();
@@ -20,7 +21,8 @@ export function AdmissionFormModal({ isOpen, onClose, onSubmit, initialData = nu
       courseId: '',
       previousSchool: '',
       residenceType: 'Day Scholar',
-      status: 'Pending'
+      status: 'Pending',
+      customFields: {}
     }
   });
 
@@ -34,7 +36,8 @@ export function AdmissionFormModal({ isOpen, onClose, onSubmit, initialData = nu
         courseId: '',
         previousSchool: '',
         residenceType: 'Day Scholar',
-        status: 'Pending'
+        status: 'Pending',
+        customFields: {}
       });
     }
   }, [isOpen, initialData, reset]);
@@ -139,7 +142,7 @@ export function AdmissionFormModal({ isOpen, onClose, onSubmit, initialData = nu
             />
           </div>
         )}
-
+        <CustomFieldsSection model="Admission" register={register} errors={errors} />
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-white/10 mt-6">
           <Button variant="secondary" type="button" onClick={onClose}>
             Cancel

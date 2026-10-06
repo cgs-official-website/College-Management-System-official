@@ -7,6 +7,7 @@ import { Select } from '../../../components/ui/Select';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useCourses } from '../../../hooks/useCourses';
 import { useSections } from '../../../hooks/useSections';
+import { CustomFieldsSection } from '../../../modules/builder/CustomFieldsSection';
 
 const getInitialValues = (initialData) => ({
   firstName: initialData?.firstName || '',
@@ -21,7 +22,8 @@ const getInitialValues = (initialData) => ({
   parentName: initialData?.parentName || initialData?.fatherName || '',
   parentPhone: initialData?.parentPhone || initialData?.parentMobile || '',
   address: initialData?.address || '',
-  residenceType: initialData?.residenceType || 'Day Scholar'
+  residenceType: initialData?.residenceType || 'Day Scholar',
+  customFields: initialData?.customFields || {}
 });
 
 export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading }) {
@@ -201,6 +203,8 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
             </div>
           </div>
         </div>
+                {/* Custom Fields (Module Builder) */}
+        <CustomFieldsSection model="Student" register={register} errors={errors} />
 
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-white/10 mt-6">
           <Button variant="secondary" type="button" onClick={onClose}>

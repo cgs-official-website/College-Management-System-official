@@ -83,3 +83,16 @@ export const useDeleteSection = () => {
     },
   });
 };
+
+export const useDeleteField = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }) => {
+      const { data } = await apiClient.delete(`/builder/fields/${id}`);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['customFields']);
+    },
+  });
+};

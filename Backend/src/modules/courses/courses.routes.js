@@ -10,7 +10,8 @@ const courseSchema = z.object({
   code: z.string().min(2, "Code must be at least 2 characters"),
   semester: z.number().int().min(1, "Total semesters/years must be at least 1"),
   credits: z.number().int().min(0).default(0),
-  departmentId: z.string().uuid()
+  departmentId: z.string().uuid(),
+  customFields: z.record(z.any()).nullish(),
 });
 
 router.use(authenticate);
@@ -111,7 +112,8 @@ router.post('/', async (req, res) => {
         semester: data.semester,
         credits: data.credits,
         departmentId: data.departmentId,
-        collegeId: req.tenant.collegeId
+        collegeId: req.tenant.collegeId,
+        customFields: data.customFields || {}
       }
     });
     res.status(201).json({ data: course });
@@ -202,6 +204,8 @@ router.put('/:id', async (req, res) => {
       if (!newDept) return res.status(404).json({ error: { message: 'New department not found' } });
     }
 
+    const existingCustom = (typeof existing.customFields === 'object' && existing.customFields !== null && !Array.isArray(existing.customFields)) ? existing.customFields : {};
+
     const course = await prisma.course.update({
       where: { id },
       data: {
@@ -209,7 +213,8 @@ router.put('/:id', async (req, res) => {
         code: data.code,
         semester: data.semester,
         credits: data.credits,
-        departmentId: data.departmentId
+        departmentId: data.departmentId,
+        customFields: { ...existingCustom, ...(data.customFields || {}) }
       }
     });
     res.json({ data: course });

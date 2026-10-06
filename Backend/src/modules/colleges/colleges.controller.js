@@ -58,6 +58,33 @@ export const getCollegeRegistrationContext = async (req, res) => {
   }
 };
 
+// Public: return courses for a college (used by student registration form, no auth needed)
+export const getCollegePublicCourses = async (req, res) => {
+  try {
+    const { identifier } = req.params;
+    const isCollegeId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(identifier);
+    const college = await prisma.college.findUnique({
+      where: isCollegeId ? { id: identifier } : { slug: identifier },
+      select: { id: true, status: true }
+    });
+
+    if (!college || college.status === 'rejected') {
+      return res.status(404).json({ success: false, error: { message: 'College not found' } });
+    }
+
+    const courses = await prisma.course.findMany({
+      where: { collegeId: college.id },
+      select: { id: true, name: true, code: true },
+      orderBy: { name: 'asc' }
+    });
+
+    return res.json({ success: true, data: courses });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+
 export const getAllColleges = async (req, res) => {
   try {
     const colleges = await prisma.college.findMany({

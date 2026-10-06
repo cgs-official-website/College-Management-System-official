@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useGetEntities, useCreateEntity, useCreateField, useGetFields, useDeleteEntity, useCreateSection, useDeleteSection } from './useBuilder';
+import { useGetEntities, useCreateEntity, useCreateField, useGetFields, useDeleteEntity, useCreateSection, useDeleteSection, useDeleteField } from './useBuilder';
 import { Button } from '../../components/ui/Button';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { Plus, Database, Settings2, GripVertical, Check, Trash2 } from 'lucide-react';
@@ -12,14 +12,16 @@ export default function ModuleBuilder() {
   const createField = useCreateField();
   const createSection = useCreateSection();
   const deleteSection = useDeleteSection();
-  
+  const deleteField = useDeleteField();
+
   const [activeEntity, setActiveEntity] = useState(null);
   const [newEntityData, setNewEntityData] = useState({ name: '', slug: '' });
   const [newSectionName, setNewSectionName] = useState('');
-  
+
   const [deleteEntityModal, setDeleteEntityModal] = useState({ isOpen: false, id: null, slug: null });
   const [deleteSectionModal, setDeleteSectionModal] = useState({ isOpen: false, id: null });
-  
+  const [deleteFieldModal, setDeleteFieldModal] = useState({ isOpen: false, id: null, name: '' });
+
   const { data: fieldsData, isLoading: fieldsLoading } = useGetFields(activeEntity);
   const [newField, setNewField] = useState({ name: '', key: '', type: 'text', isRequired: false, sectionId: '' });
 
@@ -61,7 +63,7 @@ export default function ModuleBuilder() {
   const handleCreateField = (e) => {
     e.preventDefault();
     const dynamicEntity = entitiesData?.find(en => en.slug === activeEntity);
-    
+
     const fieldPayload = {
       ...newField,
       entityId: dynamicEntity ? dynamicEntity.id : undefined,
@@ -85,7 +87,7 @@ export default function ModuleBuilder() {
     e.preventDefault();
     if (!newSectionName.trim()) return;
     const dynamicEntity = entitiesData?.find(en => en.slug === activeEntity);
-    
+
     createSection.mutate({
       name: newSectionName,
       entityId: dynamicEntity ? dynamicEntity.id : undefined,
@@ -120,6 +122,24 @@ export default function ModuleBuilder() {
     });
   };
 
+  const triggerDeleteField = (id, name) => {
+    setDeleteFieldModal({ isOpen: true, id, name });
+  };
+
+  const confirmDeleteField = () => {
+    const { id } = deleteFieldModal;
+    deleteField.mutate({ id }, {
+      onSuccess: () => {
+        toast.success('Field deleted!');
+        setDeleteFieldModal({ isOpen: false, id: null, name: '' });
+      },
+      onError: (err) => {
+        toast.error(err.data?.message || err.message || 'Failed to delete field');
+        setDeleteFieldModal({ isOpen: false, id: null, name: '' });
+      }
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -145,7 +165,7 @@ export default function ModuleBuilder() {
                 </button>
               ))}
             </div>
-            
+
             <h2 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider mt-6 mb-4">Custom Modules</h2>
             {entitiesLoading ? (
               <p className="text-sm text-slate-500">Loading...</p>
@@ -160,7 +180,7 @@ export default function ModuleBuilder() {
                       <Settings2 className="w-4 h-4" />
                       <span className="truncate">{ent.name}</span>
                     </button>
-                    <button 
+                    <button
                       onClick={(e) => triggerDeleteEntity(e, ent.id, ent.slug)}
                       className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-all"
                       title="Delete Module"
@@ -171,12 +191,12 @@ export default function ModuleBuilder() {
                 ))}
               </div>
             )}
-            
+
             <div className="mt-6 pt-6 border-t border-slate-100 dark:border-white/10">
               <form onSubmit={handleCreateEntity} className="space-y-3">
-                <input 
-                  type="text" 
-                  placeholder="New Module Name" 
+                <input
+                  type="text"
+                  placeholder="New Module Name"
                   className="w-full text-sm p-2 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white"
                   value={newEntityData.name}
                   onChange={e => setNewEntityData({ ...newEntityData, name: e.target.value, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })}
@@ -197,9 +217,9 @@ export default function ModuleBuilder() {
                 <h2 className="text-xl font-bold text-slate-900 dark:text-white">Fields for {activeEntity}</h2>
                 <p className="text-sm text-slate-500 mt-1">Add custom dynamic fields to this entity.</p>
               </div>
-              
+
               <div className="p-6">
-                
+
                 {/* Sections and Fields Display */}
                 <div className="space-y-8 mb-12">
                   {fieldsLoading ? (
@@ -234,6 +254,13 @@ export default function ModuleBuilder() {
                                       Required
                                     </div>
                                   )}
+                                  <button
+                                    onClick={() => triggerDeleteField(field.id, field.name)}
+                                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-all"
+                                    title="Delete Field"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
                                 </div>
                               ))
                             )}
@@ -255,11 +282,18 @@ export default function ModuleBuilder() {
                               <div className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-xs font-medium text-slate-600 dark:text-slate-300">
                                 {field.type}
                               </div>
+                              <button
+                                onClick={() => triggerDeleteField(field.id, field.name)}
+                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-all"
+                                title="Delete Field"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           ))}
                         </div>
                       )}
-                      
+
                       {fieldsData?.sections?.length === 0 && fieldsData?.fields?.length === 0 && (
                         <div className="text-center py-8 bg-slate-50 dark:bg-slate-800/20 rounded-xl border border-dashed border-slate-200 dark:border-white/10">
                           <p className="text-sm text-slate-500">No sections or fields defined yet.</p>
@@ -275,8 +309,8 @@ export default function ModuleBuilder() {
                     <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Create Section</h3>
                     <form onSubmit={handleCreateSection} className="space-y-3">
                       <div>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           required
                           value={newSectionName}
                           onChange={e => setNewSectionName(e.target.value)}
@@ -291,74 +325,74 @@ export default function ModuleBuilder() {
                   </div>
 
                   <div className="xl:col-span-2 bg-slate-50 dark:bg-slate-800/30 p-5 rounded-xl border border-slate-200 dark:border-white/10 h-fit">
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Add New Field</h3>
-                  <form onSubmit={handleCreateField} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">Field Label</label>
-                      <input 
-                        type="text" 
-                        required
-                        value={newField.name}
-                        onChange={e => setNewField({ ...newField, name: e.target.value, key: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
-                        className="w-full text-sm p-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0A0F1C] text-slate-900 dark:text-white"
-                        placeholder="e.g. Blood Group"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">Field Key (JSON)</label>
-                      <input 
-                        type="text" 
-                        required
-                        value={newField.key}
-                        onChange={e => setNewField({ ...newField, key: e.target.value })}
-                        className="w-full text-sm p-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0A0F1C] text-slate-900 dark:text-white font-mono"
-                        placeholder="e.g. blood_group"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">Field Type</label>
-                      <select 
-                        value={newField.type}
-                        onChange={e => setNewField({ ...newField, type: e.target.value })}
-                        className="w-full text-sm p-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0A0F1C] text-slate-900 dark:text-white"
-                      >
-                        <option value="text">Short Text</option>
-                        <option value="number">Number</option>
-                        <option value="date">Date</option>
-                        <option value="boolean">Checkbox (Yes/No)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">Section (Optional)</label>
-                      <select 
-                        value={newField.sectionId}
-                        onChange={e => setNewField({ ...newField, sectionId: e.target.value })}
-                        className="w-full text-sm p-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0A0F1C] text-slate-900 dark:text-white"
-                      >
-                        <option value="">No Section (Uncategorized)</option>
-                        {fieldsData?.sections?.map(s => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="md:col-span-2 flex items-end">
-                      <label className="flex items-center gap-2 cursor-pointer p-2">
-                        <input 
-                          type="checkbox" 
-                          checked={newField.isRequired}
-                          onChange={e => setNewField({ ...newField, isRequired: e.target.checked })}
-                          className="w-4 h-4 text-primary-600 rounded border-slate-300 focus:ring-primary-500"
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Add New Field</h3>
+                    <form onSubmit={handleCreateField} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Field Label</label>
+                        <input
+                          type="text"
+                          required
+                          value={newField.name}
+                          onChange={e => setNewField({ ...newField, name: e.target.value, key: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
+                          className="w-full text-sm p-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0A0F1C] text-slate-900 dark:text-white"
+                          placeholder="e.g. Blood Group"
                         />
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Required Field</span>
-                      </label>
-                    </div>
-                    <div className="md:col-span-2 pt-2">
-                      <Button type="submit" isLoading={createField.isLoading}>
-                        <Plus className="w-4 h-4 mr-2" /> Add Field
-                      </Button>
-                    </div>
-                  </form>
-                </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Field Key (JSON)</label>
+                        <input
+                          type="text"
+                          required
+                          value={newField.key}
+                          onChange={e => setNewField({ ...newField, key: e.target.value })}
+                          className="w-full text-sm p-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0A0F1C] text-slate-900 dark:text-white font-mono"
+                          placeholder="e.g. blood_group"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Field Type</label>
+                        <select
+                          value={newField.type}
+                          onChange={e => setNewField({ ...newField, type: e.target.value })}
+                          className="w-full text-sm p-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0A0F1C] text-slate-900 dark:text-white"
+                        >
+                          <option value="text">Short Text</option>
+                          <option value="number">Number</option>
+                          <option value="date">Date</option>
+                          <option value="boolean">Checkbox (Yes/No)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Section (Optional)</label>
+                        <select
+                          value={newField.sectionId}
+                          onChange={e => setNewField({ ...newField, sectionId: e.target.value })}
+                          className="w-full text-sm p-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0A0F1C] text-slate-900 dark:text-white"
+                        >
+                          <option value="">No Section (Uncategorized)</option>
+                          {fieldsData?.sections?.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="md:col-span-2 flex items-end">
+                        <label className="flex items-center gap-2 cursor-pointer p-2">
+                          <input
+                            type="checkbox"
+                            checked={newField.isRequired}
+                            onChange={e => setNewField({ ...newField, isRequired: e.target.checked })}
+                            className="w-4 h-4 text-primary-600 rounded border-slate-300 focus:ring-primary-500"
+                          />
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Required Field</span>
+                        </label>
+                      </div>
+                      <div className="md:col-span-2 pt-2">
+                        <Button type="submit" isLoading={createField.isLoading}>
+                          <Plus className="w-4 h-4 mr-2" /> Add Field
+                        </Button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
               </div>
             </div>
@@ -382,7 +416,7 @@ export default function ModuleBuilder() {
         isDestructive={true}
         isLoading={deleteEntity.isLoading}
       />
-      
+
       <ConfirmModal
         isOpen={deleteSectionModal.isOpen}
         onClose={() => setDeleteSectionModal({ isOpen: false, id: null })}
@@ -392,6 +426,17 @@ export default function ModuleBuilder() {
         confirmText="Delete Section"
         isDestructive={true}
         isLoading={deleteSection.isLoading}
+      />
+
+      <ConfirmModal
+        isOpen={deleteFieldModal.isOpen}
+        onClose={() => setDeleteFieldModal({ isOpen: false, id: null, name: '' })}
+        onConfirm={confirmDeleteField}
+        title="Delete Field"
+        message={`Are you sure you want to delete the field "${deleteFieldModal.name}"? This cannot be undone.`}
+        confirmText="Delete Field"
+        isDestructive={true}
+        isLoading={deleteField.isLoading}
       />
     </div>
   );

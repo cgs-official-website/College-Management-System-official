@@ -3,6 +3,7 @@ import {
   getAllColleges, 
   getCollegeBySlug,
   getCollegeRegistrationContext,
+  getCollegePublicCourses,
   onboardCollege, 
   updateCollegeStatus, 
   deleteCollege, 
@@ -20,6 +21,7 @@ router.get('/me/status', authenticate, getMyCollegeStatus);
 
 router.get('/slug/:slug', getCollegeBySlug);
 router.get('/registration-context/:identifier', getCollegeRegistrationContext);
+router.get('/registration-context/:identifier/courses', getCollegePublicCourses);
 router.get('/', getAllColleges);
 router.post('/onboard', onboardCollege);
 router.put('/:id/status', updateCollegeStatus);

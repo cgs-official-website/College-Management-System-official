@@ -3,7 +3,6 @@ import dotenv from 'dotenv';
 import { prisma } from '../../server.js';
 dotenv.config();
 
-<<<<<<< HEAD
 // ---------------------------------------------------------------------------
 // Transporter setup
 // ---------------------------------------------------------------------------
@@ -79,49 +78,7 @@ transporter.verify((err) => {
 // ---------------------------------------------------------------------------
 // Base HTML layout (used as fallback when DB template is missing)
 // ---------------------------------------------------------------------------
-const baseTemplate = (content) => `
-=======
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '465', 10),
-  secure: true, 
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
-export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo, attachments }) => {
-  try {
-    const textContent = text || (html ? html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '');
-    
-    const mailOptions = {
-      from: process.env.FROM_EMAIL,
-      to,
-      subject,
-      html,
-      text: textContent,
-    };
-
-    if (cc) mailOptions.cc = cc;
-    if (bcc) mailOptions.bcc = bcc;
-    if (replyTo) mailOptions.replyTo = replyTo;
-    if (attachments) mailOptions.attachments = attachments; 
-
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`[EmailService] Sent mail to ${to} (MessageId: ${info.messageId})`);
-    return { success: true, messageId: info.messageId };
-  } catch (error) {
-    console.error(`[EmailService] Failed to send mail to ${to}: ${error.message}`);
-    return { success: false, error: error.message };
-  }
-};
-
-const escapeHtml = (s = '') =>
-  String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
 const baseTemplate = (content, title = 'Zuna ERP') => `
->>>>>>> e053987 (fix: Leave Request, Inventory, Payslip, API Integration)
 <!DOCTYPE html>
 <html>
 <head>
@@ -207,7 +164,6 @@ const baseTemplate = (content, title = 'Zuna ERP') => `
 </html>
 `;
 
-<<<<<<< HEAD
 // ---------------------------------------------------------------------------
 // Built-in fallback templates
 // These are used when the EmailTemplate record doesn't exist in the database.
@@ -281,7 +237,7 @@ const FALLBACK_TEMPLATES = {
 // ---------------------------------------------------------------------------
 // Core sendMail — wraps nodemailer.sendMail with proper logging
 // ---------------------------------------------------------------------------
-export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo }) => {
+export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo, attachments }) => {
   try {
     const textContent = text || (html ? html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '');
 
@@ -292,46 +248,23 @@ export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo }) =>
       html,
       text: textContent,
     };
-=======
-export const sendDynamicMail = async ({ to, templateName, variables = {}, headerTitle, cc, bcc, replyTo, attachments }) => {  try {
-    const template = await prisma.emailTemplate.findFirst({
-      where: { name: templateName }
-    });
-
-    if (!template) {
-      throw new Error(`EmailTemplate not found: ${templateName}`);
-    }
-    
-    if (template.status !== 'Active') {
-      console.log(`[EmailService] Template ${templateName} is not active. Skipping email.`);
-      return { success: false, error: 'Template is not active' };
-    }
->>>>>>> e053987 (fix: Leave Request, Inventory, Payslip, API Integration)
-
     if (cc) mailOptions.cc = cc;
     if (bcc) mailOptions.bcc = bcc;
     if (replyTo) mailOptions.replyTo = replyTo;
+    if (attachments) mailOptions.attachments = attachments;
 
-<<<<<<< HEAD
     // Always use a fresh transporter per send — avoids stale/closed connections
     // on cloud hosts (Railway) which have aggressive TCP idle timeouts.
     const freshTransporter = createTransporter();
-    const info = await freshTransporter.sendMail(mailOptions);
-    freshTransporter.close();
+    let info;
+    try {
+      info = await freshTransporter.sendMail(mailOptions);
+    } finally {
+      freshTransporter.close();
+    }
 
     console.log(`[EmailService] ✅ Email sent successfully to: ${to} | Subject: "${subject}" | MessageId: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
-=======
-    for (const [key, value] of Object.entries(variables)) {
-      const regex = new RegExp(`{{${key}}}`, 'g');
-      subject = subject.replace(regex, value);
-      htmlContent = htmlContent.replace(regex, value);
-    }
-
-    const fullHtml = baseTemplate(htmlContent, headerTitle || 'Zuna ERP');
-    return await sendMail({ to, subject, html: fullHtml, cc, bcc, replyTo, attachments });
-
->>>>>>> e053987 (fix: Leave Request, Inventory, Payslip, API Integration)
   } catch (error) {
     // Log the Nodemailer error code/message for debugging — never log credentials
     console.error(
@@ -356,7 +289,7 @@ export const sendDynamicMail = async ({ to, templateName, variables = {}, header
 // ---------------------------------------------------------------------------
 const UNSAFE_TEMPLATE_PATTERN = /\{\{\s*password\s*\}\}/i;
 
-export const sendDynamicMail = async ({ to, templateName, variables = {}, cc, bcc, replyTo }) => {
+export const sendDynamicMail = async ({ to, templateName, variables = {}, headerTitle, cc, bcc, replyTo, attachments }) => {
   try {
     let subject;
     let htmlContent;
@@ -399,10 +332,10 @@ export const sendDynamicMail = async ({ to, templateName, variables = {}, cc, bc
           htmlContent = htmlContent.replace(regex, String(value ?? ''));
         }
 
-        htmlContent = baseTemplate(htmlContent);
+        htmlContent = baseTemplate(htmlContent, headerTitle);
         console.log(`[EmailService] Using DB template: "${templateName}"`);
 
-        return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo });
+        return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo, attachments });
       }
     }
 
@@ -425,9 +358,9 @@ export const sendDynamicMail = async ({ to, templateName, variables = {}, cc, bc
     }
 
     subject = fallback.subject;
-    htmlContent = baseTemplate(fallback.buildHtml(variables));
+    htmlContent = baseTemplate(fallback.buildHtml(variables), headerTitle);
 
-    return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo });
+    return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo, attachments });
 
   } catch (error) {
     console.error(

@@ -8,7 +8,7 @@ import { useForm } from 'react-hook-form';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useDepartments } from '../../../hooks/useDepartments';
 import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
-
+import { CustomFieldsSection } from '../../../modules/builder/CustomFieldsSection';
 export default function CoursesTab({ departmentId, departmentName, onSelect, onClearFilter }) {
   const { courses, isLoading, createCourse, updateCourse, deleteCourse, bulkImport } = useCourses(departmentId);
   const { departments } = useDepartments(); // needed for the dropdown when adding/editing if no department is selected
@@ -31,7 +31,7 @@ export default function CoursesTab({ departmentId, departmentName, onSelect, onC
 
   const handleOpenAdd = () => {
     setEditingCourse(null);
-    reset({ name: '', code: '', semester: 8, credits: 160, departmentId: departmentId || '' });
+    reset({ name: '', code: '', semester: 8, credits: 160, departmentId: departmentId || '', customFields:{} });
     setIsFormOpen(true);
   };
 
@@ -42,7 +42,8 @@ export default function CoursesTab({ departmentId, departmentName, onSelect, onC
       code: course.code, 
       semester: course.semester, 
       credits: course.credits,
-      departmentId: course.departmentId 
+      departmentId: course.departmentId,
+      customFields: course.customFields || {}
     });
     setIsFormOpen(true);
   };
@@ -139,6 +140,7 @@ export default function CoursesTab({ departmentId, departmentName, onSelect, onC
                 {errors.departmentId && <p className="text-red-500 text-sm mt-1">{errors.departmentId.message}</p>}
               </div>
             </div>
+            <CustomFieldsSection model="Course" register={register} errors={errors} />
             <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button>
               <Button type="submit" isLoading={createCourse.isPending || updateCourse.isPending}>

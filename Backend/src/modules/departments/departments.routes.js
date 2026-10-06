@@ -9,7 +9,8 @@ const router = express.Router();
 const departmentSchema = z.object({
   name: z.string().min(2, "Department name must be at least 2 characters").trim(),
   code: z.string().min(2, "Department code must be at least 2 characters").trim(),
-  hodUserId: z.string().uuid("Invalid HOD User ID").optional().nullable().or(z.literal(''))
+  hodUserId: z.string().uuid("Invalid HOD User ID").optional().nullable().or(z.literal('')),
+  customFields: z.record(z.any()).nullish(),
 });
 
 // All routes require authentication and standard tenant resolution
@@ -75,7 +76,8 @@ router.post('/', async (req, res) => {
         name,
         code,
         hodUserId,
-        collegeId
+        collegeId,
+        customFields: data.customFields || {}
       }
     });
 
@@ -183,12 +185,15 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: { message: `Department "${name}" is already in use by another department` } });
     }
 
+    const existingCustom = (typeof existing.customFields === 'object' && existing.customFields !== null && !Array.isArray(existing.customFields)) ? existing.customFields : {};
+
     const department = await prisma.department.update({
       where: { id },
       data: {
         name,
         code,
         hodUserId,
+        customFields: { ...existingCustom, ...(data.customFields || {}) }
       }
     });
 

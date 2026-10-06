@@ -147,3 +147,16 @@ export const deleteSection = async (req, res) => {
   });
   res.json({ success: true, message: 'Section deleted successfully' });
 };
+
+export const deleteField = async (req, res) => {
+  const collegeId = req.user.collegeId;
+  const { id } = req.params;
+
+  const existing = await prisma.customFieldDef.findFirst({
+    where: { id, collegeId }
+  });
+  if (!existing) return res.status(404).json({ success: false, message: 'Field not found' });
+
+  await prisma.customFieldDef.delete({ where: { id } });
+  res.json({ success: true, message: 'Field deleted successfully' });
+};

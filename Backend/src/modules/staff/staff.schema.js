@@ -31,6 +31,7 @@ export const createStaffSchema = z.object({
   teacherId: z.string({ required_error: 'Teacher ID is required.' })
     .trim()
     .min(1, 'Teacher ID is required.'),
+  customFields: z.record(z.any()).nullish(),
 });
 
 

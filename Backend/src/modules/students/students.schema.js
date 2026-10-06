@@ -53,6 +53,7 @@ export const createStudentSchema = z.object({
   residenceType: z.string().nullish(),
   hostelRoom: z.string().nullish(),
   collegeId: z.string().nullish(),
+  customFields: z.record(z.any()).nullish(),
 });
 
 export const updateStudentSchema = createStudentSchema.partial();

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../../middleware/authenticate.js';
 import { authorize } from '../../middleware/authorize.js';
-import { getEntities, createEntity, deleteEntity, getFieldsForModel, createField, createSection, deleteSection } from './builder.controller.js';
+import { getEntities, createEntity, deleteEntity, getFieldsForModel, createField, createSection, deleteSection, deleteField } from './builder.controller.js';
 import { catchAsync } from '../../lib/catchAsync.js';
 
 const router = Router();
@@ -16,5 +16,6 @@ router.post('/fields', catchAsync(createField));
 
 router.post('/sections', catchAsync(createSection));
 router.delete('/sections/:id', catchAsync(deleteSection));
+router.delete('/fields/:id', catchAsync(deleteField));
 
 export default router;
