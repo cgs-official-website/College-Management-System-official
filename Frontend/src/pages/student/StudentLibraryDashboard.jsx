@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Library as LibraryIcon, Search, BookOpen, CheckCircle2, XCircle, MapPin, Loader2 } from 'lucide-react';
 import { useStudentLibrary } from '../../hooks/useStudentPortal';
+import MyBooksTab from './MyBooksTab';
 
-const StudentLibraryDashboard = () => {
+const CatalogView = ({ tabs }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const { data: libraryData, isLoading } = useStudentLibrary(searchTerm);
   const books = libraryData?.data || [];
@@ -36,6 +37,8 @@ const StudentLibraryDashboard = () => {
           </motion.div>
         ))}
       </div>
+
+      {tabs}
 
       {/* Search Bar */}
       <div className="relative">
@@ -115,6 +118,33 @@ const StudentLibraryDashboard = () => {
       </motion.div>
     </div>
   );
+};
+
+const StudentLibraryDashboard = () => {
+  const [tab, setTab] = useState('catalog');
+
+  const tabs = (
+    <div className="flex gap-2 border-b border-slate-200 dark:border-white/10">
+      {[
+        { key: 'catalog', label: 'Catalog' },
+        { key: 'mybooks', label: 'My Books' },
+      ].map((t) => (
+        <button
+          key={t.key}
+          onClick={() => setTab(t.key)}
+          className={`px-5 py-3 text-sm font-bold border-b-2 -mb-px transition-colors ${
+            tab === t.key
+              ? 'border-primary-600 text-primary-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  return tab === 'catalog' ? <CatalogView tabs={tabs} /> : <MyBooksTab tabs={tabs} />;
 };
 
 export default StudentLibraryDashboard;

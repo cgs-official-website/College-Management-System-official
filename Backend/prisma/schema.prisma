@@ -274,29 +274,28 @@ model Teacher {
   user         User            @relation(fields: [userId], references: [id])
   timetable    TimetableSlot[]
   sections     Section[]       @relation("TeacherSections")
+  teacherId              String?
+  gender                 String?
+  dateOfBirth            DateTime?
+  employmentType         String?
+  qualification          String?
+  experienceYears        Int?
+  mobileNumber           String?
+  emailId                String?
+  aadhaarNumber          String?
+  panNumber              String?
+  bloodGroup             String?
+  address                String?
+  city                   String?
+  district               String?
+  state                  String?
+  pincode                String?
+  emergencyContactName   String?
+  emergencyContactNumber String?
+  customFields           Json?
 
-  teacherId               String? // Required for new teachers; nullable for existing records without an assigned ID.
-  gender                  String?
-  dateOfBirth             DateTime?
-  employmentType          String?
-  qualification           String?
-  experienceYears         Int?
-  mobileNumber            String?
-  emailId                 String?
-  aadhaarNumber           String?
-  panNumber               String?
-  bloodGroup              String?
-  address                 String?
-  city                    String?
-  district                String?
-  state                   String?
-  pincode                 String?
-  emergencyContactName    String?
-  emergencyContactNumber  String?
-  customFields            Json?
-
-  @@index([collegeId])
   @@unique([collegeId, teacherId])
+  @@index([collegeId])
 }
 
 model Student {
@@ -353,10 +352,9 @@ model Student {
   semesterFees        Float?
   customFields        Json?
 
-  profileImageData     String? @db.Text
+  profileImageData     String?              @db.Text
   profileImageMimeType String?
-
-  libraryTransactions LibraryTransaction[]
+  libraryTransactions  LibraryTransaction[]
 
   @@unique([collegeId, admissionNumber])
   @@index([collegeId])
@@ -629,68 +627,29 @@ model AssignmentSubmission {
 }
 
 model LibraryItem {
-  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId       String               @db.Uuid
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId       String    @db.Uuid
   title           String
   author          String?
   isbn            String?
   category        String?
-  totalCopies     Int                  @default(1)
-  availableCopies Int                  @default(1)
+  totalCopies     Int       @default(1)
+  availableCopies Int       @default(1)
   location        String?
-  college         College              @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  college         College   @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   edition         String?
   department      String?
   price           Float?
   rackNo          String?
   purchaseDate    DateTime?
   vendorName      String?
-  transactions    LibraryTransaction[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  transactions LibraryTransaction[]
 
   @@index([collegeId])
-}
-
-model LibraryTransaction {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId     String    @db.Uuid
-  libraryItemId String    @db.Uuid
-  studentId     String    @db.Uuid
-  issuedAt      DateTime  @default(now())
-  dueDate       DateTime
-  returnedAt    DateTime?
-  status        String    @default("ISSUED") // ISSUED, RETURNED, LOST
-  renewCount    Int       @default(0)
-  fineAmount    Float     @default(0)
-  fineReason    String? // OVERDUE, LOST, DAMAGED
-  finePaid      Boolean   @default(false)
-  issuedById    String?   @db.Uuid
-  receivedById  String?   @db.Uuid
-  remarks       String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  college     College     @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  libraryItem LibraryItem @relation(fields: [libraryItemId], references: [id])
-  student     Student     @relation(fields: [studentId], references: [id])
-
-  @@index([collegeId, status])
-  @@index([collegeId, studentId, status])
-  @@index([libraryItemId, status])
-  @@index([collegeId, dueDate])
-}
-
-model LibrarySettings {
-  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId          String   @unique @db.Uuid
-  loanDays           Int      @default(14)
-  maxBooksPerStudent Int      @default(3)
-  finePerDay         Float    @default(2)
-  maxRenewals        Int      @default(1)
-  blockIfOverdue     Boolean  @default(true)
-  lostFineMultiplier Float    @default(1)
-  updatedAt          DateTime @updatedAt
-
-  college College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  @@index([collegeId, createdAt])
 }
 
 model HostelBlock {
@@ -1155,4 +1114,63 @@ model SubscriptionPlan {
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   billingSubscriptions BillingSubscription[]
+}
+
+enum LibraryTxnStatus {
+  ISSUED
+  RETURNED
+  LOST
+}
+
+enum BookCondition {
+  GOOD
+  DAMAGED
+  LOST
+}
+
+model LibrarySettings {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId          String   @unique @db.Uuid
+  loanDays           Int      @default(14)
+  maxBooksPerStudent Int      @default(3)
+  maxRenewals        Int      @default(2)
+  graceDays          Int      @default(0)
+  finePerDay         Decimal  @default(2) @db.Decimal(10, 2)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  college College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+}
+
+model LibraryTransaction {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId    String           @db.Uuid
+  bookId       String           @db.Uuid
+  studentId    String           @db.Uuid
+  issuedById   String           @db.Uuid
+  receivedById String?          @db.Uuid
+  issueDate    DateTime         @default(now())
+  dueDate      DateTime
+  returnDate   DateTime?
+  status       LibraryTxnStatus @default(ISSUED)
+  condition    BookCondition?
+  renewCount   Int              @default(0)
+
+  lateDays   Int     @default(0)
+  fineAmount Decimal @default(0) @db.Decimal(10, 2)
+  finePaid   Boolean @default(false)
+  fineWaived Boolean @default(false)
+  remarks    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  college College     @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  book    LibraryItem @relation(fields: [bookId], references: [id], onDelete: NoAction)
+  student Student     @relation(fields: [studentId], references: [id], onDelete: NoAction)
+
+  @@index([collegeId, status])
+  @@index([collegeId, studentId, status])
+  @@index([bookId, status])
+  @@index([collegeId, dueDate])
 }

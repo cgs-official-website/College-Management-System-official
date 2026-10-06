@@ -615,8 +615,7 @@ export const deleteStudent = async (req, res) => {
 export const bulkImportStudents = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const actorId = req.user?.id || req.user?.userId;
-  const { data } = req.body; // Expecting an array of parsed Excel rows
-
+  const { data } = req.body;
   if (!collegeId) {
     return res.status(400).json({ success: false, error: { message: 'College ID is required' } });
   }
@@ -627,7 +626,6 @@ export const bulkImportStudents = async (req, res) => {
 
   const results = { successful: 0, failed: 0, errors: [] };
 
-  // Fetch or create a default department if none specified
   const departmentsCache = {};
   
   for (const [index, row] of data.entries()) {
@@ -641,7 +639,6 @@ export const bulkImportStudents = async (req, res) => {
         throw new Error('Admission_No and Student_Name are required');
       }
 
-      // Department lookup or creation
       let deptId = departmentsCache[departmentName];
       if (!deptId) {
         let dept = await prisma.department.findFirst({
@@ -660,7 +657,6 @@ export const bulkImportStudents = async (req, res) => {
         deptId = dept.id;
       }
 
-      // Split name
       const nameParts = studentName.split(' ');
       const fName = nameParts[0];
       const lName = nameParts.slice(1).join(' ');

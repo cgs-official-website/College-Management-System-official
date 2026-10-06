@@ -507,16 +507,12 @@ const AdminDashboardHome = () => {
   const [copiedLink, setCopiedLink] = useState(null); 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  const handleGenerateLink = async (role) => {
+    const handleGenerateLink = async (role) => {
     if (!userData?.collegeId && !userData?.collegeSlug) return;
     const baseUrl = window.location.origin;
     let inviteLink = '';
 
     // ── STUDENT: must use the secure token-based registration flow ──
-    // Generates a fresh cryptographic token via the backend and builds
-    // the correct URL: /student/register?token=<rawToken>
-    // (NOT /register/student?code=<collegeId> — that was wrong path, wrong
-    //  param name, and a UUID instead of a real crypto token)
     if (role === 'student') {
       try {
         console.log('[AdminLayout] Fetching student registration token from API...');
@@ -531,7 +527,6 @@ const AdminDashboardHome = () => {
           return;
         }
 
-        // Safe log — only token length and first 4 chars, never full token
         console.log(`[AdminLayout] Student registration token ready. Length: ${rawToken.length}, prefix: ${rawToken.slice(0, 4)}...`);
 
         // path from backend is e.g. /student/register?token=<rawToken>
@@ -543,15 +538,13 @@ const AdminDashboardHome = () => {
       }
     } else {
       // ── TEACHER / HOD / PARENT: general /register/:role flow ──
-      // These use the existing Register.jsx page with collegeSlug or collegeId
       inviteLink = userData?.collegeSlug
         ? `${baseUrl}/register/${role}/${userData.collegeSlug}`
         : `${baseUrl}/register/${role}?code=${userData.collegeId}`;
     }
 
     console.log(`[AdminLayout] Generated ${role} invite link. Route: ${new URL(inviteLink).pathname}`);
-
-    // Copy to clipboard with fallback
+    
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(inviteLink);

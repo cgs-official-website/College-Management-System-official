@@ -4,8 +4,7 @@ import { prisma } from '../../lib/prisma.js';
 dotenv.config();
 
 // ---------------------------------------------------------------------------
-// Transporter setup
-// ---------------------------------------------------------------------------
+// Transporter
 // Port 587 + STARTTLS is used because cloud hosts (Railway, Render, etc.)
 // typically block outbound port 465 (SMTPS / implicit TLS).
 // Port 587 with `secure:false` + STARTTLS is the correct production setup.
@@ -26,9 +25,10 @@ const createTransporter = () =>
     socketTimeout: 30000,     // 30s — time for each SMTP command/data
   });
 
-let transporter = createTransporter();
+// Used only for the startup verification check
+const transporter = createTransporter();
 
-// Verify SMTP connection at startup (non-blocking, safe log only — NO credentials ever logged)
+// Verify SMTP connection at startup (non-blocking, NO credentials ever logged)
 transporter.verify((err) => {
   if (err) {
     console.error('[EmailService] ⚠️  SMTP transporter verification FAILED — emails will not be delivered.');
@@ -72,11 +72,18 @@ transporter.verify((err) => {
   }
 });
 
-const escapeHtml = (s = '') =>
-  String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+const escapeHtml = (value = '') => String(value)
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#39;');
 
 // ---------------------------------------------------------------------------
-// Base HTML layout (used as fallback when DB template is missing)
+// Base HTML layout (wraps both DB templates and built-in fallbacks)
 // ---------------------------------------------------------------------------
 const baseTemplate = (content, title = 'Zuna ERP') => `
 <!DOCTYPE html>
@@ -166,7 +173,7 @@ const baseTemplate = (content, title = 'Zuna ERP') => `
 
 // ---------------------------------------------------------------------------
 // Built-in fallback templates
-// These are used when the EmailTemplate record doesn't exist in the database.
+// Used when the EmailTemplate record doesn't exist in the database.
 // Run seed_templates.js to persist templates to the DB for runtime editing.
 // ---------------------------------------------------------------------------
 const FALLBACK_TEMPLATES = {
@@ -320,7 +327,19 @@ export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo, atta
 // ---------------------------------------------------------------------------
 const UNSAFE_TEMPLATE_PATTERN = /\{\{\s*password\s*\}\}/i;
 
-export const sendDynamicMail = async ({ to, templateName, variables = {}, headerTitle, cc, bcc, replyTo, attachments }) => {
+// ---------------------------------------------------------------------------
+// sendDynamicMail — loads template from DB, falls back to built-in if missing
+// ---------------------------------------------------------------------------
+export const sendDynamicMail = async ({
+  to,
+  templateName,
+  variables = {},
+  headerTitle,
+  cc,
+  bcc,
+  replyTo,
+  attachments,
+}) => {
   try {
     let subject;
     let htmlContent;
@@ -343,15 +362,12 @@ export const sendDynamicMail = async ({ to, templateName, variables = {}, header
       );
       // Fall through to built-in fallback below
     } else if (template) {
-
       if (template.status !== 'Active') {
         // Template exists but is inactive — fall through to built-in fallback.
-        // Do NOT return early; the built-in template is always safe to use.
         console.warn(
           `[EmailService] ⚠️  DB template "${templateName}" status="${template.status}" (not "Active").` +
           ` Falling back to built-in template for: ${to}`
         );
-        // Fall through to built-in fallback below
       } else {
         // DB template found, active, and safe — interpolate variables
         subject = template.subject;
@@ -363,10 +379,10 @@ export const sendDynamicMail = async ({ to, templateName, variables = {}, header
           htmlContent = htmlContent.replace(regex, String(value ?? ''));
         }
 
-        htmlContent = baseTemplate(htmlContent, headerTitle || 'Zuna ERP');
+        const fullHtml = baseTemplate(htmlContent, headerTitle || 'Zuna ERP');
         console.log(`[EmailService] Using DB template: "${templateName}"`);
 
-        return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo, attachments });
+        return await sendMail({ to, subject, html: fullHtml, cc, bcc, replyTo, attachments });
       }
     }
 

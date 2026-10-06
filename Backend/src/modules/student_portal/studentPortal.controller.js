@@ -1055,3 +1055,178 @@ export const deleteStudentProfileImage = async (req, res) => {
     });
   }
 };
+
+const LIB_DAY_MS = 24 * 60 * 60 * 1000;
+const DUE_SOON_DAYS = 3;
+
+const getLibraryRules = async (collegeId) => {
+  const s = await prisma.librarySettings.findUnique({ where: { collegeId } });
+  return {
+    loanDays: s?.loanDays ?? 14,
+    maxBooksPerStudent: s?.maxBooksPerStudent ?? 3,
+    maxRenewals: s?.maxRenewals ?? 2,
+    graceDays: s?.graceDays ?? 0,
+    finePerDay: Number(s?.finePerDay ?? 2),
+  };
+};
+
+const fineStatusOf = (t) => {
+  if (Number(t.fineAmount) <= 0) return 'NONE';
+  if (t.fineWaived) return 'WAIVED';
+  if (t.finePaid) return 'PAID';
+  return 'PENDING';
+};
+
+const bookSelect = {
+  id: true,
+  title: true,
+  author: true,
+  isbn: true,
+  category: true,
+  rackNo: true,
+  location: true,
+};
+
+export const getStudentMyBooks = async (req, res) => {
+  try {
+    const student = req.student;
+    const now = new Date();
+    const rules = await getLibraryRules(student.collegeId);
+
+    const [active, pending] = await Promise.all([
+      prisma.libraryTransaction.findMany({
+        where: { collegeId: student.collegeId, studentId: student.id, status: 'ISSUED' },
+        select: {
+          id: true,
+          issueDate: true,
+          dueDate: true,
+          renewCount: true,
+          remarks: true,
+          book: { select: bookSelect },
+        },
+        orderBy: { dueDate: 'asc' },
+      }),
+      prisma.libraryTransaction.aggregate({
+        where: {
+          collegeId: student.collegeId,
+          studentId: student.id,
+          status: { in: ['RETURNED', 'LOST'] },
+          finePaid: false,
+          fineWaived: false,
+          fineAmount: { gt: 0 },
+        },
+        _sum: { fineAmount: true },
+      }),
+    ]);
+
+    const loans = active.map((t) => {
+      const msLeft = t.dueDate.getTime() - now.getTime();
+      const isOverdue = msLeft < 0;
+      const daysLeft = isOverdue ? 0 : Math.ceil(msLeft / LIB_DAY_MS);
+      const daysOverdue = isOverdue ? Math.ceil(-msLeft / LIB_DAY_MS) : 0;
+      const chargeableDays = Math.max(0, daysOverdue - rules.graceDays);
+      return {
+        id: t.id,
+        issueDate: t.issueDate,
+        dueDate: t.dueDate,
+        remarks: t.remarks,
+        book: t.book,
+        renewCount: t.renewCount,
+        maxRenewals: rules.maxRenewals,
+        renewalsLeft: Math.max(0, rules.maxRenewals - t.renewCount),
+        isOverdue,
+        isDueSoon: !isOverdue && daysLeft <= DUE_SOON_DAYS,
+        daysLeft,
+        daysOverdue,
+        accruingFine: chargeableDays * rules.finePerDay,
+      };
+    });
+
+    const overdueCount = loans.filter((l) => l.isOverdue).length;
+    const dueSoonCount = loans.filter((l) => l.isDueSoon).length;
+
+    let blockedReason = null;
+    if (loans.length >= rules.maxBooksPerStudent) blockedReason = 'You have reached your borrowing limit';
+    else if (overdueCount > 0) blockedReason = 'You have overdue books. Return them to borrow again';
+
+    res.json({
+      success: true,
+      data: {
+        summary: {
+          borrowedCount: loans.length,
+          limit: rules.maxBooksPerStudent,
+          overdueCount,
+          dueSoonCount,
+          pendingFines: Number(pending._sum.fineAmount || 0),
+          accruingFines: loans.reduce((sum, l) => sum + l.accruingFine, 0),
+          canBorrow: !blockedReason,
+          blockedReason,
+          loanDays: rules.loanDays,
+          finePerDay: rules.finePerDay,
+          graceDays: rules.graceDays,
+        },
+        loans,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentBookHistory = async (req, res) => {
+  try {
+    const student = req.student;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
+
+    const where = {
+      collegeId: student.collegeId,
+      studentId: student.id,
+      status: { in: ['RETURNED', 'LOST'] },
+    };
+
+    const [total, rows] = await Promise.all([
+      prisma.libraryTransaction.count({ where }),
+      prisma.libraryTransaction.findMany({
+        where,
+        select: {
+          id: true,
+          issueDate: true,
+          dueDate: true,
+          returnDate: true,
+          status: true,
+          condition: true,
+          lateDays: true,
+          fineAmount: true,
+          finePaid: true,
+          fineWaived: true,
+          renewCount: true,
+          book: { select: bookSelect },
+        },
+        orderBy: { returnDate: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    res.json({
+      success: true,
+      data: rows.map((t) => ({
+        id: t.id,
+        issueDate: t.issueDate,
+        dueDate: t.dueDate,
+        returnDate: t.returnDate,
+        status: t.status,
+        condition: t.condition,
+        lateDays: t.lateDays,
+        fineAmount: Number(t.fineAmount),
+        fineStatus: fineStatusOf(t),
+        renewCount: t.renewCount,
+        book: t.book,
+      })),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
