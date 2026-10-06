@@ -219,7 +219,7 @@ const FALLBACK_TEMPLATES = {
       <p>We received a request to reset your password. Click the button below to choose a new password.</p>
 
       <div style="text-align: center;">
-        <a href="${vars.resetUrl}" class="button">Reset Password</a>
+        <a href="${vars.resetUrl || vars.resetLink || '#'}" class="button">Reset Password</a>
       </div>
 
       <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
@@ -228,6 +228,45 @@ const FALLBACK_TEMPLATES = {
       <p style="font-size: 13px; color: #64748b; margin-top: 24px;">This link will expire in 15 minutes.</p>
     `
   },
+  'Admin Welcome': {
+    subject: 'Welcome to Zuna ERP - College Admin',
+    buildHtml: (vars) => `
+      <h2 style="color: #0f172a; margin-top: 0;">Welcome to Zuna ERP, ${escapeHtml(vars.name || 'Admin')}!</h2>
+      <p>Your college admin account has been successfully created. You can now log in using the credentials below:</p>
+
+      <div class="highlight" style="text-align: left; font-family: sans-serif; font-size: 14px; letter-spacing: normal;">
+        <div style="margin-bottom: 8px;"><strong>Email:</strong> ${escapeHtml(vars.email)}</div>
+        ${vars.password ? `<div><strong>Temporary Password:</strong> ${escapeHtml(vars.password)}</div>` : ''}
+      </div>
+
+      <div style="text-align: center;">
+        <a href="${escapeHtml(vars.loginUrl || '#')}" class="button">Log In to Your Account</a>
+      </div>
+    `
+  },
+  'Salary Processed': {
+    subject: 'Salary Processed Notification',
+    buildHtml: (vars) => `
+      <h2 style="color: #0f172a; margin-top: 0;">Hello ${escapeHtml(vars.staffName || 'Staff')},</h2>
+      <p>Your salary for <strong>${escapeHtml(vars.month || '')} ${escapeHtml(vars.year || '')}</strong> has been processed on ${escapeHtml(vars.paymentDate || '')}.</p>
+      <p>Net Pay: <strong>${escapeHtml(vars.netPay || '')}</strong></p>
+      <p>Your payslip details have been updated in your staff portal.</p>
+      <p>Regards,<br/>${escapeHtml(vars.collegeName || 'Zuna ERP')}</p>
+    `
+  },
+  'Low Stock Alert': {
+    subject: 'Inventory Alert: Low Stock',
+    buildHtml: (vars) => `
+      <h2 style="color: #ef4444; margin-top: 0;">Low Stock Alert</h2>
+      <p>The inventory level for <strong>${escapeHtml(vars.itemName || '')}</strong> has fallen below the reorder threshold.</p>
+      <div class="highlight" style="text-align: left; background-color: #fef2f2; border-left: 4px solid #ef4444;">
+        <div style="margin-bottom: 8px;"><strong>Item:</strong> ${escapeHtml(vars.itemName || '')}</div>
+        <div style="margin-bottom: 8px;"><strong>Current Stock:</strong> ${escapeHtml(vars.currentStock || '')}</div>
+        <div><strong>Reorder Level:</strong> ${escapeHtml(vars.reorderLevel || '')}</div>
+      </div>
+      <p>Please review inventory and initiate a replenishment request.</p>
+    `
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -237,8 +276,11 @@ export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo, atta
   try {
     const textContent = text || (html ? html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '');
 
+    // For Gmail SMTP, 'from' should align with the authenticated SMTP_USER to avoid DMARC/SPF rejection
+    const defaultSender = process.env.FROM_EMAIL || (process.env.SMTP_USER ? `"Zuna ERP" <${process.env.SMTP_USER}>` : '"Zuna ERP" <noreply@zuna.edu>');
+
     const mailOptions = {
-      from: process.env.FROM_EMAIL || '"Zuna ERP" <noreply@zuna.edu>',
+      from: defaultSender,
       to,
       subject,
       html,
