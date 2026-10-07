@@ -28,7 +28,7 @@ function StatusBadge({ t }) {
 }
 
 export function CirculationTab({ version, onIssueClick, onChanged }) {
-  const { transactions, meta, isLoading, isWorking, fetchTransactions, renewBook } = useCirculation();
+  const { transactions, meta, isLoading, isWorking, fetchTransactions, renewBook} = useCirculation();
   const [filter, setFilter] = useState('ISSUED');
   const [page, setPage] = useState(1);
   const [returning, setReturning] = useState(null);
@@ -143,7 +143,7 @@ export function CirculationTab({ version, onIssueClick, onChanged }) {
                               <CornerDownLeft className="w-4 h-4" />
                             </button>
                           </div>
-                        )}
+                        )}      
                       </td>
                     </tr>
                   );

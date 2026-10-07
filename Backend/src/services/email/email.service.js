@@ -9,21 +9,24 @@ dotenv.config();
 // typically block outbound port 465 (SMTPS / implicit TLS).
 // Port 587 with `secure:false` + STARTTLS is the correct production setup.
 // ---------------------------------------------------------------------------
-const createTransporter = () =>
-  nodemailer.createTransport({
+const createTransporter = () => {
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const useImplicitTls = port === 465;
+
+  return nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: false,           // false = STARTTLS on port 587 (do NOT use true here)
-    requireTLS: true,        // Force upgrade to TLS — reject plain connections
+    port,
+    secure: useImplicitTls,
+    requireTLS: !useImplicitTls,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
-    // Fail fast: don't hang the HTTP request if SMTP is unreachable
-    connectionTimeout: 15000, // 15s — time to establish TCP connection
-    greetingTimeout: 15000,   // 15s — time to receive SMTP greeting banner
-    socketTimeout: 30000,     // 30s — time for each SMTP command/data
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 30000,
   });
+};
 
 // Used only for the startup verification check
 const transporter = createTransporter();

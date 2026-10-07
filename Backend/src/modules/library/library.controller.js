@@ -15,21 +15,32 @@ export const getLibraryItems = async (req, res) => {
 export const createLibraryItem = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const actorId = req.user?.id || req.user?.userId;
-  const { title, author, isbn, category, totalCopies, availableCopies, location } = req.body;
+  const { title, author, isbn, category, totalCopies, price, location } = req.body;
 
-  if (!title) {
+  if (!title || !String(title).trim()) {
     return res.status(400).json({ success: false, error: { code: 'TITLE_REQUIRED', message: 'Title is required' } });
+  }
+
+  const priceNum = Number(price);
+  if (price === undefined || price === null || price === '' || !Number.isFinite(priceNum) || priceNum <= 0) {
+    return res.status(400).json({ success: false, error: { code: 'PRICE_REQUIRED', message: 'Price is required and must be greater than 0' } });
+  }
+
+  const total = totalCopies ? Number(totalCopies) : 1;
+  if (!Number.isInteger(total) || total < 1) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_TOTAL', message: 'Total copies must be a whole number >= 1' } });
   }
 
   const item = await prisma.libraryItem.create({
     data: { 
       collegeId, 
-      title,
+      title: String(title).trim(),
       author,
       isbn,
-      category,
-      totalCopies: totalCopies ? Number(totalCopies) : 1,
-      availableCopies: availableCopies ? Number(availableCopies) : 1,
+      category: category ? String(category).trim() : null,
+      totalCopies: total,
+      availableCopies: total,
+      price: priceNum,
       location
     }
   });
@@ -42,14 +53,28 @@ export const updateLibraryItem = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const actorId = req.user?.id || req.user?.userId;
   const { id } = req.params;
-  const { title, author, isbn, category, totalCopies, location } = req.body;
+  const { title, author, isbn, category, totalCopies, price, location } = req.body;
 
   const existing = await prisma.libraryItem.findFirst({ where: { id, collegeId } });
   if (!existing) {
     return res.status(404).json({ success: false, error: { code: 'ITEM_NOT_FOUND', message: 'Library item not found' } });
   }
 
-  const data = { title, author, isbn, category, location };
+  const data = {
+    title,
+    author,
+    isbn,
+    category: category ? String(category).trim() : category,
+    location
+  };
+
+  if (price !== undefined) {
+    const priceNum = Number(price);
+    if (price === null || price === '' || !Number.isFinite(priceNum) || priceNum <= 0) {
+      return res.status(400).json({ success: false, error: { code: 'PRICE_REQUIRED', message: 'Price is required and must be greater than 0' } });
+    }
+    data.price = priceNum;
+  }
 
   if (totalCopies !== undefined && totalCopies !== '') {
     const newTotal = Number(totalCopies);

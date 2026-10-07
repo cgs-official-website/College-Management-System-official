@@ -24,4 +24,20 @@ export const getSignedAssetUrl = ({ publicId, resourceType, format }) =>
 export const deleteAsset = (publicId, resourceType = 'image') =>
   cloudinary.uploader.destroy(publicId, { resource_type: resourceType, type: 'authenticated' });
 
+export const STORE_IMAGE_ROOT = 'campus-store';
+
+export const uploadPublicImage = (buffer, { folder }) =>
+  uploadBuffer(buffer, {
+    folder,
+    resource_type: 'image',
+    type: 'upload',
+    transformation: [
+      { width: 800, height: 800, crop: 'limit' }, 
+      { quality: 'auto', fetch_format: 'auto' }
+    ]
+  });
+
+export const deletePublicImage = (publicId) =>
+  cloudinary.uploader.destroy(publicId, { resource_type: 'image', type: 'upload' });
+
 export default cloudinary;

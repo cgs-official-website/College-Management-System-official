@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef } from 'react';
-import { sendMessage } from '../utils/groq';
 
 const WELCOME_MESSAGE = {
   id: 'welcome',

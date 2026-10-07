@@ -55,6 +55,9 @@ model College {
   scholarships             Scholarship[]
   sections                 Section[]
   storeItems               StoreItem[]
+  storeSales               StoreSale[]
+  storeStockMovements      StoreStockMovement[]
+  storeInvoiceCounters     StoreInvoiceCounter[]
   students                 Student[]
   teachers                 Teacher[]
   timetableSlots           TimetableSlot[]
@@ -79,6 +82,7 @@ model College {
   librarySettings          LibrarySettings?
   ptmSlots                 PtmSlot[]
   ptmMeetings              PtmMeeting[]
+  storeCategories          StoreCategory[]
 }
 
 model BillingSubscription {
@@ -844,11 +848,47 @@ model Placement {
   college     College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 }
 
+enum StoreCustomerType {
+  STUDENT
+  STAFF
+  OTHER
+}
+
+enum StorePaymentMethod {
+  CASH
+  UPI
+  CARD
+}
+
+enum StoreStockMovementType {
+  OPENING
+  RESTOCK
+  ADJUST
+  SALE
+}
+
 model StoreItem {
-  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId String  @db.Uuid
-  name      String
-  college   College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId     String         @db.Uuid
+  name          String
+  category      String?
+  categoryId    String?        @db.Uuid
+  storeCategory StoreCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  price         Decimal        @default(0) @db.Decimal(10, 2)
+  stock         Int            @default(0)
+  lowStockAt    Int            @default(5)
+  imageUrl      String?
+  imagePublicId String?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now()) @updatedAt
+
+  college   College              @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  saleItems StoreSaleItem[]
+  movements StoreStockMovement[]
+
+  @@index([collegeId])
+  @@index([collegeId, isActive])
 }
 
 model DocumentVault {
@@ -1246,4 +1286,92 @@ model PtmMeeting {
   @@index([collegeId, status])
   @@index([teacherId])
   @@index([studentId])
+
+model StoreSale {
+  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId     String             @db.Uuid
+  invoiceNo     String
+  customerType  StoreCustomerType
+  customerName  String
+  rollNo        String?
+  department    String?
+  year          String?
+  section       String?
+  subtotal      Decimal            @db.Decimal(12, 2)
+  discount      Decimal            @default(0) @db.Decimal(12, 2)
+  total         Decimal            @db.Decimal(12, 2)
+  paymentMethod StorePaymentMethod
+  paymentRef    String?
+  createdById   String?            @db.Uuid
+  createdByName String?
+  createdAt     DateTime           @default(now())
+
+  college College         @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  items   StoreSaleItem[]
+
+  @@unique([collegeId, invoiceNo])
+  @@index([collegeId, createdAt])
+  @@index([collegeId, customerType, department])
+}
+
+model StoreSaleItem {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  saleId    String  @db.Uuid
+  itemId    String  @db.Uuid
+  name      String
+  quantity  Int
+  unitPrice Decimal @db.Decimal(10, 2)
+  lineTotal Decimal @db.Decimal(12, 2)
+
+  sale StoreSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  item StoreItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([saleId])
+  @@index([itemId])
+}
+
+model StoreStockMovement {
+  id           String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId    String                 @db.Uuid
+  itemId       String                 @db.Uuid
+  type         StoreStockMovementType
+  quantity     Int
+  balanceAfter Int
+  refId        String?
+  note         String?
+  byUserId     String?                @db.Uuid
+  createdAt    DateTime               @default(now())
+
+  college College   @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  item    StoreItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([collegeId, itemId, createdAt])
+}
+
+model StoreInvoiceCounter {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId String  @db.Uuid
+  year      Int
+  lastNo    Int     @default(0)
+
+  college College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+
+  @@unique([collegeId, year])
+}
+
+model StoreCategory {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId   String   @db.Uuid
+  name        String
+  code        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  college College     @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  items   StoreItem[]
+
+  @@unique([collegeId, code])
+  @@index([collegeId])
 }

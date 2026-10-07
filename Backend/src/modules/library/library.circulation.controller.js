@@ -132,6 +132,9 @@ export const returnBook = handle(async (req, res) => {
     });
     if (!txn) throw new CircError(404, 'TXN_NOT_FOUND', 'Transaction not found');
     if (txn.status !== 'ISSUED') throw new CircError(409, 'ALREADY_CLOSED', 'This loan is already closed');
+    if (condition === 'LOST' && !(Number(txn.book.price) > 0)) {
+      throw new CircError(409, 'PRICE_MISSING', 'This book has no price. Set its price in Inventory before marking it lost.');
+    }
 
     const now = new Date();
     const lateDays = calcLateDays(txn.dueDate, now, settings.graceDays);
@@ -224,7 +227,7 @@ export const listTransactions = handle(async (req, res) => {
       skip: (page - 1) * limit,
       take: limit,
       include: {
-        book: { select: { id: true, title: true, author: true, isbn: true } },
+        book: { select: { id: true, title: true, author: true, isbn: true, price: true } },
         student: { select: studentSelect },
       },
     }),

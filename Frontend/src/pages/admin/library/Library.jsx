@@ -35,8 +35,8 @@ export default function Library() {
   };
 
   const filteredBooks = books.filter(book => 
-    book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    book.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    book.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    book.author?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     book.isbn?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -136,6 +136,7 @@ export default function Library() {
                     <th className="p-4 pl-6">Book Title & Author</th>
                     <th className="p-4">Category</th>
                     <th className="p-4">ISBN</th>
+                    <th className="p-4">Price</th>
                     <th className="p-4 text-center">Available</th>
                     <th className="p-4 pr-6 text-right">Actions</th>
                   </tr>
@@ -147,13 +148,14 @@ export default function Library() {
                         <td className="p-4 pl-6"><div className="h-10 w-48 bg-slate-100 dark:bg-white/5 rounded-lg"></div></td>
                         <td className="p-4"><div className="h-6 w-24 bg-slate-100 dark:bg-white/5 rounded-lg"></div></td>
                         <td className="p-4"><div className="h-6 w-32 bg-slate-100 dark:bg-white/5 rounded-lg"></div></td>
+                        <td className="p-4"><div className="h-6 w-16 bg-slate-100 dark:bg-white/5 rounded-lg"></div></td>
                         <td className="p-4"><div className="h-6 w-16 bg-slate-100 dark:bg-white/5 rounded-lg mx-auto"></div></td>
                         <td className="p-4 pr-6"></td>
                       </tr>
                     ))
                   ) : filteredBooks.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="p-12 text-center">
+                      <td colSpan="6" className="p-12 text-center">
                         <div className="w-16 h-16 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
                           <LibIcon className="w-8 h-8 text-slate-400" />
                         </div>
@@ -171,17 +173,24 @@ export default function Library() {
                             </div>
                             <div>
                               <p className="font-bold text-slate-900 dark:text-white text-sm line-clamp-1">{book.title}</p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">by {book.author}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">by {book.author || 'Unknown'}</p>
                             </div>
                           </div>
                         </td>
                         <td className="p-4">
                           <span className="px-2.5 py-1 bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-400 rounded-md text-xs font-bold uppercase tracking-wider w-max">
-                            {book.category}
+                            {book.category || 'N/A'}
                           </span>
                         </td>
                         <td className="p-4 text-sm text-slate-600 dark:text-slate-400">
                           {book.isbn || 'N/A'}
+                        </td>
+                        <td className="p-4 text-sm">
+                          {Number(book.price) > 0 ? (
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">₹{Number(book.price).toFixed(2)}</span>
+                          ) : (
+                            <span className="text-xs font-bold text-rose-600">Not set</span>
+                          )}
                         </td>
                         <td className="p-4 text-center">
                           <div className="flex items-center justify-center gap-1.5">

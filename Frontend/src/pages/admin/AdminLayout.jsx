@@ -48,7 +48,8 @@ import {
   FileEdit,
   CalendarClock,
   ChevronDown,
-  History
+  History,
+  Store as StoreIcon,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { api } from '../../services/api';
@@ -90,6 +91,7 @@ import DynamicDashboard from '../../modules/dynamic/DynamicDashboard';
 import { useGetEntities } from '../../modules/builder/useBuilder';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
+import StoreDashboard from '../shared/StoreDashboard';
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -158,6 +160,7 @@ const AdminLayout = () => {
     { name: 'Reports', path: '/admin/reports', icon: FileText, moduleKey: 'reports' },
     { name: 'Audit Logs', path: '/admin/audit-logs', icon: History, moduleKey: 'audit' },
     { name: 'Inventory', path: '/admin/inventory', icon: Package, moduleKey: 'inventory' },
+    { name: 'Campus Store', path: '/admin/store', icon: StoreIcon, moduleKey: 'store' },
     { name: 'Payroll', path: '/admin/payroll', icon: IndianRupee, moduleKey: 'payroll' },
     { name: 'API Integrations', path: '/admin/api-integrations', icon: Zap, moduleKey: 'api_integration' },
     { name: 'Module Builder', path: '/admin/builder', icon: Settings2, moduleKey: 'custom' },
@@ -490,6 +493,7 @@ const AdminLayout = () => {
               <Route path="/reports/*" element={hasAccess('reports') ? <Reports /> : <Navigate to="/404" replace />} />
               <Route path="/audit-logs/*" element={hasAccess('audit') || isAdmin ? <AuditLogs /> : <Navigate to="/404" replace />} />
               <Route path="/inventory/*" element={hasAccess('inventory') ? <InventoryDashboard /> : <Navigate to="/404" replace />} />
+              <Route path="/store/*" element={hasAccess('store') ? <StoreDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/api-integrations/*" element={hasAccess('api_integration') ? <ApiIntegrations /> : <Navigate to="/404" replace />} />
               <Route path="/payroll/*" element={hasAccess('payroll') ? <PayrollDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/builder/*" element={hasAccess('custom') ? <ModuleBuilder /> : <Navigate to="/404" replace />} />

@@ -20,6 +20,7 @@ const DEFAULT_MODULES = [
   { key: 'api_integration', label: 'API Integrations' },
   { key: 'inventory', label: 'Inventory Management' },
   { key: 'payroll', label: 'Payroll Management' },
+  { key: 'store', label: 'Campus Store' },
 ];
 
 async function seedModules() {
