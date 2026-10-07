@@ -1,13 +1,10 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
-import { prisma } from '../../server.js';
+import { prisma } from '../../lib/prisma.js';
 dotenv.config();
 
 // ---------------------------------------------------------------------------
-// Transporter setup
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
-// Transporter — lazy singleton
+// Transporter
 // Port 587 + STARTTLS is used because cloud hosts (Railway, Render, etc.)
 // typically block outbound port 465 (SMTPS / implicit TLS).
 // Port 587 with `secure:false` + STARTTLS is the correct production setup.
@@ -28,9 +25,10 @@ const createTransporter = () =>
     socketTimeout: 30000,     // 30s — time for each SMTP command/data
   });
 
-let transporter = createTransporter();
+// Used only for the startup verification check
+const transporter = createTransporter();
 
-// Verify SMTP connection at startup (non-blocking, safe log only — NO credentials ever logged)
+// Verify SMTP connection at startup (non-blocking, NO credentials ever logged)
 transporter.verify((err) => {
   if (err) {
     console.error('[EmailService] ⚠️  SMTP transporter verification FAILED — emails will not be delivered.');
@@ -74,9 +72,18 @@ transporter.verify((err) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+const escapeHtml = (value = '') => String(value)
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#39;');
 
 // ---------------------------------------------------------------------------
-// Base HTML layout (used as fallback when DB template is missing)
+// Base HTML layout (wraps both DB templates and built-in fallbacks)
 // ---------------------------------------------------------------------------
 const baseTemplate = (content, title = 'Zuna ERP') => `
 <!DOCTYPE html>
@@ -166,16 +173,9 @@ const baseTemplate = (content, title = 'Zuna ERP') => `
 
 // ---------------------------------------------------------------------------
 // Built-in fallback templates
-// These are used when the EmailTemplate record doesn't exist in the database.
+// Used when the EmailTemplate record doesn't exist in the database.
 // Run seed_templates.js to persist templates to the DB for runtime editing.
 // ---------------------------------------------------------------------------
-const escapeHtml = (value = '') => String(value)
-  .replaceAll('&', '&amp;')
-  .replaceAll('<', '&lt;')
-  .replaceAll('>', '&gt;')
-  .replaceAll('"', '&quot;')
-  .replaceAll("'", '&#39;');
-
 const FALLBACK_TEMPLATES = {
   'Teacher Account Setup': {
     subject: 'Set up your Zuna ERP teacher account',
@@ -214,24 +214,66 @@ const FALLBACK_TEMPLATES = {
       <p>We strongly recommend changing your password after your first login.</p>
 
       <div style="text-align: center;">
-        <a href="${vars.loginUrl}" class="button">Log In to Your Account</a>
+        <a href="${vars.loginUrl || '#'}" class="button">Log In to Your Account</a>
       </div>
     `
   },
   'Password Reset': {
     subject: 'Password Reset Request',
     buildHtml: (vars) => `
-      <h2 style="color: #0f172a; margin-top: 0;">Password Reset Request</h2>
-      <p>We received a request to reset your password. If you didn't make this request, you can safely ignore this email.</p>
-      <p>Click the button below to reset your password:</p>
+      <h2 style="color: #0f172a; margin-top: 0;">Reset Your Password</h2>
+      <p>Hello ${vars.name || ''},</p>
+      <p>We received a request to reset your password. Click the button below to choose a new password.</p>
 
       <div style="text-align: center;">
-        <a href="${vars.resetLink}" class="button">Reset Password</a>
+        <a href="${vars.resetUrl || vars.resetLink || '#'}" class="button">Reset Password</a>
       </div>
 
+      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
+        If you did not request a password reset, you can safely ignore this email.
+      </p>
       <p style="font-size: 13px; color: #64748b; margin-top: 24px;">This link will expire in 15 minutes.</p>
     `
   },
+  'Admin Welcome': {
+    subject: 'Welcome to Zuna ERP - College Admin',
+    buildHtml: (vars) => `
+      <h2 style="color: #0f172a; margin-top: 0;">Welcome to Zuna ERP, ${escapeHtml(vars.name || 'Admin')}!</h2>
+      <p>Your college admin account has been successfully created. You can now log in using the credentials below:</p>
+
+      <div class="highlight" style="text-align: left; font-family: sans-serif; font-size: 14px; letter-spacing: normal;">
+        <div style="margin-bottom: 8px;"><strong>Email:</strong> ${escapeHtml(vars.email)}</div>
+        ${vars.password ? `<div><strong>Temporary Password:</strong> ${escapeHtml(vars.password)}</div>` : ''}
+      </div>
+
+      <div style="text-align: center;">
+        <a href="${escapeHtml(vars.loginUrl || '#')}" class="button">Log In to Your Account</a>
+      </div>
+    `
+  },
+  'Salary Processed': {
+    subject: 'Salary Processed Notification',
+    buildHtml: (vars) => `
+      <h2 style="color: #0f172a; margin-top: 0;">Hello ${escapeHtml(vars.staffName || 'Staff')},</h2>
+      <p>Your salary for <strong>${escapeHtml(vars.month || '')} ${escapeHtml(vars.year || '')}</strong> has been processed on ${escapeHtml(vars.paymentDate || '')}.</p>
+      <p>Net Pay: <strong>${escapeHtml(vars.netPay || '')}</strong></p>
+      <p>Your payslip details have been updated in your staff portal.</p>
+      <p>Regards,<br/>${escapeHtml(vars.collegeName || 'Zuna ERP')}</p>
+    `
+  },
+  'Low Stock Alert': {
+    subject: 'Inventory Alert: Low Stock',
+    buildHtml: (vars) => `
+      <h2 style="color: #ef4444; margin-top: 0;">Low Stock Alert</h2>
+      <p>The inventory level for <strong>${escapeHtml(vars.itemName || '')}</strong> has fallen below the reorder threshold.</p>
+      <div class="highlight" style="text-align: left; background-color: #fef2f2; border-left: 4px solid #ef4444;">
+        <div style="margin-bottom: 8px;"><strong>Item:</strong> ${escapeHtml(vars.itemName || '')}</div>
+        <div style="margin-bottom: 8px;"><strong>Current Stock:</strong> ${escapeHtml(vars.currentStock || '')}</div>
+        <div><strong>Reorder Level:</strong> ${escapeHtml(vars.reorderLevel || '')}</div>
+      </div>
+      <p>Please review inventory and initiate a replenishment request.</p>
+    `
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -241,13 +283,20 @@ export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo, atta
   try {
     const textContent = text || (html ? html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '');
 
+    // For Gmail SMTP, 'from' should align with the authenticated SMTP_USER to avoid DMARC/SPF rejection
+    const defaultSender = process.env.FROM_EMAIL || (process.env.SMTP_USER ? `"Zuna ERP" <${process.env.SMTP_USER}>` : '"Zuna ERP" <noreply@zuna.edu>');
+
     const mailOptions = {
-      from: process.env.FROM_EMAIL || '"Zuna ERP" <noreply@zuna.edu>',
+      from: defaultSender,
       to,
       subject,
       html,
       text: textContent,
     };
+<<<<<<< HEAD
+=======
+
+>>>>>>> 64eda189aa369c561ae4043e1bb9915e8a410fcf
     if (cc) mailOptions.cc = cc;
     if (bcc) mailOptions.bcc = bcc;
     if (replyTo) mailOptions.replyTo = replyTo;
@@ -277,10 +326,6 @@ export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo, atta
   }
 };
 
-
-// ---------------------------------------------------------------------------
-// sendDynamicMail — loads template from DB, falls back to built-in if missing
-// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // PASSWORD SAFETY GUARD
 // Rejects any DB-stored email template whose subject or contentHtml contains
@@ -289,15 +334,31 @@ export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo, atta
 // ---------------------------------------------------------------------------
 const UNSAFE_TEMPLATE_PATTERN = /\{\{\s*password\s*\}\}/i;
 
+<<<<<<< HEAD
 export const sendDynamicMail = async ({ to, templateName, variables = {}, headerTitle, cc, bcc, replyTo, attachments }) => {
+=======
+// ---------------------------------------------------------------------------
+// sendDynamicMail — loads template from DB, falls back to built-in if missing
+// ---------------------------------------------------------------------------
+export const sendDynamicMail = async ({
+  to,
+  templateName,
+  variables = {},
+  headerTitle,
+  cc,
+  bcc,
+  replyTo,
+  attachments,
+}) => {
+>>>>>>> 64eda189aa369c561ae4043e1bb9915e8a410fcf
   try {
     let subject;
     let htmlContent;
 
     // --- Try loading template from database first ---
     const template = await prisma.emailTemplate.findFirst({
-        where: { name: templateName }
-      }).catch(() => null); // DB failure should not crash email sending
+      where: { name: templateName }
+    }).catch(() => null); // DB failure should not crash email sending
 
     // Safety guard: refuse to send any DB template that contains a {{password}}
     // placeholder, regardless of template name. Fall through to built-in fallback.
@@ -312,15 +373,12 @@ export const sendDynamicMail = async ({ to, templateName, variables = {}, header
       );
       // Fall through to built-in fallback below
     } else if (template) {
-
       if (template.status !== 'Active') {
         // Template exists but is inactive — fall through to built-in fallback.
-        // Do NOT return early; the built-in template is always safe to use.
         console.warn(
           `[EmailService] ⚠️  DB template "${templateName}" status="${template.status}" (not "Active").` +
           ` Falling back to built-in template for: ${to}`
         );
-        // Fall through to built-in fallback below
       } else {
         // DB template found, active, and safe — interpolate variables
         subject = template.subject;
@@ -332,10 +390,17 @@ export const sendDynamicMail = async ({ to, templateName, variables = {}, header
           htmlContent = htmlContent.replace(regex, String(value ?? ''));
         }
 
+<<<<<<< HEAD
         htmlContent = baseTemplate(htmlContent, headerTitle);
         console.log(`[EmailService] Using DB template: "${templateName}"`);
 
         return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo, attachments });
+=======
+        const fullHtml = baseTemplate(htmlContent, headerTitle || 'Zuna ERP');
+        console.log(`[EmailService] Using DB template: "${templateName}"`);
+
+        return await sendMail({ to, subject, html: fullHtml, cc, bcc, replyTo, attachments });
+>>>>>>> 64eda189aa369c561ae4043e1bb9915e8a410fcf
       }
     }
 
@@ -358,7 +423,11 @@ export const sendDynamicMail = async ({ to, templateName, variables = {}, header
     }
 
     subject = fallback.subject;
+<<<<<<< HEAD
     htmlContent = baseTemplate(fallback.buildHtml(variables), headerTitle);
+=======
+    htmlContent = baseTemplate(fallback.buildHtml(variables), headerTitle || 'Zuna ERP');
+>>>>>>> 64eda189aa369c561ae4043e1bb9915e8a410fcf
 
     return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo, attachments });
 

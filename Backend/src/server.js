@@ -33,6 +33,7 @@ export { prisma };
 const app = express();
 
 import { requestLogger } from './middleware/requestLogger.js';
+import { auditMiddleware } from './middleware/auditMiddleware.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 // Middlewares
@@ -70,6 +71,7 @@ app.use(cors({
 app.use(helmet());
 app.use(express.json({ limit: '10mb' }));
 app.use(requestLogger);
+app.use(auditMiddleware);
 
 // ---------------------------------------------------------
 // HEALTH CHECK (Railway deployment requirement)
@@ -206,8 +208,11 @@ app.use('/api/v1/dynamic', dynamicRoutes);
 app.use('/api/v1/email-templates', emailTemplatesRoutes);
 app.use('/api/v1/landing-page', landingPageRoutes);
 import reportsRoutes from './modules/reports/reports.routes.js';
+import auditRoutes from './modules/audit/audit.routes.js';
 app.use('/api/v1/reports', reportsRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/v1/audit-logs', auditRoutes);
+app.use('/api/audit-logs', auditRoutes);
 
 // Sentry error handler if initialized
 Sentry.setupExpressErrorHandler(app);

@@ -15,8 +15,8 @@ const pool = new pg.Pool({
   // Connection attempt timeout — generous for slow remote DBs
   connectionTimeoutMillis: 30000,
   // Pool size
-  max: 10,
-  min: 1,
+  max: 15,
+  min: 2,
 });
 
 // Log pool-level errors so they don't crash the process silently
@@ -25,7 +25,24 @@ pool.on('error', (err) => {
 });
 
 const adapter = new PrismaPg(pool);
-export const prisma = new PrismaClient({ adapter });
+const basePrisma = new PrismaClient({ adapter });
+
+// Wrap $transaction to provide a robust default timeout for remote / high-latency databases
+const originalTransaction = basePrisma.$transaction.bind(basePrisma);
+
+basePrisma.$transaction = function (arg, options = {}) {
+  if (typeof arg === 'function') {
+    const defaultOptions = {
+      maxWait: 15000, // 15 seconds to acquire a connection from the pool (default was 2s)
+      timeout: 60000, // 60 seconds interactive transaction execution timeout (default was 5s)
+      ...options
+    };
+    return originalTransaction(arg, defaultOptions);
+  }
+  return originalTransaction(arg, options);
+};
+
+export const prisma = basePrisma;
 
 /**
  * Warm up the DB connection with retries.

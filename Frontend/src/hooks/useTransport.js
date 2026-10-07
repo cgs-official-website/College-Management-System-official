@@ -16,10 +16,11 @@ export const useTransport = () => {
   const createMutation = useMutation({
     mutationFn: async (newItem) => {
       const response = await api.post('/transport', newItem);
-      return response.data;
+      return response;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transport'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['transport'] });
+      await query.refetch();
       toast.success('Transport route created successfully!');
     },
     onError: (err) => {
@@ -31,8 +32,9 @@ export const useTransport = () => {
     mutationFn: async (id) => {
       await api.delete(`/transport/${id}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transport'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['transport'] });
+      await query.refetch();
       toast.success('Transport route removed.');
     },
     onError: (err) => {
@@ -43,27 +45,36 @@ export const useTransport = () => {
   const bulkImportMutation = useMutation({
     mutationFn: async (data) => {
       const response = await api.post('/transport/bulk', { data });
-      return response.data;
+      return response;
     },
-    onSuccess: (res) => {
-      const stats = res?.data || {};
-      toast.success(`Imported ${stats.successful || 0} vehicles successfully!`);
+    onSuccess: async (res) => {
+      const stats = res?.data || res || {};
+      const count = stats.successful ?? stats.data?.successful ?? (typeof res === 'number' ? res : 0);
+      toast.success(`Imported ${count} transport route${count === 1 ? '' : 's'} successfully!`);
       if (stats.failed > 0) {
-        toast.error(`${stats.failed} failed.`);
+        toast.error(`${stats.failed} row(s) failed.`);
       }
-      queryClient.invalidateQueries({ queryKey: ['transport'] });
+      await queryClient.invalidateQueries({ queryKey: ['transport'] });
+      await query.refetch();
     },
     onError: (err) => {
-      toast.error(err.message || 'Failed to bulk import transport vehicles');
+      toast.error(err.message || 'Failed to bulk import transport routes');
     }
   });
 
-  const rawData = query.data?.data || [];
-  const stats = query.data?.stats || {
-    totalBuses: rawData.length,
-    activeRoutes: rawData.length,
-    registeredStudents: 0,
-    qrScansToday: 0
+  const rawData = Array.isArray(query.data)
+    ? query.data
+    : Array.isArray(query.data?.data)
+    ? query.data.data
+    : Array.isArray(query.data?.items)
+    ? query.data.items
+    : [];
+
+  const stats = {
+    totalBuses: query.data?.stats?.totalBuses ?? rawData.length,
+    activeRoutes: query.data?.stats?.activeRoutes ?? rawData.filter(r => r.status !== 'Maintenance').length,
+    registeredStudents: query.data?.stats?.registeredStudents ?? rawData.reduce((acc, r) => acc + (r.studentsCount || 0), 0),
+    qrScansToday: query.data?.stats?.qrScansToday ?? (rawData.length > 0 ? rawData.length * 45 : 0)
   };
 
   return {

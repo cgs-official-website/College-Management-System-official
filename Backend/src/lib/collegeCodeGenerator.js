@@ -1,4 +1,4 @@
-import { prisma } from '../server.js';
+import { prisma } from './prisma.js';
 
 let isSequenceEnsured = false;
 

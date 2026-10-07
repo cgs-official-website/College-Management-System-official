@@ -12,12 +12,16 @@ export function useFees(collegeId) {
   const [isUpdating, setIsUpdating] = useState(false);
 
   const fetchFees = useCallback(async () => {
-    if (!collegeId) return;
-
     setIsLoading(true);
     try {
-      const response = await api.get('/fees');
-      setFees(response.data || []);
+      const url = collegeId && collegeId !== 'default_college_id' ? `/fees?collegeId=${collegeId}` : '/fees';
+      const response = await api.get(url);
+      const list = Array.isArray(response?.data) 
+        ? response.data 
+        : (Array.isArray(response?.fees)
+          ? response.fees
+          : (Array.isArray(response) ? response : []));
+      setFees(list);
     } catch (error) {
       console.error("Error fetching fees:", error);
       toast.error("Failed to load fee records");

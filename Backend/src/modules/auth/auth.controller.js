@@ -1,7 +1,8 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { prisma, logger } from '../../server.js';
+import { prisma } from '../../lib/prisma.js';
+import { logger } from '../../lib/logger.js';
 import { redis, redisKeys } from '../../lib/cache.js';
 import { 
   loginSchema, 
@@ -18,6 +19,7 @@ import { verifyStaffSetupToken, verifyTeacherRegistrationToken, createStaffSetup
 import { sendDynamicMail } from '../../services/email/email.service.js';
 import { getNextCollegeCode } from '../../lib/collegeCodeGenerator.js';
 import { findUserWithMatchingPassword } from './auth.credentials.js';
+import { createAuditLog } from '../audit/audit.service.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret';
@@ -130,6 +132,23 @@ export const login = async (req, res) => {
     });
 
     logger.info(`[info] User ${user.email} (id=${user.id}, role=${user.role}) logged in successfully`);
+
+    createAuditLog({
+      collegeId: user.collegeId,
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      userRole: user.role,
+      action: 'LOGIN',
+      module: 'AUTH',
+      entity: 'UserSession',
+      entityId: user.id,
+      description: `User ${user.email} (${user.role}) logged in successfully`,
+      ipAddress: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'Unknown',
+      status: 'SUCCESS'
+    }).catch(() => {});
+
     res.json({
       success: true,
       data: {
@@ -1492,21 +1511,27 @@ export const completeStaffSetup = async (req, res) => {
 
 export const forgotPassword = async (req, res) => {
   try {
-    const { email } = forgotPasswordSchema.parse(req.body);
+    const { email: rawEmail } = forgotPasswordSchema.parse(req.body);
+    const normalizedEmail = rawEmail.trim().toLowerCase();
 
     const user = await prisma.user.findFirst({
-      where: { email }
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: 'insensitive'
+        }
+      }
     });
 
     if (!user) {
       return res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
     }
 
-    const secret = JWT_SECRET + user.passwordHash;
+    const secret = JWT_SECRET + (user.passwordHash || '');
     const token = jwt.sign({ userId: user.id, email: user.email }, secret, { expiresIn: '15m' });
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const resetLink = `${frontendUrl}/reset-password?token=${token}&id=${user.id}`;
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
+    const resetLink = `${frontendUrl}/reset-password?token=${encodeURIComponent(token)}&id=${encodeURIComponent(user.id)}`;
     
     await sendDynamicMail({
       to: user.email,
@@ -1534,7 +1559,7 @@ export const resetPassword = async (req, res) => {
       return res.status(400).json({ success: false, error: { message: 'Invalid or expired token' } });
     }
 
-    const secret = JWT_SECRET + user.passwordHash;
+    const secret = JWT_SECRET + (user.passwordHash || '');
     
     try {
       jwt.verify(token, secret);
@@ -1546,7 +1571,10 @@ export const resetPassword = async (req, res) => {
 
     await prisma.user.update({
       where: { id: userId },
-      data: { passwordHash: newPasswordHash }
+      data: {
+        passwordHash: newPasswordHash,
+        accountStatus: user.accountStatus === 'pending_setup' ? 'active' : user.accountStatus
+      }
     });
 
     res.json({ success: true, message: 'Password has been successfully reset.' });

@@ -47,7 +47,8 @@ import {
   CalendarOff,
   FileEdit,
   CalendarClock,
-  ChevronDown
+  ChevronDown,
+  History
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { api } from '../../services/api';
@@ -66,6 +67,7 @@ import Infrastructure from './infrastructure/Infrastructure';
 import NoticeBoard from './notices/NoticeBoard';
 import Timetable from './timetable/Timetable';
 import Reports from './reports/Reports';
+import AuditLogs from './audit/AuditLogs';
 import Settings from './settings/Settings';
 import RolesManagement from './roles/RolesManagement';
 import MarketingDashboard from './marketing/MarketingDashboard';
@@ -112,6 +114,7 @@ const AdminLayout = () => {
   };
 
   const hasAccess = (moduleKey) => {
+    if (moduleKey === 'audit' && (userRole === 'admin' || userRole === 'superadmin')) return true;
     if (moduleKey && userData?.allowedModules && Array.isArray(userData.allowedModules)) {
       if (!userData.allowedModules.includes(moduleKey)) {
         return false;
@@ -153,6 +156,7 @@ const AdminLayout = () => {
     { name: 'Complaints', path: '/admin/complaints', icon: MessageSquareWarning, moduleKey: null },
     { name: 'Placements', path: '/admin/placements', icon: Briefcase, moduleKey: 'placements' },
     { name: 'Reports', path: '/admin/reports', icon: FileText, moduleKey: 'reports' },
+    { name: 'Audit Logs', path: '/admin/audit-logs', icon: History, moduleKey: 'audit' },
     { name: 'Inventory', path: '/admin/inventory', icon: Package, moduleKey: 'inventory' },
     { name: 'Payroll', path: '/admin/payroll', icon: IndianRupee, moduleKey: 'payroll' },
     { name: 'API Integrations', path: '/admin/api-integrations', icon: Zap, moduleKey: 'api_integration' },
@@ -484,6 +488,7 @@ const AdminLayout = () => {
               <Route path="/complaints/*" element={<ComplaintsDashboard />} />
               <Route path="/placements/*" element={hasAccess('placements') ? <PlacementsDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/reports/*" element={hasAccess('reports') ? <Reports /> : <Navigate to="/404" replace />} />
+              <Route path="/audit-logs/*" element={hasAccess('audit') || isAdmin ? <AuditLogs /> : <Navigate to="/404" replace />} />
               <Route path="/inventory/*" element={hasAccess('inventory') ? <InventoryDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/api-integrations/*" element={hasAccess('api_integration') ? <ApiIntegrations /> : <Navigate to="/404" replace />} />
               <Route path="/payroll/*" element={hasAccess('payroll') ? <PayrollDashboard /> : <Navigate to="/404" replace />} />
@@ -507,17 +512,16 @@ const AdminDashboardHome = () => {
   const [copiedLink, setCopiedLink] = useState(null); 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  const handleGenerateLink = async (role) => {
+    const handleGenerateLink = async (role) => {
     if (!userData?.collegeId && !userData?.collegeSlug) return;
+<<<<<<< HEAD
 
+=======
+>>>>>>> 64eda189aa369c561ae4043e1bb9915e8a410fcf
     const baseUrl = window.location.origin;
     let inviteLink;
 
     // ── STUDENT: must use the secure token-based registration flow ──
-    // Generates a fresh cryptographic token via the backend and builds
-    // the correct URL: /student/register?token=<rawToken>
-    // (NOT /register/student?code=<collegeId> — that was wrong path, wrong
-    //  param name, and a UUID instead of a real crypto token)
     if (role === 'student') {
       try {
         console.log('[AdminLayout] Fetching student registration token from API...');
@@ -532,7 +536,6 @@ const AdminDashboardHome = () => {
           return;
         }
 
-        // Safe log — only token length and first 4 chars, never full token
         console.log(`[AdminLayout] Student registration token ready. Length: ${rawToken.length}, prefix: ${rawToken.slice(0, 4)}...`);
 
         // path from backend is e.g. /student/register?token=<rawToken>
@@ -544,15 +547,18 @@ const AdminDashboardHome = () => {
       }
     } else {
       // ── TEACHER / HOD / PARENT: general /register/:role flow ──
-      // These use the existing Register.jsx page with collegeSlug or collegeId
       inviteLink = userData?.collegeSlug
         ? `${baseUrl}/register/${role}/${userData.collegeSlug}`
         : `${baseUrl}/register/${role}?code=${userData.collegeId}`;
     }
 
     console.log(`[AdminLayout] Generated ${role} invite link. Route: ${new URL(inviteLink).pathname}`);
+<<<<<<< HEAD
 
     // Copy to clipboard with fallback
+=======
+    
+>>>>>>> 64eda189aa369c561ae4043e1bb9915e8a410fcf
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(inviteLink);
