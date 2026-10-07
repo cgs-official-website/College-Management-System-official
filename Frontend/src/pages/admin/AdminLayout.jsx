@@ -514,10 +514,6 @@ const AdminDashboardHome = () => {
 
     const handleGenerateLink = async (role) => {
     if (!userData?.collegeId && !userData?.collegeSlug) return;
-<<<<<<< HEAD
-
-=======
->>>>>>> 64eda189aa369c561ae4043e1bb9915e8a410fcf
     const baseUrl = window.location.origin;
     let inviteLink;
 
@@ -553,12 +549,7 @@ const AdminDashboardHome = () => {
     }
 
     console.log(`[AdminLayout] Generated ${role} invite link. Route: ${new URL(inviteLink).pathname}`);
-<<<<<<< HEAD
-
-    // Copy to clipboard with fallback
-=======
     
->>>>>>> 64eda189aa369c561ae4043e1bb9915e8a410fcf
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(inviteLink);

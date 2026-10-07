@@ -293,10 +293,6 @@ export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo, atta
       html,
       text: textContent,
     };
-<<<<<<< HEAD
-=======
-
->>>>>>> 64eda189aa369c561ae4043e1bb9915e8a410fcf
     if (cc) mailOptions.cc = cc;
     if (bcc) mailOptions.bcc = bcc;
     if (replyTo) mailOptions.replyTo = replyTo;
@@ -334,9 +330,6 @@ export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo, atta
 // ---------------------------------------------------------------------------
 const UNSAFE_TEMPLATE_PATTERN = /\{\{\s*password\s*\}\}/i;
 
-<<<<<<< HEAD
-export const sendDynamicMail = async ({ to, templateName, variables = {}, headerTitle, cc, bcc, replyTo, attachments }) => {
-=======
 // ---------------------------------------------------------------------------
 // sendDynamicMail — loads template from DB, falls back to built-in if missing
 // ---------------------------------------------------------------------------
@@ -350,7 +343,6 @@ export const sendDynamicMail = async ({
   replyTo,
   attachments,
 }) => {
->>>>>>> 64eda189aa369c561ae4043e1bb9915e8a410fcf
   try {
     let subject;
     let htmlContent;
@@ -390,17 +382,10 @@ export const sendDynamicMail = async ({
           htmlContent = htmlContent.replace(regex, String(value ?? ''));
         }
 
-<<<<<<< HEAD
-        htmlContent = baseTemplate(htmlContent, headerTitle);
-        console.log(`[EmailService] Using DB template: "${templateName}"`);
-
-        return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo, attachments });
-=======
         const fullHtml = baseTemplate(htmlContent, headerTitle || 'Zuna ERP');
         console.log(`[EmailService] Using DB template: "${templateName}"`);
 
         return await sendMail({ to, subject, html: fullHtml, cc, bcc, replyTo, attachments });
->>>>>>> 64eda189aa369c561ae4043e1bb9915e8a410fcf
       }
     }
 
@@ -423,11 +408,7 @@ export const sendDynamicMail = async ({
     }
 
     subject = fallback.subject;
-<<<<<<< HEAD
-    htmlContent = baseTemplate(fallback.buildHtml(variables), headerTitle);
-=======
     htmlContent = baseTemplate(fallback.buildHtml(variables), headerTitle || 'Zuna ERP');
->>>>>>> 64eda189aa369c561ae4043e1bb9915e8a410fcf
 
     return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo, attachments });
 

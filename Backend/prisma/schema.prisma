@@ -120,34 +120,6 @@ model PlatformTicket {
 }
 
 model User {
-<<<<<<< HEAD
-  email          String
-  name           String?
-  role           String
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  accountStatus  String           @default("pending")
-  lastLoginAt    DateTime?
-  passwordHash   String?
-  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId      String?          @db.Uuid
-  customRoleId   String?          @db.Uuid
-  customRole     Role?            @relation("UserCustomRole", fields: [customRoleId], references: [id])
-  parentProfile  Parent?
-  tickets        PlatformTicket[]
-  refreshTokens  RefreshToken[]
-  studentProfile Student?
-  teacherProfile Teacher?
-  college        College?         @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  complaints          Complaint[]
-  payrollRecords      PayrollRecord[]
-  timesheets          Timesheet[]
-  inventoryAuditLogs  InventoryAuditLog[]
-  payrolls            Payroll[]
-  facilityRequests    InfrastructureBooking[] @relation("BookingRequester")
-  reviewedBookings    InfrastructureBooking[] @relation("BookingReviewer")
-  notifications       Notification[]
-=======
   email              String
   name               String?
   role               String
@@ -174,7 +146,6 @@ model User {
   facilityRequests   InfrastructureBooking[] @relation("BookingRequester")
   reviewedBookings   InfrastructureBooking[] @relation("BookingReviewer")
   notifications      Notification[]
->>>>>>> 64eda189aa369c561ae4043e1bb9915e8a410fcf
 
   @@unique([collegeId, email])
 }
@@ -303,29 +274,7 @@ model Teacher {
   user         User            @relation(fields: [userId], references: [id])
   timetable    TimetableSlot[]
   sections     Section[]       @relation("TeacherSections")
-<<<<<<< HEAD
-
-  teacherId               String?  // Required for new teachers; nullable for existing records without an assigned ID.
-  gender                  String?
-  dateOfBirth             DateTime?
-  employmentType          String?
-  qualification           String?
-  experienceYears         Int?
-  mobileNumber            String?
-  emailId                 String?
-  aadhaarNumber           String?
-  panNumber               String?
-  bloodGroup              String?
-  address                 String?
-  city                    String?
-  district                String?
-  state                   String?
-  pincode                 String?
-  emergencyContactName    String?
-  emergencyContactNumber  String?
-  customFields            Json?
-=======
-  teacherId              String?
+  teacherId              String?  // Required for new teachers; nullable for existing records without an assigned ID.
   gender                 String?
   dateOfBirth            DateTime?
   employmentType         String?
@@ -344,14 +293,9 @@ model Teacher {
   emergencyContactName   String?
   emergencyContactNumber String?
   customFields           Json?
->>>>>>> 64eda189aa369c561ae4043e1bb9915e8a410fcf
 
   @@unique([collegeId, teacherId])
-<<<<<<< HEAD
-
-=======
   @@index([collegeId])
->>>>>>> 64eda189aa369c561ae4043e1bb9915e8a410fcf
 }
 
 model Student {
@@ -1172,7 +1116,6 @@ model SubscriptionPlan {
   billingSubscriptions BillingSubscription[]
 }
 
-<<<<<<< HEAD
 model AuditLog {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   collegeId   String?  @db.Uuid
@@ -1196,7 +1139,8 @@ model AuditLog {
   @@index([module])
   @@index([action])
   @@index([createdAt])
-=======
+}
+
 enum LibraryTxnStatus {
   ISSUED
   RETURNED
@@ -1254,5 +1198,4 @@ model LibraryTransaction {
   @@index([collegeId, studentId, status])
   @@index([bookId, status])
   @@index([collegeId, dueDate])
->>>>>>> c050d3e65645b952447b7d7825e0e0d42bf09da0
 }
