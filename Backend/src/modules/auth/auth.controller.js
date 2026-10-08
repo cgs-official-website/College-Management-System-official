@@ -57,7 +57,7 @@ export const login = async (req, res) => {
           studentProfile: true
         }
       });
-    } else {
+        } else {
       matchingUsers = await prisma.user.findMany({
         where: { email: normalizedEmail },
         include: {
@@ -66,7 +66,6 @@ export const login = async (req, res) => {
         }
       });
     }
-
     // Generic 401 on missing user or invalid password (zero account enumeration)
     const user = await findUserWithMatchingPassword(matchingUsers, password);
     if (!user) {
@@ -1516,10 +1515,7 @@ export const forgotPassword = async (req, res) => {
 
     const user = await prisma.user.findFirst({
       where: {
-        email: {
-          equals: normalizedEmail,
-          mode: 'insensitive'
-        }
+        email: { equals: normalizedEmail, mode: 'insensitive' }
       }
     });
 
