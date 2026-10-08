@@ -163,4 +163,18 @@ export const useStoreSales = (filters) =>
     placeholderData: keepPreviousData,
   });
 
-export const fetchSaleBillPdf = (id) => api.get(`/store/sales/${id}/pdf`, { responseType: 'blob' });
+export const fetchSaleBillPdf = async (id) => {
+  try {
+    return await api.get(`/store/sales/${id}/pdf`, { responseType: 'blob' });
+  } catch (e) {
+    if (e?.data instanceof Blob) {
+      try {
+        const body = JSON.parse(await e.data.text());
+        if (body?.error?.message) throw new Error(body.error.message);
+      } catch (inner) {
+        if (inner instanceof Error && inner.message !== e.message && !(inner instanceof SyntaxError)) throw inner;
+      }
+    }
+    throw e;
+  }
+};
