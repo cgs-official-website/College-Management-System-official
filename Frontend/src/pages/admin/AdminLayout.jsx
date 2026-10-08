@@ -50,6 +50,7 @@ import {
   ChevronDown,
   History,
   Store as StoreIcon,
+  History
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { api } from '../../services/api';

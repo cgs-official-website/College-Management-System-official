@@ -1,0 +1,173 @@
+import PDFDocument from 'pdfkit';
+import { prisma } from '../../server.js';
+
+const httpError = (statusCode, code, message) =>
+  Object.assign(new Error(message), { statusCode, code });
+
+const money = (n) =>
+  `Rs. ${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const YEAR_LABELS = { '1': '1st Year', '2': '2nd Year', '3': '3rd Year', '4': '4th Year' };
+
+const formatDate = (d) =>
+  new Date(d).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true,
+  });
+
+const fetchLogo = async (url) => {
+  if (!url || !/^https?:\/\//i.test(url)) return null;
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    if (!r.ok) return null;
+    if (!/image\/(png|jpe?g)/i.test(r.headers.get('content-type') || '')) return null;
+    const buf = Buffer.from(await r.arrayBuffer());
+    return buf.length <= 1024 * 1024 ? buf : null;
+  } catch {
+    return null;
+  }
+};
+
+const buildPdf = (sale, college, logo) =>
+  new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 40 });
+    const chunks = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const L = 40;
+    const R = 555;
+    const GREY = '#64748b';
+    const DARK = '#0f172a';
+    const COLS = { sr: 40, item: 68, qty: 330, price: 375, total: 450 };
+
+    //  header 
+    let textX = L;
+    if (logo) {
+      try { doc.image(logo, L, 40, { fit: [60, 60] }); textX = L + 72; } catch { /* skip bad image */ }
+    }
+    doc.font('Helvetica-Bold').fontSize(16).fillColor(DARK)
+      .text(college?.name || 'Campus Store', textX, 42, { width: R - textX });
+    doc.font('Helvetica').fontSize(9).fillColor(GREY);
+    if (college?.address) doc.text(college.address, textX, doc.y + 2, { width: R - textX });
+    const contact = [college?.contactPhone, college?.contactEmail].filter(Boolean).join('  |  ');
+    if (contact) doc.text(contact, textX, doc.y + 2, { width: R - textX });
+
+    let y = Math.max(doc.y, logo ? 108 : 0) + 12;
+    doc.moveTo(L, y).lineTo(R, y).lineWidth(1).strokeColor('#cbd5e1').stroke();
+    y += 12;
+
+    //  invoice meta 
+    doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('SALES INVOICE', L, y);
+    doc.font('Helvetica').fontSize(10).fillColor(DARK)
+      .text(`Invoice No: ${sale.invoiceNo}`, 300, y, { width: R - 300, align: 'right' });
+    doc.fillColor(GREY).text(`Date: ${formatDate(sale.createdAt)}`, 300, y + 15, { width: R - 300, align: 'right' });
+    y += 38;
+
+    //  customer 
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(GREY).text('BILLED TO', L, y);
+    y += 13;
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(DARK).text(sale.customerName, L, y, { width: R - L });
+    y = doc.y + 2;
+
+    const typeLabel = { STUDENT: 'Student', STAFF: 'Staff', OTHER: null }[sale.customerType];
+    const detail = [
+      typeLabel,
+      sale.department,
+      sale.year && (YEAR_LABELS[sale.year] || sale.year),
+      sale.section && `Section ${sale.section}`,
+      sale.rollNo && `Roll No: ${sale.rollNo}`,
+    ].filter(Boolean).join('  |  ');
+    if (detail) {
+      doc.font('Helvetica').fontSize(10).fillColor(GREY).text(detail, L, y, { width: R - L });
+      y = doc.y;
+    }
+    y += 14;
+
+    //  items table 
+    const drawTableHeader = (yy) => {
+      doc.rect(L, yy, R - L, 20).fill('#f1f5f9');
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(GREY);
+      doc.text('#', COLS.sr + 4, yy + 6, { width: 22 });
+      doc.text('ITEM', COLS.item, yy + 6, { width: 250 });
+      doc.text('QTY', COLS.qty, yy + 6, { width: 40, align: 'right' });
+      doc.text('PRICE', COLS.price, yy + 6, { width: 70, align: 'right' });
+      doc.text('TOTAL', COLS.total, yy + 6, { width: 105, align: 'right' });
+      return yy + 26;
+    };
+
+    y = drawTableHeader(y);
+    sale.items.forEach((it, idx) => {
+      if (y > 720) {
+        doc.addPage();
+        y = drawTableHeader(40);
+      }
+      doc.font('Helvetica').fontSize(10).fillColor(DARK);
+      const h = doc.heightOfString(it.name, { width: 255 });
+      doc.text(String(idx + 1), COLS.sr + 4, y, { width: 22 });
+      doc.text(it.name, COLS.item, y, { width: 255 });
+      doc.text(String(it.quantity), COLS.qty, y, { width: 40, align: 'right' });
+      doc.text(money(it.unitPrice), COLS.price, y, { width: 70, align: 'right' });
+      doc.text(money(it.lineTotal), COLS.total, y, { width: 105, align: 'right' });
+      y += Math.max(h, 14) + 8;
+      doc.moveTo(L, y - 4).lineTo(R, y - 4).lineWidth(0.5).strokeColor('#e2e8f0').stroke();
+    });
+
+    // totals 
+    if (y > 650) { doc.addPage(); y = 40; }
+    y += 6;
+    const row = (label, value, bold) => {
+      doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(bold ? 12 : 10).fillColor(DARK);
+      doc.text(label, 330, y, { width: 100 });
+      doc.text(value, 430, y, { width: 125, align: 'right' });
+      y += bold ? 20 : 16;
+    };
+    row('Subtotal', money(sale.subtotal));
+    if (Number(sale.discount) > 0) row('Discount', `- ${money(sale.discount)}`);
+    doc.moveTo(330, y).lineTo(R, y).lineWidth(1).strokeColor('#cbd5e1').stroke();
+    y += 6;
+    row('Total', money(sale.total), true);
+
+    //  payment + footer 
+    y += 10;
+    doc.font('Helvetica').fontSize(10).fillColor(DARK).text(
+      `Payment: ${sale.paymentMethod}${sale.paymentRef ? `  (Ref: ${sale.paymentRef})` : ''}`, L, y, { width: R - L });
+    if (sale.createdByName) {
+      doc.fillColor(GREY).text(`Issued by: ${sale.createdByName}`, L, doc.y + 3, { width: R - L });
+    }
+    doc.moveDown(2);
+    doc.font('Helvetica').fontSize(8).fillColor(GREY)
+      .text('This is a computer-generated bill.', L, doc.y, { width: R - L, align: 'center' });
+
+    doc.end();
+  });
+
+
+export const getSaleBillPdf = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  if (!collegeId) throw httpError(403, 'FORBIDDEN', 'Tenant context missing');
+
+  const sale = await prisma.storeSale.findFirst({
+    where: { id: req.params.id, collegeId },
+    include: { items: true },
+  });
+  if (!sale) throw httpError(404, 'NOT_FOUND', 'Sale not found');
+
+  const college = await prisma.college.findUnique({
+    where: { id: collegeId },
+    select: { name: true, address: true, logoUrl: true, contactPhone: true, contactEmail: true },
+  });
+
+  const logo = await fetchLogo(college?.logoUrl);
+  const pdf = await buildPdf(sale, college, logo); 
+
+  res.set({
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': `inline; filename="${sale.invoiceNo}.pdf"`,
+    'Content-Length': pdf.length,
+    'Cache-Control': 'private, no-store',
+  });
+  res.send(pdf);
+};

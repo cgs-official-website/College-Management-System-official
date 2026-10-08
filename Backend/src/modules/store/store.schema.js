@@ -49,3 +49,48 @@ export const adjustSchema = z.object({
     .max(10000000),
   note: z.string().trim().min(3, 'Please give a reason (at least 3 characters)').max(300),
 });
+
+// ---- sales ----
+const reqText = (max, label) =>
+  z.string({ error: `${label} is required` }).trim().min(1, `${label} is required`).max(max);
+
+const optText = (max) =>
+  z.string().trim().max(max).nullish().transform((v) => v || null);
+
+const saleLine = z.object({
+  itemId: z.string().uuid('Invalid item'),
+  quantity: z.number({ error: 'Quantity must be a number' })
+    .int('Quantity must be a whole number')
+    .min(1, 'Quantity must be at least 1')
+    .max(100000),
+});
+
+const saleCommon = {
+  items: z.array(saleLine).min(1, 'Add at least one item').max(50, 'Too many items in one sale'),
+  discount: z.number({ error: 'Discount must be a number' }).min(0, 'Discount cannot be negative').max(100000000).default(0),
+  paymentMethod: z.enum(['CASH', 'UPI', 'CARD'], { error: 'Choose a payment method' }),
+  paymentRef: optText(100),
+};
+
+export const createSaleSchema = z.discriminatedUnion('customerType', [
+  z.object({
+    ...saleCommon,
+    customerType: z.literal('STUDENT'),
+    customerName: reqText(100, 'Student name'),
+    rollNo: optText(30),
+    department: reqText(100, 'Department'),
+    year: reqText(20, 'Year'),
+    section: reqText(20, 'Section'),
+  }),
+  z.object({
+    ...saleCommon,
+    customerType: z.literal('STAFF'),
+    customerName: reqText(100, 'Staff name'),
+    department: reqText(100, 'Department'),
+  }),
+  z.object({
+    ...saleCommon,
+    customerType: z.literal('OTHER'),
+    customerName: reqText(150, 'Customer details'),
+  }),
+]);

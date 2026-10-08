@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import {
   Package, Plus, Edit2, Trash2, Search, Filter, RotateCcw, ImagePlus, X, Tag,
   Layers, CheckCircle2, XCircle, ArrowDownRight, SlidersHorizontal, History,
+  ShoppingCart, Receipt
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button } from '../../components/ui/Button';
@@ -10,6 +11,17 @@ import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { useStore } from '../../hooks/useStore';
 import { StockModal, StockHistoryModal } from './StoreStockModals';
+import { ExcelUploadButton } from '../../components/ui/ExcelUploadButton';
+import StoreNewSale from './StoreNewSale';
+import StoreSalesHistory from './StoreSalesHistory';
+
+const STORE_IMPORT_FIELDS = [
+  { name: 'Item_Name', required: true, type: 'String', description: 'Item name', example: 'Uniform Shirt' },
+  { name: 'Category', required: false, type: 'String', description: 'Existing category name or code (create it first)', example: 'Uniforms' },
+  { name: 'Price', required: true, type: 'Number', description: 'Selling price in rupees (>= 0)', example: '450' },
+  { name: 'Opening_Stock', required: false, type: 'Integer', description: 'Units on hand (>= 0)', example: '20' },
+  { name: 'Low_Stock_Alert', required: false, type: 'Integer', description: 'Warn when stock is at or below this (default 5)', example: '5' },
+];
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -56,6 +68,8 @@ export default function StoreDashboard() {
     deleteCategory, isDeletingCategory,
     restockItem, isRestocking,
     adjustStock, isAdjusting,
+    bulkImport, isImporting,
+    departments, createSale, isCreatingSale,
   } = useStore();
 
   // ---- item modal ----
@@ -246,6 +260,14 @@ export default function StoreDashboard() {
         <div className="flex flex-wrap gap-2">
           {activeTab === 'products' && (
             <>
+            <ExcelUploadButton
+                onUpload={bulkImport}
+                isLoading={isImporting}
+                title="Import Store Items"
+                description="Upload an Excel (.xlsx, .xls) or CSV file. Categories must already exist."
+                fields={STORE_IMPORT_FIELDS}
+                sampleFileName="store_import_template.xlsx"
+              />
               <Button
                 variant="outline"
                 onClick={() => setStockModal({ mode: 'restock', item: null })}
@@ -275,6 +297,14 @@ export default function StoreDashboard() {
           <Package className="w-4 h-4" />
           Products & Stock
           <span className={countCls}>{activeCount}</span>
+        </button>
+        <button onClick={() => setActiveTab('sale')} className={tabCls(activeTab === 'sale')}>
+          <ShoppingCart className="w-4 h-4" />
+          New Sale
+        </button>
+        <button onClick={() => setActiveTab('history')} className={tabCls(activeTab === 'history')}>
+          <Receipt className="w-4 h-4" />
+          Sales History
         </button>
         <button onClick={() => setActiveTab('categories')} className={tabCls(activeTab === 'categories')}>
           <Tag className="w-4 h-4" />
@@ -434,6 +464,18 @@ export default function StoreDashboard() {
           </div>
         </motion.div>
       )}
+
+      {activeTab === 'sale' && (
+        <StoreNewSale
+          items={items}
+          categories={categories}
+          departments={departments}
+          onCreateSale={createSale}
+          isCreating={isCreatingSale}
+        />
+      )}
+
+      {activeTab === 'history' && <StoreSalesHistory departments={departments} />}
 
       {/* ===================== CATEGORIES TAB ===================== */}
       {activeTab === 'categories' && (

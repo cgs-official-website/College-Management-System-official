@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { api } from '../services/apiClient';
 import toast from 'react-hot-toast';
 
@@ -76,6 +76,33 @@ export const useStore = () => {
     onError: (err) => toast.error(err.message || 'Failed to adjust stock'),
   });
 
+  const bulkImportMutation = useMutation({
+    mutationFn: async (data) => (await api.post('/store/bulk', { data })).data,
+    onSuccess: (r) => {
+      refresh();
+      if (r.imported > 0) toast.success(`Imported ${r.imported} item(s)`);
+      if (r.skipped > 0) toast(`${r.skipped} duplicate(s) skipped:\n${r.skippedRows.slice(0, 3).join('\n')}`, { duration: 8000 });
+      if (r.failed > 0) toast.error(`${r.failed} row(s) failed:\n${r.errors.slice(0, 3).join('\n')}`, { duration: 10000 });
+      if (r.imported === 0 && r.skipped === 0 && r.failed === 0) toast.error('Nothing was imported');
+    },
+    onError: (err) => toast.error(err.message || 'Bulk import failed'),
+  });
+
+    const departmentsQuery = useQuery({
+    queryKey: ['store-departments'],
+    queryFn: async () => (await api.get('/departments')).data,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const createSaleMutation = useMutation({
+    mutationFn: async (payload) => (await api.post('/store/sales', payload)).data,
+    onSuccess: () => refresh(), 
+    onError: (err) => {
+      refresh(); 
+      toast.error(err.message || 'Failed to create sale');
+    },
+  });
+
   return {
     items: itemsQuery.data || [],
     isLoading: itemsQuery.isLoading,
@@ -106,6 +133,13 @@ export const useStore = () => {
     isRestocking: restockMutation.isPending,
     adjustStock: adjustMutation.mutateAsync,
     isAdjusting: adjustMutation.isPending,
+
+    bulkImport: bulkImportMutation.mutateAsync,
+    isImporting: bulkImportMutation.isPending,
+
+    departments: departmentsQuery.data || [],
+    createSale: createSaleMutation.mutateAsync,
+    isCreatingSale: createSaleMutation.isPending,
   };
 };
 
@@ -114,4 +148,19 @@ export const useStoreMovements = (itemId) =>
     queryKey: ['store', 'movements', itemId],
     queryFn: async () => (await api.get(`/store/${itemId}/movements`)).data,
     enabled: !!itemId,
+});
+
+export const useStoreSales = (filters) =>
+  useQuery({
+    queryKey: ['store', 'sales', filters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([k, v]) => {
+        if (v !== '' && v !== null && v !== undefined) params.append(k, v);
+      });
+      return api.get(`/store/sales?${params.toString()}`); 
+    },
+    placeholderData: keepPreviousData,
   });
+
+export const fetchSaleBillPdf = (id) => api.get(`/store/sales/${id}/pdf`, { responseType: 'blob' });

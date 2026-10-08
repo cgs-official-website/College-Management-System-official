@@ -227,3 +227,119 @@ export const deleteItem = async (req, res) => {
     data: { id, deactivated: false, message: `'${existing.name}' deleted successfully.` },
   });
 };
+
+const MAX_IMPORT_ROWS = 500;
+
+const normKey = (k) => String(k).toLowerCase().replace(/\*/g, '').replace(/[^a-z0-9]/g, '');
+
+const makeGetter = (row) => {
+  const map = {};
+  for (const [k, v] of Object.entries(row)) map[normKey(k)] = v;
+  return (...names) => {
+    for (const n of names) {
+      const v = map[normKey(n)];
+      if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+    }
+    return '';
+  };
+};
+
+export const bulkImportItems = async (req, res) => {
+  const { collegeId, actorId } = ctx(req);
+  if (!collegeId) throw httpError(403, 'FORBIDDEN', 'Tenant context missing');
+
+  const { data } = req.body;
+  if (!Array.isArray(data) || data.length === 0) {
+    throw httpError(400, 'EMPTY_DATA', 'No data provided for import');
+  }
+  if (data.length > MAX_IMPORT_ROWS) {
+    throw httpError(400, 'TOO_MANY_ROWS', `Import up to ${MAX_IMPORT_ROWS} rows at a time`);
+  }
+
+  const categories = await prisma.storeCategory.findMany({ where: { collegeId } });
+  const catMap = new Map();
+  for (const c of categories) {
+    catMap.set(c.name.toLowerCase(), c);
+    catMap.set(c.code.toLowerCase(), c);
+  }
+
+  const existing = await prisma.storeItem.findMany({
+    where: { collegeId },
+    select: { name: true, categoryId: true },
+  });
+  const seen = new Set(existing.map((i) => `${i.name.toLowerCase()}|${i.categoryId || ''}`));
+
+  const result = { imported: 0, skipped: 0, failed: 0, errors: [], skippedRows: [] };
+
+  for (const [index, row] of data.entries()) {
+    const rowNo = index + 2; 
+    try {
+      const get = makeGetter(row || {});
+
+      const name = get('Item_Name', 'name');
+      if (!name) throw new Error('Item_Name is required');
+      if (name.length > 200) throw new Error('Item_Name is too long (max 200)');
+
+      const priceRaw = get('Price', 'price');
+      if (priceRaw === '') throw new Error('Price is required');
+      const price = Number(priceRaw.replace(/,/g, ''));
+      if (Number.isNaN(price) || price < 0 || price > 9999999) throw new Error(`Invalid price '${priceRaw}'`);
+
+      const stockRaw = get('Opening_Stock', 'stock', 'quantity');
+      const stock = stockRaw === '' ? 0 : Number(stockRaw);
+      if (!Number.isInteger(stock) || stock < 0) throw new Error(`Opening_Stock must be a whole number (got '${stockRaw}')`);
+
+      const lowRaw = get('Low_Stock_Alert', 'lowStockAt', 'reorderLevel');
+      const lowStockAt = lowRaw === '' ? 5 : Number(lowRaw);
+      if (!Number.isInteger(lowStockAt) || lowStockAt < 0) throw new Error(`Low_Stock_Alert must be a whole number (got '${lowRaw}')`);
+
+      const catRaw = get('Category', 'categoryName', 'categoryCode');
+      let cat = null;
+      if (catRaw) {
+        cat = catMap.get(catRaw.toLowerCase());
+        if (!cat) throw new Error(`Category '${catRaw}' not found. Create it first in Product Categories`);
+        if (!cat.isActive) throw new Error(`Category '${cat.name}' is inactive`);
+      }
+
+      const key = `${name.toLowerCase()}|${cat?.id || ''}`;
+      if (seen.has(key)) {
+        result.skipped++;
+        result.skippedRows.push(`Row ${rowNo}: '${name}' already exists${cat ? ` in ${cat.name}` : ''}`);
+        continue;
+      }
+
+      await prisma.storeItem.create({
+        data: {
+          collegeId,
+          name,
+          categoryId: cat?.id ?? null,
+          category: cat?.name ?? null,
+          price,
+          stock,
+          lowStockAt,
+          ...(stock > 0 ? {
+            movements: {
+              create: {
+                collegeId,
+                type: 'OPENING',
+                quantity: stock,
+                balanceAfter: stock,
+                note: 'Bulk import',
+                byUserId: actorId || null,
+              },
+            },
+          } : {}),
+        },
+      });
+
+      seen.add(key);
+      result.imported++;
+    } catch (err) {
+      result.failed++;
+      result.errors.push(`Row ${rowNo}: ${err.message}`);
+    }
+  }
+
+  logger.info(`[info] college=${collegeId} actor=${actorId} Store bulk import: ${result.imported} imported, ${result.skipped} skipped, ${result.failed} failed`);
+  res.json({ success: true, data: result });
+};
