@@ -34,7 +34,6 @@ export default function HODFacilityRequests() {
     isSubmittingRequest 
   } = useInfrastructure(collegeId);
 
-  const { departments } = useDepartments();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -45,7 +44,6 @@ export default function HODFacilityRequests() {
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm({
     defaultValues: {
       facilityId: '',
-      departmentId: '',
       eventName: '',
       purpose: '',
       eventDate: new Date().toISOString().split('T')[0],
@@ -77,8 +75,7 @@ export default function HODFacilityRequests() {
 
   const handleOpenModal = () => {
     reset({
-      facilityId: facilities[0]?.id || '',
-      departmentId: '',
+      facilityId: bookable[0]?.id || '',
       eventName: '',
       purpose: '',
       eventDate: new Date().toISOString().split('T')[0],
@@ -100,14 +97,11 @@ export default function HODFacilityRequests() {
   };
 
   // Only facilities created by the college admin are listed in the dropdown
-  const facilityOptions = facilities.map(fac => ({
+  const bookable = facilities.filter(f => ['active', 'operational'].includes(f.status));
+
+  const facilityOptions = bookable.map(fac => ({
     value: fac.id,
     label: `${fac.name} (${fac.type} - Capacity: ${fac.capacity} seats, ${fac.location || 'Campus'})`
-  }));
-
-  const departmentOptions = departments.map(d => ({
-    value: d.id,
-    label: `${d.name} (${d.code})`
   }));
 
   return (
@@ -325,7 +319,7 @@ export default function HODFacilityRequests() {
             <strong>Institutional Policy:</strong> This request will be instantly dispatched to the College Administration. You will receive an in-app alert notification as soon as the Admin approves or provides feedback.
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             <Select
               label="Select Facility / Venue *"
               {...register('facilityId', { required: 'Please select a facility' })}
@@ -333,15 +327,6 @@ export default function HODFacilityRequests() {
               options={[
                 { value: '', label: 'Select admin-created facility...' },
                 ...facilityOptions
-              ]}
-            />
-
-            <Select
-              label="Department *"
-              {...register('departmentId')}
-              options={[
-                { value: '', label: 'Auto-detect my department...' },
-                ...departmentOptions
               ]}
             />
           </div>

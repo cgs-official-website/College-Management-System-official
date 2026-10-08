@@ -47,7 +47,7 @@ const TeacherLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout, userData } = useAuth();
+  const { logout, userData, permissions } = useAuth();
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
 
   useEffect(() => {
@@ -77,8 +77,14 @@ const TeacherLayout = () => {
     { name: 'Settings', path: '/teacher/settings', icon: SettingsIcon },
   ];
 
+  const canUseFacilities =
+  permissions?.infrastructure?.canRead === true ||
+  (userData?.role === 'hod' && !userData?.customRoleId);
+
   if (userData?.role === 'hod') {
     navLinks.splice(4, 0, { name: 'Manage Timetable', path: '/teacher/timetable', icon: Calendar });
+  }
+  if (canUseFacilities) {
     navLinks.splice(5, 0, { name: 'Facility Requests', path: '/teacher/facility-requests', icon: Building });
   }
 
@@ -234,7 +240,7 @@ const TeacherLayout = () => {
               <Route path="/student-leaves" element={<LeaveRequestsDashboard />} />
               <Route path="/ptm" element={<TeacherPtm />} />
               <Route path="/settings" element={<TeacherSettings />} />
-              <Route path="/facility-requests" element={<HODFacilityRequests />} />
+              {canUseFacilities && <Route path="/facility-requests" element={<HODFacilityRequests />} />}
               {userData?.role === 'hod' && <Route path="/timetable" element={<Timetable />} />}
               <Route path="*" element={<Navigate to="/teacher" replace />} />
             </Routes>

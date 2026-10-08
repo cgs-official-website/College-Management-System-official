@@ -144,13 +144,22 @@ export const createBookingRequest = async (req, res) => {
       return res.status(404).json({ error: { message: 'Selected facility does not exist.' } });
     }
 
-    // Resolve department if not passed explicitly
-    let resolvedDeptId = departmentId;
-    if (!resolvedDeptId) {
+    if (endTime <= startTime) {
+      return res.status(400).json({ error: { message: 'End time must be after start time.' } });
+    }
+    if (!['active', 'operational'].includes(facility.status)) {
+      return res.status(400).json({ error: { message: 'This facility is not available for booking.' } });
+    }
+
+    let resolvedDeptId = null;
+    if (user.role === 'admin') {
+      resolvedDeptId = departmentId || null;
+    } else {
       const teacher = await prisma.teacher.findFirst({
-        where: { userId: user.id, collegeId }
+        where: { userId: user.id, collegeId, deletedAt: null },
+        select: { departmentId: true }
       });
-      if (teacher?.departmentId) resolvedDeptId = teacher.departmentId;
+      resolvedDeptId = teacher?.departmentId || null;
     }
 
     const booking = await prisma.infrastructureBooking.create({
@@ -212,6 +221,23 @@ export const reviewBookingRequest = async (req, res) => {
 
     if (!existingBooking) {
       return res.status(404).json({ error: { message: 'Booking request not found.' } });
+    }
+
+    if (status === 'approved') {
+      const clash = await prisma.infrastructureBooking.findFirst({
+        where: {
+          collegeId,
+          facilityId: existingBooking.facilityId,
+          eventDate: existingBooking.eventDate,
+          status: 'approved',
+          id: { not: id },
+          startTime: { lt: existingBooking.endTime },
+          endTime: { gt: existingBooking.startTime },
+        },
+      });
+      if (clash) {
+        return res.status(409).json({ error: { message: 'This slot overlaps an already approved booking.' } });
+      }
     }
 
     const updatedBooking = await prisma.infrastructureBooking.update({
