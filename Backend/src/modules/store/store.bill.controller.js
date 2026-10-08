@@ -43,17 +43,25 @@ const buildPdf = (sale, college, logo) =>
     const DARK = '#0f172a';
     const COLS = { sr: 40, item: 68, qty: 330, price: 375, total: 450 };
 
-    //  header 
-    let textX = L;
+    // header
+    const pad = logo ? 72 : 0;
+    const tx = L + pad;
+    const tw = R - L - pad * 2;
     if (logo) {
-      try { doc.image(logo, L, 40, { fit: [60, 60] }); textX = L + 72; } catch { /* skip bad image */ }
+      try { doc.image(logo, L, 40, { fit: [60, 60] }); } catch { /* skip bad image */ }
     }
+
     doc.font('Helvetica-Bold').fontSize(16).fillColor(DARK)
-      .text(college?.name || 'Campus Store', textX, 42, { width: R - textX });
+      .text(college?.name || 'Campus Store', tx, 42, { width: tw, align: 'center' });
+
     doc.font('Helvetica').fontSize(9).fillColor(GREY);
-    if (college?.address) doc.text(college.address, textX, doc.y + 2, { width: R - textX });
-    const contact = [college?.contactPhone, college?.contactEmail].filter(Boolean).join('  |  ');
-    if (contact) doc.text(contact, textX, doc.y + 2, { width: R - textX });
+    if (college?.address) doc.text(college.address, tx, doc.y + 2, { width: tw, align: 'center' });
+
+    const contact = [
+      college?.contactPhone && `Phone Number: ${college.contactPhone}`,
+      college?.contactEmail && `Email: ${college.contactEmail}`,
+    ].filter(Boolean).join(', ');
+    if (contact) doc.text(contact, tx, doc.y + 2, { width: tw, align: 'center' });
 
     let y = Math.max(doc.y, logo ? 108 : 0) + 12;
     doc.moveTo(L, y).lineTo(R, y).lineWidth(1).strokeColor('#cbd5e1').stroke();
