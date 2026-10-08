@@ -6,7 +6,6 @@ import { requirePermission } from '../../middleware/requirePermission.js';
 import { catchAsync } from '../../lib/catchAsync.js';
 
 const router = Router();
-
 router.use(authenticate, resolveTenant);
 
 router.get('/', requirePermission('transport', 'read'), catchAsync(getItems));

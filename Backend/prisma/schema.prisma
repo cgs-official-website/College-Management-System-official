@@ -77,6 +77,8 @@ model College {
   notifications            Notification[]
   libraryTransactions      LibraryTransaction[]
   librarySettings          LibrarySettings?
+  ptmSlots                 PtmSlot[]
+  ptmMeetings              PtmMeeting[]
 }
 
 model BillingSubscription {
@@ -274,6 +276,8 @@ model Teacher {
   user         User            @relation(fields: [userId], references: [id])
   timetable    TimetableSlot[]
   sections     Section[]       @relation("TeacherSections")
+  ptmSlots     PtmSlot[]
+  ptmMeetings  PtmMeeting[]
   teacherId              String?  // Required for new teachers; nullable for existing records without an assigned ID.
   gender                 String?
   dateOfBirth            DateTime?
@@ -355,6 +359,7 @@ model Student {
   profileImageData     String?              @db.Text
   profileImageMimeType String?
   libraryTransactions  LibraryTransaction[]
+  ptmMeetings          PtmMeeting[]
 
   @@unique([collegeId, admissionNumber])
   @@index([collegeId])
@@ -1198,4 +1203,47 @@ model LibraryTransaction {
   @@index([collegeId, studentId, status])
   @@index([bookId, status])
   @@index([collegeId, dueDate])
+}
+model PtmSlot {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId String   @db.Uuid
+  teacherId String   @db.Uuid
+  date      DateTime @db.Date
+  startTime String
+  endTime   String
+  status    String   @default("available") // available, booked, cancelled
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  college College     @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  teacher Teacher     @relation(fields: [teacherId], references: [id])
+  meeting PtmMeeting?
+
+  @@unique([teacherId, date, startTime])
+  @@index([collegeId, teacherId, date])
+}
+
+model PtmMeeting {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId    String   @db.Uuid
+  slotId       String   @unique @db.Uuid
+  teacherId    String   @db.Uuid
+  studentId    String   @db.Uuid
+  mode         String   @default("online") // online, offline
+  meetingLink  String?
+  venue        String?
+  agenda       String?
+  teacherNotes String?
+  status       String   @default("scheduled") // scheduled, completed, cancelled
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  college College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  slot    PtmSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  teacher Teacher @relation(fields: [teacherId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@index([collegeId, status])
+  @@index([teacherId])
+  @@index([studentId])
 }

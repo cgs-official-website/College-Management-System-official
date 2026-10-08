@@ -26,7 +26,8 @@ import {
   Moon, 
   RefreshCw,
   Bell,    
-  ArrowUpRight
+  ArrowUpRight,
+  Video
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 import { useQueryClient } from '@tanstack/react-query';
@@ -46,6 +47,7 @@ import StudentPlacements from './StudentPlacements';
 import StudentComplaints from './StudentComplaints';
 import StudentDocumentsDashboard from './StudentDocumentsDashboard';
 import StudentSettings from './StudentSettings';
+import StudentPtm from './StudentPtm';
 
 const StudentLayout = () => {
   const queryClient = useQueryClient();
@@ -93,6 +95,7 @@ const StudentLayout = () => {
     { name: 'Exams & Results', path: '/student/exams', icon: ClipboardList },
     { name: 'Fees & Finance', path: '/student/fees', icon: Calculator },
     { name: 'Notice Board', path: '/student/notices', icon: Megaphone },
+    { name: 'PTM Meetings', path: '/student/ptm', icon: Video },
     { name: 'Library', path: '/student/library', icon: LibraryIcon },
     { name: 'Hostel', path: '/student/hostel', icon: Home, show: isHosteller },
     { name: 'Transport', path: '/student/transport', icon: Bus, show: isDayScholar },
@@ -280,6 +283,7 @@ const StudentLayout = () => {
               <Route path="/exams" element={<StudentExamsDashboard />} />
               <Route path="/fees" element={<StudentFeesDashboard />} />
               <Route path="/notices" element={<StudentNoticesDashboard />} />
+              <Route path="/ptm" element={<StudentPtm />} />
               <Route path="/library" element={<StudentLibraryDashboard />} />
               <Route path="/hostel" element={isHosteller ? <StudentHostel /> : <Navigate to="/student" replace />} />
               <Route path="/transport" element={isDayScholar ? <StudentTransport /> : <Navigate to="/student" replace />} />

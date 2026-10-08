@@ -632,10 +632,6 @@ const AdminDashboardHome = () => {
                     <span className="flex items-center gap-2"><Briefcase className="w-4 h-4 text-indigo-500" /> HOD Link</span>
                     {copiedLink === 'hod' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                   </button>
-                  <button onClick={() => handleGenerateLink('parent')} className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-lg transition-colors">
-                    <span className="flex items-center gap-2"><User className="w-4 h-4 text-amber-500" /> Parent Link</span>
-                    {copiedLink === 'parent' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                  </button>
                 </div>
               </motion.div>
             )}

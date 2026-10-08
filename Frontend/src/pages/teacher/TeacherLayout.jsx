@@ -22,7 +22,8 @@ import {
   Banknote,
   Building,
   CalendarClock,
-  CalendarOff
+  CalendarOff,
+  Video
 } from 'lucide-react';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
@@ -38,6 +39,7 @@ import TeacherSchedule from './TeacherSchedule';
 import TeacherGrades from './TeacherGrades';
 import TeacherSettings from './TeacherSettings';
 import TeacherMyLeaves from './TeacherMyLeaves';
+import TeacherPtm from './TeacherPtm';
 import Timetable from '../admin/timetable/Timetable';
 import LeaveRequestsDashboard from '../admin/leaves/LeaveRequestsDashboard';
 
@@ -71,6 +73,7 @@ const TeacherLayout = () => {
     { name: 'Payroll', path: '/teacher/payroll', icon: Banknote },
     { name: 'My Leaves', path: '/teacher/my-leaves', icon: CalendarClock },
     { name: 'Student Leaves', path: '/teacher/student-leaves', icon: CalendarOff },
+        { name: 'PTM Meetings', path: '/teacher/ptm', icon: Video },
     { name: 'Settings', path: '/teacher/settings', icon: SettingsIcon },
   ];
 
@@ -229,6 +232,7 @@ const TeacherLayout = () => {
               <Route path="/payroll" element={<PayrollDashboard />} />
               <Route path="/my-leaves" element={<TeacherMyLeaves />} />
               <Route path="/student-leaves" element={<LeaveRequestsDashboard />} />
+              <Route path="/ptm" element={<TeacherPtm />} />
               <Route path="/settings" element={<TeacherSettings />} />
               <Route path="/facility-requests" element={<HODFacilityRequests />} />
               {userData?.role === 'hod' && <Route path="/timetable" element={<Timetable />} />}
