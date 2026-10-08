@@ -104,7 +104,7 @@ export const matchesRole = (recordRole, filterRole) => {
     return rr.includes('admin') || rr.includes('principal') || rr.includes('super');
   }
   if (fr === 'teacher') {
-    return rr.includes('teach') || rr.includes('faculty') || rr.includes('prof') || rr.includes('hod') || rr.includes('instructor');
+    return rr.includes('teach') || rr.includes('faculty') || rr.includes('prof') || rr.includes('hod') || rr.includes('instructor') || rr.includes('staff') || rr.includes('lecturer');
   }
   if (fr === 'student') {
     return rr.includes('student');
@@ -130,7 +130,7 @@ export const getRoleDetails = (role) => {
       iconType: 'admin'
     };
   }
-  if (r.includes('teach') || r.includes('faculty') || r.includes('prof') || r.includes('hod') || r.includes('instructor')) {
+  if (r.includes('teach') || r.includes('faculty') || r.includes('prof') || r.includes('hod') || r.includes('instructor') || r.includes('staff') || r.includes('lecturer')) {
     return {
       label: 'Teacher',
       badgeClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
@@ -160,7 +160,7 @@ export const matchesModule = (recordModule, filterModule) => {
   const fm = String(filterModule || '').toUpperCase();
   if (rm === fm) return true;
   if (fm === 'STUDENT' || fm === 'STUDENTS') return rm.includes('STUDENT');
-  if (fm === 'FACULTY' || fm === 'STAFF' || fm === 'HR') return rm.includes('STAFF') || rm.includes('FACULTY') || rm.includes('HR');
+  if (fm === 'FACULTY' || fm === 'STAFF' || fm === 'HR') return rm.includes('STAFF') || rm.includes('FACULTY') || rm.includes('HR') || rm.includes('PTM');
   if (fm === 'COURSE' || fm === 'COURSES' || fm === 'ACADEMIC') return rm.includes('COURSE') || rm.includes('ACADEMIC') || rm.includes('DEPARTMENT');
   if (fm === 'FEE' || fm === 'FEES' || fm === 'FINANCE') return rm.includes('FEE') || rm.includes('FINANCE');
   if (fm === 'PERMISSION' || fm === 'ROLES' || fm === 'ROLE') return rm.includes('ROLE') || rm.includes('PERMISSION');
@@ -498,12 +498,12 @@ export default function AuditLogs() {
   const collegeId = userData?.collegeId;
 
   // State
-  const [logs, setLogs] = useState(INITIAL_DEMO_LOGS);
-  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: INITIAL_DEMO_LOGS.length, totalPages: 1 });
-  const [stats, setStats] = useState({ totalLogs: INITIAL_DEMO_LOGS.length, todayCount: INITIAL_DEMO_LOGS.length, failureCount: 0 });
-  const [isLoading, setIsLoading] = useState(false);
+  const [logs, setLogs] = useState([]);
+  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
+  const [stats, setStats] = useState({ totalLogs: 0, todayCount: 0, failureCount: 0 });
+  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [liveTracking, setLiveTracking] = useState(false); // Auto-refresh off
+  const [liveTracking, setLiveTracking] = useState(true); // Real-time live polling active by default
 
   // Filters
   const [search, setSearch] = useState('');
@@ -578,18 +578,31 @@ export default function AuditLogs() {
       const response = await api.get('/audit-logs', { params });
       const raw = response?.data;
       const data = raw?.data || raw || response || {};
-      const validLogs = (Array.isArray(fetchedLogs) ? fetchedLogs : []).filter(l => {
+      const incomingList = Array.isArray(data.logs)
+        ? data.logs
+        : Array.isArray(raw?.logs)
+        ? raw.logs
+        : Array.isArray(data)
+        ? data
+        : [];
+
+      const validLogs = incomingList.filter(l => {
         const act = String(l.action || '').toUpperCase();
         const ent = String(l.entity || '').toUpperCase();
         const mod = String(l.module || '').toUpperCase();
-        return !act.includes('REFRESH') && !ent.includes('REFRESH') && !mod.includes('REFRESH');
+        const desc = String(l.description || '').toLowerCase();
+        return !act.includes('REFRESH') && !ent.includes('REFRESH') && !mod.includes('REFRESH') && !desc.includes('session refresh');
       });
 
-      if (validLogs.length > 0) {
-        setLogs(validLogs);
-        if (data.stats || raw?.stats || response?.stats) {
-          setStats(data.stats || raw?.stats || response?.stats);
-        }
+      setLogs(validLogs);
+      if (data.stats || raw?.stats || response?.stats) {
+        setStats(data.stats || raw?.stats || response?.stats);
+      } else {
+        setStats({
+          totalLogs: validLogs.length,
+          todayCount: validLogs.length,
+          failureCount: validLogs.filter(l => l.status === 'FAILURE').length
+        });
       }
     } catch (err) {
       console.warn('[AuditLogs] Primary endpoint sync notice:', err?.message);
@@ -613,12 +626,12 @@ export default function AuditLogs() {
     fetchAuditLogs(true);
   }, [fetchAuditLogs]);
 
-  // Real-time polling when liveTracking is enabled
+  // Real-time polling when liveTracking is enabled (every 3.5s for instant live updates)
   useEffect(() => {
     if (!liveTracking) return;
     const interval = setInterval(() => {
       fetchAuditLogs(true);
-    }, 10000);
+    }, 3500);
     return () => clearInterval(interval);
   }, [liveTracking, fetchAuditLogs]);
 
@@ -631,6 +644,59 @@ export default function AuditLogs() {
       const desc = String(log.description || '').toLowerCase();
       return !act.includes('REFRESH') && !ent.includes('REFRESH') && !mod.includes('REFRESH') && !desc.includes('session refresh');
     });
+
+    // Intelligent Deduplication: consolidate duplicate logs for the same target record / description and action
+    const deduplicated = [];
+    const seenIds = new Set();
+
+    for (const log of result) {
+      if (log.id && seenIds.has(log.id)) continue;
+      if (log.id) seenIds.add(log.id);
+
+      const email = String(log.userEmail || '').toLowerCase().trim();
+      const action = String(log.action || '').toUpperCase().trim();
+      const module = String(log.module || '').toUpperCase().trim();
+      const desc = getDisplayDescription(log).toLowerCase().trim();
+      const target = getDisplayTargetRecord(log).toLowerCase().trim();
+      const ts = new Date(log.createdAt).getTime();
+
+      const dupIndex = deduplicated.findIndex(existing => {
+        const exEmail = String(existing.userEmail || '').toLowerCase().trim();
+        const exAction = String(existing.action || '').toUpperCase().trim();
+        const exModule = String(existing.module || '').toUpperCase().trim();
+        const exDesc = getDisplayDescription(existing).toLowerCase().trim();
+        const exTarget = getDisplayTargetRecord(existing).toLowerCase().trim();
+        const exTs = new Date(existing.createdAt).getTime();
+
+        const timeDiff = isNaN(ts) || isNaN(exTs) ? 0 : Math.abs(exTs - ts);
+
+        // Case 1: Exact same description or same target record within 60s
+        if (timeDiff <= 60000 && (exDesc === desc || (exTarget === target && exTarget !== '-' && exAction === action))) {
+          return true;
+        }
+
+        // Case 2: Same user and same action within 30s
+        if (timeDiff <= 30000 && exEmail && email && exEmail === email && exAction === action && exModule === module) {
+          return true;
+        }
+
+        return false;
+      });
+
+      if (dupIndex === -1) {
+        deduplicated.push(log);
+      } else {
+        const existing = deduplicated[dupIndex];
+        const existingRole = String(existing.userRole || '').toLowerCase();
+        const currentRole = String(log.userRole || '').toLowerCase();
+        // Keep the record with the more specific role (superadmin / admin / teacher / student over 'user')
+        if ((existingRole === 'user' || !existingRole) && currentRole && currentRole !== 'user') {
+          deduplicated[dupIndex] = log;
+        }
+      }
+    }
+
+    result = deduplicated;
 
     // Role filter (Teacher vs Admin)
     if (selectedRole !== 'ALL') {
@@ -1178,19 +1244,6 @@ export default function AuditLogs() {
 
       {/* ── 4. Main Audit Logs Table ── */}
       <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-3xl shadow-sm overflow-hidden">
-
-        {/* Table Header Info */}
-        <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-slate-900 dark:text-white">Audit Trail Stream</span>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 font-semibold">
-              {displayedLogs.length} matching {displayedLogs.length === 1 ? 'record' : 'records'}
-            </span>
-          </div>
-          <div className="text-xs text-slate-400">
-            Showing page {pagination.page} of {totalPages}
-          </div>
-        </div>
 
         {/* Responsive Table */}
         <div className="overflow-x-auto">

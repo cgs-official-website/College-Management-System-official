@@ -14,6 +14,7 @@ const getInitialValues = (initialData) => ({
   lastName: initialData?.lastName || '',
   email: initialData?.email || '',
   admissionNumber: initialData?.admissionNumber || initialData?.admissionNo || '',
+  registerNumber: initialData?.registerNumber || initialData?.studentRegNo || initialData?.regNo || '',
   phone: initialData?.phone || initialData?.studentMobile || '',
   dob: initialData?.dob || (initialData?.dateOfBirth ? (typeof initialData.dateOfBirth === 'string' ? initialData.dateOfBirth.split('T')[0] : new Date(initialData.dateOfBirth).toISOString().split('T')[0]) : ''),
   gender: initialData?.gender || '',
@@ -94,8 +95,15 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
             />
             <Input
               label="Admission ID / Number *"
+              placeholder="e.g. ADM-2026-001"
               {...register('admissionNumber', { required: 'Admission ID / Number is required' })}
               error={errors.admissionNumber?.message}
+            />
+            <Input
+              label="Student Reg No / Unique ID"
+              placeholder="e.g. REG-2026-089"
+              {...register('registerNumber')}
+              error={errors.registerNumber?.message}
             />
             <Input 
               label="Phone Number" 
@@ -112,9 +120,10 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
               error={errors.phone?.message}
             />
             <Input 
-              label="Date of Birth" 
+              label="Date of Birth *" 
               type="date"
-              {...register('dob')}
+              {...register('dob', { required: "Date of birth is required" })}
+              error={errors.dob?.message}
             />
             <Select 
               label="Gender" 

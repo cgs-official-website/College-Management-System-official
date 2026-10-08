@@ -1,7 +1,11 @@
 import { getAuditLogs, getAuditLogById, createAuditLog } from './audit.service.js';
 
 export const getAuditLogsController = async (req, res) => {
-  const collegeId = req.tenant?.collegeId || req.user?.collegeId || req.query?.collegeId;
+  const isSuperAdmin = (req.user?.role || '').toLowerCase() === 'superadmin';
+  const collegeId = isSuperAdmin 
+    ? (req.query?.collegeId || req.tenant?.collegeId || req.user?.collegeId || null)
+    : (req.user?.collegeId || null);
+
   const {
     page = 1,
     limit = 25,
@@ -17,6 +21,7 @@ export const getAuditLogsController = async (req, res) => {
 
   const result = await getAuditLogs({
     collegeId,
+    isSuperAdmin,
     page,
     limit,
     module,
@@ -44,9 +49,10 @@ export const getAuditLogsController = async (req, res) => {
 
 export const getAuditLogByIdController = async (req, res) => {
   const { id } = req.params;
-  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const isSuperAdmin = (req.user?.role || '').toLowerCase() === 'superadmin';
+  const collegeId = isSuperAdmin ? null : (req.user?.collegeId || null);
 
-  const log = await getAuditLogById(id, collegeId);
+  const log = await getAuditLogById(id, collegeId, isSuperAdmin);
   if (!log) {
     return res.status(404).json({
       success: false,
@@ -61,7 +67,10 @@ export const getAuditLogByIdController = async (req, res) => {
 };
 
 export const createAuditLogController = async (req, res) => {
-  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const isSuperAdmin = (req.user?.role || '').toLowerCase() === 'superadmin';
+  const collegeId = isSuperAdmin 
+    ? (req.body?.collegeId || req.tenant?.collegeId || req.user?.collegeId || null)
+    : (req.user?.collegeId || null);
   const user = req.user;
 
   const {

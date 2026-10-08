@@ -364,10 +364,13 @@ model Student {
   profileImageMimeType String?
   libraryTransactions  LibraryTransaction[]
   ptmMeetings          PtmMeeting[]
+  registerNumber       String?
 
   @@unique([collegeId, admissionNumber])
+  @@unique([collegeId, registerNumber])
   @@index([collegeId])
   @@index([collegeId, emailId])
+  @@index([collegeId, registerNumber])
 }
 
 model Parent {
@@ -1286,6 +1289,7 @@ model PtmMeeting {
   @@index([collegeId, status])
   @@index([teacherId])
   @@index([studentId])
+}
 
 model StoreSale {
   id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid

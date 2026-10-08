@@ -231,6 +231,7 @@ export default function StudentRegister() {
     if (!form.firstName.trim()) e.firstName = 'First name is required';
     if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Valid email is required';
     if (!form.admissionNumber.trim()) e.admissionNumber = 'Admission ID / Number is required';
+    if (!form.dob || !form.dob.trim()) e.dob = 'Date of birth is required';
     if (!form.gender) e.gender = 'Please select your gender';
     if (!form.parentName.trim()) e.parentName = 'Parent/Guardian name is required';
     if (form.phone && !/^\d{10}$/.test(form.phone)) e.phone = 'Phone must be 10 digits';
@@ -410,7 +411,7 @@ export default function StudentRegister() {
                   />
                 </Field>
 
-                <Field label="Date of Birth" error={errors.dob}>
+                <Field label="Date of Birth" required error={errors.dob}>
                   <TextInput icon={Calendar} type="date" value={form.dob} onChange={set('dob')} />
                 </Field>
 

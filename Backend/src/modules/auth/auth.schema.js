@@ -37,7 +37,7 @@ export const studentRegisterSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required'),
   lastName: z.string().trim().optional().default(''),
   phone: z.string().trim().optional().nullable(),
-  dob: z.string().trim().optional().nullable(),
+  dob: z.string({ required_error: 'Date of birth is required' }).trim().min(1, 'Date of birth is required'),
   gender: z.string().trim().optional().nullable(),
   course: z.string().trim().optional().nullable(),   // free-text course name from student
   section: z.string().trim().optional().nullable(),  // free-text section from student

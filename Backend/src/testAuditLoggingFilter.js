@@ -10,13 +10,13 @@
  * 5. One attendance submission = exactly one log row.
  */
 
-import { 
-  shouldLogAuditEvent, 
-  hasActualChanges, 
+import {
+  shouldLogAuditEvent,
+  hasActualChanges,
   isAuditableRequest,
   ALLOWED_AUDIT_ACTIONS,
   SKIPPED_ACTION_KEYWORDS,
-  SKIPPED_ROUTE_PATTERNS 
+  SKIPPED_ROUTE_PATTERNS
 } from './modules/audit/auditFilter.js';
 import { createAuditLog } from './modules/audit/audit.service.js';
 
@@ -437,7 +437,7 @@ async function runAuditFilterTests() {
     description: 'Jd Guru (Teacher) marked attendance for Class 10-A'
   });
   assert(
-    attendanceLogResult !== null && 
+    attendanceLogResult !== null &&
     attendanceLogResult.newValue?.className === 'Class 10-A' &&
     attendanceLogResult.newValue?.students?.length === 4,
     'One attendance submission saves exactly 1 row containing full class details and student list'
@@ -445,8 +445,85 @@ async function runAuditFilterTests() {
 
 
   // ─────────────────────────────────────────────────────────────────
-  // TEST SUMMARY
+  // TEST GROUP 6: MULTI-COLLEGE DATA ISOLATION (ZERO LEAKAGE)
   // ─────────────────────────────────────────────────────────────────
+  console.log('\n--- 6. Testing Multi-College Tenant Isolation ---');
+
+  const collegeAId = 'a1111111-1111-4111-a111-111111111111';
+  const collegeBId = 'b2222222-2222-4222-b222-222222222222';
+  const collegeCId = 'c3333333-3333-4333-c333-333333333333';
+
+  const logA = await createAuditLog({
+    collegeId: collegeAId,
+    action: 'CREATE',
+    module: 'STUDENTS',
+    entity: 'Student',
+    userName: 'College A Admin',
+    userRole: 'admin',
+    description: 'Added student Alice in College A'
+  });
+
+  const logB = await createAuditLog({
+    collegeId: collegeBId,
+    action: 'CREATE',
+    module: 'STUDENTS',
+    entity: 'Student',
+    userName: 'College B Admin',
+    userRole: 'admin',
+    description: 'Added student Bob in College B'
+  });
+
+  const logC = await createAuditLog({
+    collegeId: collegeCId,
+    action: 'CREATE',
+    module: 'COURSES',
+    entity: 'Course',
+    userName: 'College C Admin',
+    userRole: 'admin',
+    description: 'Created Course CS101 in College C'
+  });
+
+  // Verify College A queries only see College A records
+  const { getAuditLogs, getAuditLogById } = await import('./modules/audit/audit.service.js');
+  const resA = await getAuditLogs({ collegeId: collegeAId });
+  const hasLogAInA = resA.logs.some(l => l.id === logA.id);
+  const hasLogBInA = resA.logs.some(l => l.id === logB.id);
+  const hasLogCInA = resA.logs.some(l => l.id === logC.id);
+
+  assert(hasLogAInA === true, 'College A audit query contains College A log');
+  assert(hasLogBInA === false, 'College A audit query DOES NOT leak College B log');
+  assert(hasLogCInA === false, 'College A audit query DOES NOT leak College C log');
+
+  // Verify College B queries only see College B records
+  const resB = await getAuditLogs({ collegeId: collegeBId });
+  const hasLogBInB = resB.logs.some(l => l.id === logB.id);
+  const hasLogAInB = resB.logs.some(l => l.id === logA.id);
+  const hasLogCInB = resB.logs.some(l => l.id === logC.id);
+
+  assert(hasLogBInB === true, 'College B audit query contains College B log');
+  assert(hasLogAInB === false, 'College B audit query DOES NOT leak College A log');
+  assert(hasLogCInB === false, 'College B audit query DOES NOT leak College C log');
+
+  // Verify College C queries only see College C records
+  const resC = await getAuditLogs({ collegeId: collegeCId });
+  const hasLogCInC = resC.logs.some(l => l.id === logC.id);
+  const hasLogAInC = resC.logs.some(l => l.id === logA.id);
+  const hasLogBInC = resC.logs.some(l => l.id === logB.id);
+
+  assert(hasLogCInC === true, 'College C audit query contains College C log');
+  assert(hasLogAInC === false, 'College C audit query DOES NOT leak College A log');
+  assert(hasLogBInC === false, 'College C audit query DOES NOT leak College B log');
+
+  // Direct ID lookup isolation test
+  const crossLookupBtoA = await getAuditLogById(logA.id, collegeBId);
+  assert(crossLookupBtoA === null, 'Direct lookup of College A log using College B context returns null');
+
+  const crossLookupCtoB = await getAuditLogById(logB.id, collegeCId);
+  assert(crossLookupCtoB === null, 'Direct lookup of College B log using College C context returns null');
+
+  // Unauthenticated / untrusted non-superadmin without collegeId returns 0 records
+  const noCollegeRes = await getAuditLogs({ collegeId: null, isSuperAdmin: false });
+  assert(noCollegeRes.logs.length === 0, 'Non-superadmin query without college context returns 0 records (no cross-tenant leakage)');
   console.log('\n====================================================');
   console.log(`TEST SUMMARY: ${passed} Passed, ${failed} Failed`);
   console.log('====================================================');

@@ -72,6 +72,8 @@ export const getStudents = async (req, res) => {
       admissionNo: s.admissionNumber || s.rollNumber,
       admissionNumber: s.admissionNumber,
       rollNumber: s.rollNumber,
+      registerNumber: s.registerNumber || custom.registerNumber || s.rollNumber || '',
+      studentRegNo: s.registerNumber || custom.registerNumber || s.rollNumber || '',
       firstName: fName || '',
       lastName: lName || '',
       name: fullName,
@@ -210,6 +212,8 @@ export const getStudentById = async (req, res) => {
       admissionNo: student.admissionNumber || student.rollNumber,
       admissionNumber: student.admissionNumber,
       rollNumber: student.rollNumber,
+      registerNumber: student.registerNumber || custom.registerNumber || student.rollNumber || '',
+      studentRegNo: student.registerNumber || custom.registerNumber || student.rollNumber || '',
       firstName: fName || '',
       lastName: lName || '',
       name: fullName,
@@ -328,6 +332,23 @@ export const createStudent = async (req, res) => {
 
   const admissionNo = admissionNumber;
   const rollNo = (payload.rollNo || payload.rollNumber || `R-${Date.now().toString().slice(-4)}`).trim();
+  const registerNumber = (payload.registerNumber || payload.studentRegNo || payload.regNo || '').trim() || null;
+
+  if (registerNumber) {
+    const existingStudentByReg = await prisma.student.findFirst({
+      where: { collegeId, registerNumber, deletedAt: null }
+    });
+    if (existingStudentByReg) {
+      return res.status(409).json({
+        success: false,
+        error: {
+          code: 'REGISTER_NUMBER_ALREADY_EXISTS',
+          message: `Student Reg No '${registerNumber}' already exists in this college.`
+        }
+      });
+    }
+  }
+
   const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
 
   let student;
@@ -388,7 +409,9 @@ export const createStudent = async (req, res) => {
         lastName: payload.lastName || '',
         gender: payload.gender || null,
         dob: payload.dob || payload.dateOfBirth || null,
-        dateOfBirth: payload.dob || payload.dateOfBirth || null
+        dateOfBirth: payload.dob || payload.dateOfBirth || null,
+        registerNumber: registerNumber || null,
+        studentRegNo: registerNumber || null
       };
 
       const newStudent = await tx.student.create({
@@ -400,6 +423,7 @@ export const createStudent = async (req, res) => {
           sectionId: payload.sectionId || null,
           admissionNumber: admissionNo,
           rollNumber: rollNo,
+          registerNumber: registerNumber || null,
           batchYear: payload.batchYear || `${new Date().getFullYear()}`,
           bloodGroup: payload.bloodGroup,
           studentMobile: payload.phone || null,
@@ -442,6 +466,8 @@ export const createStudent = async (req, res) => {
     data: {
       id: student.id,
       admissionNo: student.admissionNumber,
+      registerNumber: student.registerNumber || registerNumber,
+      studentRegNo: student.registerNumber || registerNumber,
       name: `${payload.firstName} ${payload.lastName || ''}`.trim(),
       email: student.user?.email,
       department: student.department?.name,
@@ -479,6 +505,23 @@ export const updateStudent = async (req, res) => {
       return res.status(409).json({
         success: false,
         error: { code: 'ADMISSION_NUMBER_ALREADY_EXISTS', message: `Admission number '${admissionNumber}' already exists in this college.` }
+      });
+    }
+  }
+
+  const registerNumber = payload.registerNumber !== undefined 
+    ? (payload.registerNumber?.trim() || null)
+    : (payload.studentRegNo !== undefined ? (payload.studentRegNo?.trim() || null) : (payload.regNo !== undefined ? (payload.regNo?.trim() || null) : undefined));
+
+  if (registerNumber) {
+    const duplicateReg = await prisma.student.findFirst({
+      where: { collegeId, registerNumber, deletedAt: null, NOT: { id } },
+      select: { id: true },
+    });
+    if (duplicateReg) {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'REGISTER_NUMBER_ALREADY_EXISTS', message: `Student Reg No '${registerNumber}' already exists in this college.` }
       });
     }
   }
@@ -542,7 +585,8 @@ export const updateStudent = async (req, res) => {
         ...(payload.firstName !== undefined ? { firstName: payload.firstName } : {}),
         ...(payload.lastName !== undefined ? { lastName: payload.lastName } : {}),
         ...(payload.gender !== undefined ? { gender: payload.gender } : {}),
-        ...(payload.dob !== undefined || payload.dateOfBirth !== undefined ? { dob: payload.dob || payload.dateOfBirth, dateOfBirth: payload.dob || payload.dateOfBirth } : {})
+        ...(payload.dob !== undefined || payload.dateOfBirth !== undefined ? { dob: payload.dob || payload.dateOfBirth, dateOfBirth: payload.dob || payload.dateOfBirth } : {}),
+        ...(registerNumber !== undefined ? { registerNumber, studentRegNo: registerNumber } : {})
       };
 
       const s = await tx.student.update({
@@ -551,6 +595,7 @@ export const updateStudent = async (req, res) => {
           ...(admissionNumber ? { admissionNumber } : {}),
           ...(normalizedEmail ? { emailId: normalizedEmail } : {}),
           ...(payload.rollNo || payload.rollNumber ? { rollNumber: payload.rollNo || payload.rollNumber } : {}),
+          ...(registerNumber !== undefined ? { registerNumber } : {}),
           ...(payload.batchYear !== undefined ? { batchYear: payload.batchYear } : {}),
           ...(payload.bloodGroup !== undefined ? { bloodGroup: payload.bloodGroup || null } : {}),
           ...(payload.phone !== undefined ? { studentMobile: payload.phone || null } : {}),
@@ -702,6 +747,8 @@ export const bulkImportStudents = async (req, res) => {
         const dateOfBirth = row['Date_of_Birth*'] || row['Date_of_Birth'] ? new Date(row['Date_of_Birth*'] || row['Date_of_Birth']) : null;
         const dateOfAdmission = row['Date_of_Admission*'] || row['Date_of_Admission'] ? new Date(row['Date_of_Admission*'] || row['Date_of_Admission']) : null;
         
+        const registerNumber = String(row['Student_Reg_No'] || row['Register_No'] || row['Reg_No'] || row['Register_Number'] || '').trim() || null;
+
         await tx.student.create({
           data: {
             collegeId,
@@ -709,6 +756,7 @@ export const bulkImportStudents = async (req, res) => {
             departmentId: deptId,
             admissionNumber: admissionNo,
             rollNumber: rollNo,
+            registerNumber: registerNumber || null,
             batchYear: String(row['Year_of_Study*'] || row['Year_of_Study'] || new Date().getFullYear()),
             bloodGroup: row['Blood_Group'] || null,
             emergencyContact: String(row['Parent_Mobile*'] || row['Parent_Mobile'] || row['Student_Mobile'] || ''),

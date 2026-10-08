@@ -8,17 +8,21 @@ const MODULE_ROUTE_MAP = [
   { prefix: '/api/v1/students', module: 'STUDENTS' },
   { prefix: '/api/v1/hr', module: 'STAFF' },
   { prefix: '/api/v1/staff', module: 'STAFF' },
+  { prefix: '/api/v1/ptm', module: 'STAFF' },
   { prefix: '/api/v1/fees', module: 'FEES' },
   { prefix: '/api/v1/attendance', module: 'ATTENDANCE' },
   { prefix: '/api/v1/courses', module: 'COURSES' },
   { prefix: '/api/v1/departments', module: 'COURSES' },
   { prefix: '/api/v1/academic', module: 'COURSES' },
   { prefix: '/api/v1/sections', module: 'COURSES' },
+  { prefix: '/api/v1/assignments', module: 'COURSES' },
   { prefix: '/api/v1/roles', module: 'ROLES_AND_PERMISSIONS' },
   { prefix: '/api/v1/permissions', module: 'ROLES_AND_PERMISSIONS' },
   { prefix: '/api/v1/colleges', module: 'SETTINGS' },
   { prefix: '/api/v1/settings', module: 'SETTINGS' },
   { prefix: '/api/v1/exams', module: 'EXAMS' },
+  { prefix: '/api/v1/marks', module: 'EXAMS' },
+  { prefix: '/api/v1/grades', module: 'EXAMS' },
   { prefix: '/api/v1/timetable', module: 'TIMETABLE' },
   { prefix: '/api/v1/transport', module: 'TRANSPORT' },
   { prefix: '/api/v1/hostel', module: 'HOSTEL' },
@@ -60,8 +64,8 @@ export const auditMiddleware = (req, res, next) => {
   const requestBodySnapshot = req.body ? JSON.parse(JSON.stringify(req.body)) : null;
 
   res.on('finish', () => {
-    // Extra safety: Ignore any refresh or session refresh routes
-    if (url.includes('/refresh') || url.includes('/session-refresh')) {
+    // Extra safety: Ignore any refresh, session refresh, or login routes (login is recorded with full user role directly in auth controller)
+    if (url.includes('/refresh') || url.includes('/session-refresh') || url.includes('/auth/login')) {
       return;
     }
 

@@ -70,6 +70,7 @@ const inMemoryFallbackLogs = [
 
 const MAX_FALLBACK = 500;
 let tableInitialized = false;
+const recentAuditEvents = new Map(); // deduplication cache: key -> { timestamp, entry }
 
 const isUuid = (val) => {
   if (!val || typeof val !== 'string') return false;
@@ -171,6 +172,14 @@ export async function createAuditLog({
     return null;
   }
 
+  // Deduplication guard: ignore identical logs for same user/action/target within 4 seconds
+  const dedupKey = `${(userEmail || '').toLowerCase()}_${String(action || '').toUpperCase()}_${String(module || '').toUpperCase()}_${entityId || ''}_${(description || '').trim()}`;
+  const nowMs = Date.now();
+  const recent = recentAuditEvents.get(dedupKey);
+  if (recent && (nowMs - recent.timestamp < 4000)) {
+    return recent.entry;
+  }
+
   const sanitizedOld = oldValue ? sanitizePayload(oldValue) : null;
   const sanitizedNew = newValue ? sanitizePayload(newValue) : null;
   const now = new Date();
@@ -194,6 +203,14 @@ export async function createAuditLog({
     status: status ? String(status).toUpperCase() : 'SUCCESS',
     createdAt: now
   };
+
+  recentAuditEvents.set(dedupKey, { timestamp: nowMs, entry });
+  if (recentAuditEvents.size > 2000) {
+    const cutoff = nowMs - 60000;
+    for (const [k, v] of recentAuditEvents.entries()) {
+      if (v.timestamp < cutoff) recentAuditEvents.delete(k);
+    }
+  }
 
   // Add to in-memory fallback ring buffer first
   inMemoryFallbackLogs.unshift(entry);
@@ -250,6 +267,7 @@ export async function createAuditLog({
  */
 export async function getAuditLogs({
   collegeId = null,
+  isSuperAdmin = false,
   page = 1,
   limit = 20,
   module = null,
@@ -278,15 +296,19 @@ export async function getAuditLogs({
     const params = [];
     let pIdx = 1;
 
+    // Strict multi-college tenant isolation
     if (collegeId && collegeId !== 'default_college_id' && collegeId !== 'all') {
       if (isUuid(collegeId)) {
-        whereClauses.push(`("collegeId" = $${pIdx}::uuid OR "collegeId" IS NULL)`);
+        whereClauses.push(`"collegeId" = $${pIdx}::uuid`);
         params.push(collegeId);
       } else {
-        whereClauses.push(`("collegeId"::text = $${pIdx} OR "collegeId" IS NULL)`);
+        whereClauses.push(`"collegeId"::text = $${pIdx}`);
         params.push(String(collegeId));
       }
       pIdx++;
+    } else if (!isSuperAdmin) {
+      // Non-superadmins without a verified collegeId cannot access multi-tenant data
+      whereClauses.push(`1 = 0`);
     }
 
     if (role && role !== 'ALL') {
@@ -410,22 +432,87 @@ export async function getAuditLogs({
     `;
     const logs = await prisma.$queryRawUnsafe(dataQuery, ...params, take, offset);
 
-    // Activity metrics
+    // Activity metrics strictly scoped to college
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const todayCountRes = await prisma.$queryRawUnsafe(
-      `SELECT COUNT(*)::int as today_count FROM "AuditLog" WHERE "createdAt" >= $1::timestamp AND UPPER("action") NOT LIKE '%REFRESH%'`,
-      today
-    );
-    const todayCount = todayCountRes?.[0]?.today_count || 0;
+    let todayCount = 0;
+    let failureCount = 0;
 
-    const failureCountRes = await prisma.$queryRawUnsafe(
-      `SELECT COUNT(*)::int as failure_count FROM "AuditLog" WHERE "status" = 'FAILURE' AND UPPER("action") NOT LIKE '%REFRESH%'`
-    );
-    const failureCount = failureCountRes?.[0]?.failure_count || 0;
+    if (collegeId && collegeId !== 'all') {
+      if (isUuid(collegeId)) {
+        const todayRes = await prisma.$queryRawUnsafe(
+          `SELECT COUNT(*)::int as today_count FROM "AuditLog" WHERE "createdAt" >= $1::timestamp AND UPPER("action") NOT LIKE '%REFRESH%' AND "collegeId" = $2::uuid`,
+          today,
+          collegeId
+        );
+        todayCount = todayRes?.[0]?.today_count || 0;
 
-    const enrichedLogs = (logs || []).map(l => {
+        const failureRes = await prisma.$queryRawUnsafe(
+          `SELECT COUNT(*)::int as failure_count FROM "AuditLog" WHERE "status" = 'FAILURE' AND UPPER("action") NOT LIKE '%REFRESH%' AND "collegeId" = $1::uuid`,
+          collegeId
+        );
+        failureCount = failureRes?.[0]?.failure_count || 0;
+      } else {
+        const todayRes = await prisma.$queryRawUnsafe(
+          `SELECT COUNT(*)::int as today_count FROM "AuditLog" WHERE "createdAt" >= $1::timestamp AND UPPER("action") NOT LIKE '%REFRESH%' AND "collegeId"::text = $2`,
+          today,
+          String(collegeId)
+        );
+        todayCount = todayRes?.[0]?.today_count || 0;
+
+        const failureRes = await prisma.$queryRawUnsafe(
+          `SELECT COUNT(*)::int as failure_count FROM "AuditLog" WHERE "status" = 'FAILURE' AND UPPER("action") NOT LIKE '%REFRESH%' AND "collegeId"::text = $1`,
+          String(collegeId)
+        );
+        failureCount = failureRes?.[0]?.failure_count || 0;
+      }
+    } else if (isSuperAdmin) {
+      const todayRes = await prisma.$queryRawUnsafe(
+        `SELECT COUNT(*)::int as today_count FROM "AuditLog" WHERE "createdAt" >= $1::timestamp AND UPPER("action") NOT LIKE '%REFRESH%'`,
+        today
+      );
+      todayCount = todayRes?.[0]?.today_count || 0;
+
+      const failureRes = await prisma.$queryRawUnsafe(
+        `SELECT COUNT(*)::int as failure_count FROM "AuditLog" WHERE "status" = 'FAILURE' AND UPPER("action") NOT LIKE '%REFRESH%'`
+      );
+      failureCount = failureRes?.[0]?.failure_count || 0;
+    }
+
+    // Cleanse repeated/duplicate events within close time windows
+    const deduplicatedLogs = [];
+    for (const l of logs || []) {
+      const email = String(l.userEmail || '').toLowerCase();
+      const action = String(l.action || '').toUpperCase();
+      const desc = String(l.description || '').toLowerCase();
+      const ts = new Date(l.createdAt).getTime();
+
+      const dupIndex = deduplicatedLogs.findIndex(existing => {
+        const exEmail = String(existing.userEmail || '').toLowerCase();
+        const exAction = String(existing.action || '').toUpperCase();
+        const exDesc = String(existing.description || '').toLowerCase();
+        const exTs = new Date(existing.createdAt).getTime();
+        const sameUserAndAction = (exEmail && email && exEmail === email && exAction === action);
+        const sameDesc = (exDesc && desc && exDesc === desc);
+        const timeDiff = Math.abs(exTs - ts);
+
+        return (sameUserAndAction || sameDesc) && timeDiff <= 15000;
+      });
+
+      if (dupIndex === -1) {
+        deduplicatedLogs.push(l);
+      } else {
+        const existing = deduplicatedLogs[dupIndex];
+        const existingRole = String(existing.userRole || '').toLowerCase();
+        const currentRole = String(l.userRole || '').toLowerCase();
+        if ((existingRole === 'user' || !existingRole) && currentRole && currentRole !== 'user') {
+          deduplicatedLogs[dupIndex] = l;
+        }
+      }
+    }
+
+    const enrichedLogs = deduplicatedLogs.map(l => {
       const targetName = l.newValue?.name || l.newValue?.studentName || l.newValue?.title || l.newValue?.assignmentTitle || l.newValue?.className || l.entityId || '';
       return {
         ...l,
@@ -461,7 +548,9 @@ export async function getAuditLogs({
       !String(l.entity || '').toUpperCase().includes('REFRESH')
     );
     if (collegeId && collegeId !== 'default_college_id' && collegeId !== 'all') {
-      filtered = filtered.filter(l => !l.collegeId || String(l.collegeId) === String(collegeId));
+      filtered = filtered.filter(l => l.collegeId && String(l.collegeId) === String(collegeId));
+    } else if (!isSuperAdmin) {
+      filtered = [];
     }
     if (module && module !== 'ALL') {
       const m = String(module).toUpperCase();
@@ -545,16 +634,34 @@ export async function getAuditLogs({
 /**
  * Retrieves a single audit log entry by ID.
  */
-export async function getAuditLogById(id, collegeId = null) {
+export async function getAuditLogById(id, collegeId = null, isSuperAdmin = false) {
+  // Non-superadmin cannot look up a record without college context
+  if (!isSuperAdmin && !collegeId) {
+    return null;
+  }
+
   try {
     if (!tableInitialized) {
       await initializeAuditTable();
     }
 
-    const query = isUuid(id)
-      ? `SELECT * FROM "AuditLog" WHERE "id" = $1::uuid LIMIT 1`
-      : `SELECT * FROM "AuditLog" WHERE "id"::text = $1 LIMIT 1`;
-    const res = await prisma.$queryRawUnsafe(query, id);
+    let query = isUuid(id)
+      ? `SELECT * FROM "AuditLog" WHERE "id" = $1::uuid`
+      : `SELECT * FROM "AuditLog" WHERE "id"::text = $1`;
+    const params = [id];
+
+    if (collegeId && collegeId !== 'all') {
+      if (isUuid(collegeId)) {
+        query += ` AND "collegeId" = $2::uuid`;
+        params.push(collegeId);
+      } else {
+        query += ` AND "collegeId"::text = $2`;
+        params.push(String(collegeId));
+      }
+    }
+    query += ` LIMIT 1`;
+
+    const res = await prisma.$queryRawUnsafe(query, ...params);
     if (res && res.length > 0) {
       return res[0];
     }
@@ -562,5 +669,11 @@ export async function getAuditLogById(id, collegeId = null) {
     logger.warn(`[AuditLog] getAuditLogById fallback: ${err.message}`);
   }
 
-  return inMemoryFallbackLogs.find(l => String(l.id) === String(id)) || null;
+  return inMemoryFallbackLogs.find(l => 
+    String(l.id) === String(id) && (
+      isSuperAdmin 
+        ? (!collegeId || collegeId === 'all' || String(l.collegeId) === String(collegeId))
+        : (l.collegeId && String(l.collegeId) === String(collegeId))
+    )
+  ) || null;
 }

@@ -137,6 +137,12 @@ export function describeAuditEvent({
 
   // 4. TEACHER Specific Routes
   if (normRole === 'Teacher') {
+    if (rPath.includes('/ptm') || mod === 'PTM' || act.includes('PTM')) {
+      if (rPath.includes('/slots') || act === 'CREATE') {
+        return `${cleanActor} (Teacher) created PTM availability slot`;
+      }
+      return `${cleanActor} (Teacher) scheduled PTM meeting for ${cleanTarget || 'student'}`;
+    }
     if (mod === 'ATTENDANCE' || act === 'MARK_ATTENDANCE' || rPath.includes('/attendance')) {
       const cName = className || cleanTarget || 'Class 10-A';
       return `${cleanActor} (Teacher) marked attendance for ${cName.startsWith('Class') ? cName : `Class ${cName}`}`;
@@ -149,6 +155,9 @@ export function describeAuditEvent({
       const aName = assignmentName || cleanTarget || 'Algebra Test';
       const cName = className || 'Class 10-A';
       return `${cleanActor} (Teacher) created assignment '${aName}' for ${cName}`;
+    }
+    if (rPath.includes('/timetable') || mod === 'TIMETABLE') {
+      return `${cleanActor} (Teacher) updated timetable schedule`;
     }
   }
 

@@ -34,7 +34,7 @@ export default function StudentList() {
     : students;
 
   const filteredStudents = tabStudents.filter(student => {
-    const searchString = `${student.firstName} ${student.lastName} ${student.admissionNo}`.toLowerCase();
+    const searchString = `${student.firstName} ${student.lastName} ${student.admissionNo} ${student.registerNumber || ''} ${student.studentRegNo || ''} ${student.rollNumber || ''}`.toLowerCase();
     return searchString.includes(searchTerm.toLowerCase());
   });
 
@@ -92,6 +92,15 @@ export default function StudentList() {
       header: 'Admission No',
       accessorKey: 'admissionNo',
       cell: (row) => <span className="font-medium text-primary-600 dark:text-primary-400">{row.admissionNo}</span>
+    },
+    {
+      header: 'Student Reg No',
+      accessorKey: 'registerNumber',
+      cell: (row) => (
+        <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 font-medium">
+          {row.registerNumber || row.studentRegNo || row.rollNumber || '-'}
+        </span>
+      )
     },
     {
       header: 'Name',

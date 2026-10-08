@@ -10,10 +10,14 @@ import {
 
 const router = Router();
 
-// Resilient tenant context binder: attaches college context without throwing 403/404 if college is pending or default
+// Resilient tenant context binder: strictly confines non-superadmin users to their authenticated collegeId
 const resolveAuditTenant = (req, res, next) => {
   if (req.user) {
-    const collegeId = req.headers?.['x-college-id'] || req.query?.collegeId || req.user?.collegeId;
+    const isSuperAdmin = (req.user.role || '').toLowerCase() === 'superadmin';
+    let collegeId = req.user?.collegeId;
+    if (isSuperAdmin) {
+      collegeId = req.headers?.['x-college-id'] || req.query?.collegeId || req.user?.collegeId || null;
+    }
     req.tenant = { collegeId: collegeId || null };
   }
   next();

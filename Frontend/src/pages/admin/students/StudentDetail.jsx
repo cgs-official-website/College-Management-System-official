@@ -42,8 +42,13 @@ export default function StudentDetail() {
             {student.firstName} {student.lastName}
           </h2>
           <p className="text-indigo-600 dark:text-indigo-400 font-medium mt-1">
-            {student.admissionNo}
+            Admission No: {student.admissionNo}
           </p>
+          {(student.registerNumber || student.studentRegNo) && (
+            <p className="text-xs font-mono text-slate-500 dark:text-slate-400 mt-0.5">
+              Reg No: {student.registerNumber || student.studentRegNo}
+            </p>
+          )}
           <span className={`mt-3 px-3 py-1 rounded-full text-xs font-medium ${
             student.status === 'active' 
               ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
@@ -86,6 +91,14 @@ export default function StudentDetail() {
               Academic Information
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-slate-500 dark:text-slate-400">Admission Number</p>
+                <p className="font-medium text-slate-900 dark:text-white">{student.admissionNumber || student.admissionNo || '-'}</p>
+              </div>
+              <div>
+                <p className="text-slate-500 dark:text-slate-400">Student Reg No / Unique ID</p>
+                <p className="font-medium font-mono text-slate-900 dark:text-white">{student.registerNumber || student.studentRegNo || '-'}</p>
+              </div>
               <div>
                 <p className="text-slate-500 dark:text-slate-400">Class</p>
                 <p className="font-medium text-slate-900 dark:text-white">{student.class || '-'}</p>
