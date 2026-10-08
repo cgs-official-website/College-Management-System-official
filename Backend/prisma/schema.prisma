@@ -1286,6 +1286,7 @@ model PtmMeeting {
   @@index([collegeId, status])
   @@index([teacherId])
   @@index([studentId])
+}
 
 model StoreSale {
   id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
