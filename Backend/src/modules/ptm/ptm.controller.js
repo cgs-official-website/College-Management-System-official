@@ -87,6 +87,9 @@ const fail = (res, status, code, message) =>
   res.status(status).json({ success: false, error: { code, message } });
 
 const handleError = (res, error, duplicateMessage = 'Duplicate entry') => {
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('[PTM] original error:', error);
+  }
   if (error.name === 'ZodError') {
     return fail(res, 400, 'VALIDATION_ERROR', error.issues.map((i) => i.message).join(', '));
   }
@@ -487,10 +490,21 @@ export const assignMeeting = async (req, res) => {
     }
 
     // Meeting link auto-generation (Jitsi Meet, no API key needed)
-    const meetingLink =
-      payload.mode === 'online'
-        ? `https://meet.jit.si/zuna-ptm-${randomUUID().replace(/-/g, '').slice(0, 16)}`
-        : null;
+    let meetingLink = null;
+    if (payload.mode === 'online') {
+      const college = await prisma.college.findUnique({
+        where: { id: collegeId },
+        select: { name: true, slug: true },
+      });
+
+      const collegeName = college?.name || 'College';
+      const collegeSlug = college?.slug || 'college';
+      const uniqueId = randomUUID().replace(/-/g, '').slice(0, 16);
+
+      meetingLink =
+        `https://meet.jit.si/${collegeSlug}-ptm-${uniqueId}` +
+        `#config.subject=${encodeURIComponent(JSON.stringify(collegeName))}`;
+    }
 
     const meeting = await dbCreateMeeting({
       collegeId,
