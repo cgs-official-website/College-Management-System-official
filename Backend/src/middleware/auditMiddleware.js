@@ -1,4 +1,6 @@
 import { createAuditLog } from '../modules/audit/audit.service.js';
+import { describeAuditEvent } from '../modules/audit/auditDescriber.js';
+import { isAuditableRequest, shouldLogAuditEvent } from '../modules/audit/auditFilter.js';
 
 // Map URL prefixes to institutional modules
 const MODULE_ROUTE_MAP = [
@@ -37,55 +39,78 @@ const METHOD_ACTION_MAP = {
   DELETE: 'DELETE'
 };
 
-const IGNORED_PATHS = [
-  '/api/v1/audit-logs',
-  '/health',
-  '/redis-test',
-  '/notifications',
-  '/socket.io'
-];
-
 /**
  * System-wide audit logging middleware.
  * Automatically records mutations and security events across the entire institution.
+ * 
+ * Strict skip-list & filter:
+ * - Saves a log ONLY when a member really changes something:
+ *   add, edit, delete, login, logout, failed login, role/password change, fee payment, export, or attendance.
+ * - Skips session/token refresh, page views, list/search calls, polling, and saves with no change.
+ * - One submission = one log row.
  */
 export const auditMiddleware = (req, res, next) => {
-  const url = req.originalUrl || req.url;
-
-  // Ignore static assets, health probes, and audit-log reads themselves
-  if (IGNORED_PATHS.some(p => url.startsWith(p))) {
+  // Pre-filter: skip refresh, page views, list/search, polling, health checks
+  if (!isAuditableRequest(req)) {
     return next();
   }
 
-  // Only audit state-changing methods or special auth routes
-  const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
-  const isAuthAction = url.includes('/auth/login') || url.includes('/auth/logout') || url.includes('/auth/reset-password');
-
-  if (!isMutation && !isAuthAction) {
-    return next();
-  }
-
-  // Preserve request body snapshot for audit log
+  const url = (req.originalUrl || req.url || '').toLowerCase();
+  // Preserve request body snapshot for audit log (strip sensitive credentials)
   const requestBodySnapshot = req.body ? JSON.parse(JSON.stringify(req.body)) : null;
 
   res.on('finish', () => {
+    // Extra safety: Ignore any refresh or session refresh routes
+    if (url.includes('/refresh') || url.includes('/session-refresh')) {
+      return;
+    }
+
     // Determine module
     const matched = MODULE_ROUTE_MAP.find(m => url.startsWith(m.prefix));
     const module = matched ? matched.module : 'SYSTEM';
 
     // Determine action
     let action = METHOD_ACTION_MAP[req.method] || 'ACTION';
+    if (url.includes('/export')) action = 'EXPORT';
     if (url.includes('/auth/login')) action = 'LOGIN';
     if (url.includes('/auth/logout')) action = 'LOGOUT';
-    if (url.includes('/permissions')) action = 'PERMISSION_CHANGE';
+    if (url.includes('/permissions') || url.includes('/roles')) action = 'ASSIGN_ROLE';
+    if (url.includes('/password') || url.includes('/reset-password')) action = 'PASSWORD_CHANGE';
+    if (url.includes('/registration-link')) action = 'SETTINGS_UPDATE';
+    if (url.includes('/attendance')) action = 'MARK_ATTENDANCE';
+    if (url.includes('/fees') || url.includes('/payment')) action = 'COLLECT_FEE';
 
     const statusCode = res.statusCode;
     const isSuccess = statusCode >= 200 && statusCode < 400;
     const status = isSuccess ? 'SUCCESS' : 'FAILURE';
 
+    // Extract changed fields for updates (filter out passwords and internal timestamps)
+    let changes = null;
+    if ((req.method === 'PUT' || req.method === 'PATCH') && requestBodySnapshot) {
+      const ignoredKeys = ['id', '_id', 'collegeId', 'createdAt', 'updatedAt', 'password', 'token', 'otp', '__v'];
+      changes = Object.keys(requestBodySnapshot).filter(k => !ignoredKeys.includes(k.toLowerCase()));
+      // If an update save has no actual changes, skip immediately (0 rows saved)
+      if (changes.length === 0) {
+        return;
+      }
+    }
+
+    // Decide before saving: check skip-list and action filter
+    if (!shouldLogAuditEvent({
+      action,
+      method: req.method,
+      route: url,
+      module,
+      newValue: requestBodySnapshot,
+      changes,
+      status
+    })) {
+      return;
+    }
+
     const collegeId = req.tenant?.collegeId || req.user?.collegeId;
     const userId = req.user?.id || req.user?.userId;
-    const userName = req.user?.name || req.body?.name || (action === 'LOGIN' ? req.body?.email : 'System');
+    const userName = req.user?.name || req.body?.name || req.body?.studentName || (action === 'LOGIN' ? req.body?.email : 'System');
     const userEmail = req.user?.email || req.body?.email || 'system@internal';
     const userRole = req.user?.role || (action === 'LOGIN' ? 'user' : 'admin');
 
@@ -99,7 +124,31 @@ export const auditMiddleware = (req, res, next) => {
     const entityId = isIdInUrl ? lastPart : (req.body?.id || null);
     const entity = pathParts[pathParts.length - (isIdInUrl ? 2 : 1)] || module;
 
-    const description = `${action} performed on ${entity}${entityId ? ` (#${entityId})` : ''} via ${req.method} ${url}`;
+    // Extract human-readable target attributes
+    const targetName = req.body?.studentName || req.body?.name || req.body?.title || req.body?.assignmentName || req.body?.email || '';
+    const amount = req.body?.amount || req.body?.amountPaid || null;
+    const className = req.body?.className || req.body?.section || req.body?.batch || '';
+    const fromRole = req.body?.oldRole || req.body?.fromRole || 'Teacher';
+    const toRole = req.body?.newRole || req.body?.toRole || req.body?.role || 'Admin';
+
+    // Generate human-readable sentence at write time
+    const description = describeAuditEvent({
+      actor: userName,
+      role: userRole,
+      method: req.method,
+      route: url,
+      module,
+      action,
+      targetName,
+      changes,
+      status,
+      failureReason: isSuccess ? '' : (statusCode === 403 || statusCode === 401 ? 'permission denied' : 'operation failed'),
+      amount,
+      fromRole,
+      toRole,
+      className,
+      assignmentName: req.body?.assignmentName || req.body?.title
+    });
 
     // Execute asynchronously to avoid delaying response delivery
     createAuditLog({
@@ -115,6 +164,7 @@ export const auditMiddleware = (req, res, next) => {
       description,
       oldValue: null,
       newValue: requestBodySnapshot,
+      changes,
       ipAddress,
       userAgent,
       status

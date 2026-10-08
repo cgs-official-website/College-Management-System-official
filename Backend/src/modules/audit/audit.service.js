@@ -1,6 +1,8 @@
 import crypto from 'crypto';
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
+import { getTargetRecord } from './auditDescriber.js';
+import { shouldLogAuditEvent } from './auditFilter.js';
 
 // Pre-seeded in-memory fallback logs to ensure zero-downtime display
 const inMemoryFallbackLogs = [
@@ -8,14 +10,15 @@ const inMemoryFallbackLogs = [
     id: crypto.randomUUID(),
     collegeId: null,
     userId: null,
-    userName: 'Admin User',
+    userName: 'System Administrator',
     userEmail: 'admin@college.edu',
     userRole: 'admin',
     action: 'LOGIN',
     module: 'AUTH',
     entity: 'UserSession',
     entityId: 'sess-init-001',
-    description: 'Admin user logged in successfully via web console',
+    description: 'System Administrator (Admin) logged in successfully via web console',
+    targetRecord: 'Session: Web Console',
     oldValue: null,
     newValue: { status: 'AUTHENTICATED', role: 'admin', ip: '127.0.0.1' },
     ipAddress: '127.0.0.1',
@@ -27,14 +30,15 @@ const inMemoryFallbackLogs = [
     id: crypto.randomUUID(),
     collegeId: null,
     userId: null,
-    userName: 'System Sentinel',
+    userName: 'System Administrator',
     userEmail: 'system@internal',
-    userRole: 'system',
+    userRole: 'admin',
     action: 'SETTINGS_UPDATE',
     module: 'SETTINGS',
     entity: 'SecurityPolicy',
     entityId: 'sec-001',
-    description: 'Audit logging engine initialized with immutable PostgreSQL trail',
+    description: 'System Administrator (Admin) configured institutional security policy',
+    targetRecord: 'Policy: Security Configuration',
     oldValue: { auditLogging: 'DISABLED' },
     newValue: { auditLogging: 'ACTIVE', retentionDays: 365, immutable: true },
     ipAddress: '127.0.0.1',
@@ -48,12 +52,13 @@ const inMemoryFallbackLogs = [
     userId: null,
     userName: 'Super Admin',
     userEmail: 'superadmin@cms.edu',
-    userRole: 'superadmin',
+    userRole: 'admin',
     action: 'ASSIGN_ROLE',
     module: 'PERMISSION',
     entity: 'RolePermissions',
     entityId: 'role-audit-admin',
-    description: 'Updated read-only privileges for System Audit Logs module',
+    description: 'Super Admin (Admin) updated role permissions for System Audit Logs',
+    targetRecord: 'Role: System Audit Logs',
     oldValue: { canRead: false },
     newValue: { canRead: true, canExport: true, canDelete: false },
     ipAddress: '127.0.0.1',
@@ -147,10 +152,25 @@ export async function createAuditLog({
   description = '',
   oldValue = null,
   newValue = null,
+  changes = null,
   ipAddress = '127.0.0.1',
   userAgent = 'Unknown',
   status = 'SUCCESS'
 }) {
+  // Enforce pre-save filter: save only when a member really changes something
+  if (!shouldLogAuditEvent({
+    action,
+    module,
+    entity,
+    entityId,
+    oldValue,
+    newValue,
+    changes,
+    status
+  })) {
+    return null;
+  }
+
   const sanitizedOld = oldValue ? sanitizePayload(oldValue) : null;
   const sanitizedNew = newValue ? sanitizePayload(newValue) : null;
   const now = new Date();
@@ -238,7 +258,8 @@ export async function getAuditLogs({
   search = null,
   startDate = null,
   endDate = null,
-  userId = null
+  userId = null,
+  role = null
 }) {
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
   const take = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
@@ -250,7 +271,10 @@ export async function getAuditLogs({
     }
 
     // Build parameterized raw SQL query
-    const whereClauses = [];
+    const whereClauses = [
+      `UPPER("action") NOT LIKE '%REFRESH%'`,
+      `(UPPER("entity") NOT LIKE '%REFRESH%' OR "entity" IS NULL)`
+    ];
     const params = [];
     let pIdx = 1;
 
@@ -263,6 +287,21 @@ export async function getAuditLogs({
         params.push(String(collegeId));
       }
       pIdx++;
+    }
+
+    if (role && role !== 'ALL') {
+      const r = String(role).toLowerCase();
+      if (r === 'teacher') {
+        whereClauses.push(`(LOWER("userRole") LIKE '%teach%' OR LOWER("userRole") LIKE '%faculty%' OR LOWER("userRole") LIKE '%prof%' OR LOWER("userRole") LIKE '%hod%')`);
+      } else if (r === 'admin') {
+        whereClauses.push(`(LOWER("userRole") LIKE '%admin%' OR LOWER("userRole") LIKE '%principal%' OR LOWER("userRole") LIKE '%super%')`);
+      } else if (r === 'student') {
+        whereClauses.push(`LOWER("userRole") LIKE '%student%'`);
+      } else {
+        whereClauses.push(`LOWER("userRole") LIKE $${pIdx}`);
+        params.push(`%${r}%`);
+        pIdx++;
+      }
     }
 
     if (module && module !== 'ALL') {
@@ -341,6 +380,7 @@ export async function getAuditLogs({
       whereClauses.push(`(
         LOWER("userName") LIKE $${pIdx} OR 
         LOWER("userEmail") LIKE $${pIdx} OR 
+        LOWER("userRole") LIKE $${pIdx} OR
         LOWER("description") LIKE $${pIdx} OR 
         LOWER("entity") LIKE $${pIdx} OR 
         LOWER("entityId") LIKE $${pIdx} OR
@@ -375,18 +415,31 @@ export async function getAuditLogs({
     today.setHours(0, 0, 0, 0);
 
     const todayCountRes = await prisma.$queryRawUnsafe(
-      `SELECT COUNT(*)::int as today_count FROM "AuditLog" WHERE "createdAt" >= $1::timestamp`,
+      `SELECT COUNT(*)::int as today_count FROM "AuditLog" WHERE "createdAt" >= $1::timestamp AND UPPER("action") NOT LIKE '%REFRESH%'`,
       today
     );
     const todayCount = todayCountRes?.[0]?.today_count || 0;
 
     const failureCountRes = await prisma.$queryRawUnsafe(
-      `SELECT COUNT(*)::int as failure_count FROM "AuditLog" WHERE "status" = 'FAILURE'`
+      `SELECT COUNT(*)::int as failure_count FROM "AuditLog" WHERE "status" = 'FAILURE' AND UPPER("action") NOT LIKE '%REFRESH%'`
     );
     const failureCount = failureCountRes?.[0]?.failure_count || 0;
 
+    const enrichedLogs = (logs || []).map(l => {
+      const targetName = l.newValue?.name || l.newValue?.studentName || l.newValue?.title || l.newValue?.assignmentTitle || l.newValue?.className || l.entityId || '';
+      return {
+        ...l,
+        targetRecord: l.targetRecord || getTargetRecord({
+          entity: l.entity,
+          module: l.module,
+          targetName,
+          description: l.description
+        })
+      };
+    });
+
     return {
-      logs: logs || [],
+      logs: enrichedLogs,
       pagination: {
         total,
         page: pageNum,
@@ -402,8 +455,11 @@ export async function getAuditLogs({
   } catch (err) {
     logger.warn(`[AuditLog] DB read fallback to in-memory: ${err.message}`);
 
-    // In-memory fallback filtering
-    let filtered = [...inMemoryFallbackLogs];
+    // In-memory fallback filtering (filter out any session refresh)
+    let filtered = inMemoryFallbackLogs.filter(l => 
+      !String(l.action || '').toUpperCase().includes('REFRESH') &&
+      !String(l.entity || '').toUpperCase().includes('REFRESH')
+    );
     if (collegeId && collegeId !== 'default_college_id' && collegeId !== 'all') {
       filtered = filtered.filter(l => !l.collegeId || String(l.collegeId) === String(collegeId));
     }
@@ -435,11 +491,22 @@ export async function getAuditLogs({
     if (status && status !== 'ALL') {
       filtered = filtered.filter(l => (l.status || 'SUCCESS').toUpperCase() === String(status).toUpperCase());
     }
+    if (role && role !== 'ALL') {
+      const r = String(role).toLowerCase();
+      filtered = filtered.filter(l => {
+        const lr = (l.userRole || '').toLowerCase();
+        if (r === 'teacher') return lr.includes('teach') || lr.includes('faculty') || lr.includes('prof') || lr.includes('hod');
+        if (r === 'admin') return lr.includes('admin') || lr.includes('principal') || lr.includes('super');
+        if (r === 'student') return lr.includes('student');
+        return lr.includes(r);
+      });
+    }
     if (search && search.trim()) {
       const q = search.trim().toLowerCase();
       filtered = filtered.filter(l =>
         l.userName?.toLowerCase().includes(q) ||
         l.userEmail?.toLowerCase().includes(q) ||
+        l.userRole?.toLowerCase().includes(q) ||
         l.description?.toLowerCase().includes(q) ||
         l.entity?.toLowerCase().includes(q) ||
         l.entityId?.toLowerCase().includes(q) ||
@@ -451,7 +518,15 @@ export async function getAuditLogs({
     const paginated = filtered.slice(offset, offset + take);
 
     return {
-      logs: paginated,
+      logs: paginated.map(l => ({
+        ...l,
+        targetRecord: l.targetRecord || getTargetRecord({
+          entity: l.entity,
+          module: l.module,
+          targetName: l.entityId,
+          description: l.description
+        })
+      })),
       pagination: {
         total,
         page: pageNum,

@@ -12,7 +12,7 @@ export const getDashboardStats = async (req, res) => {
         prisma.course.count({ where: { deletedAt: null } }),
         prisma.college.findMany({ orderBy: { createdAt: 'desc' }, take: 5 })
       ]);
-      
+
       const recentActivity = recentColleges.map(c => ({
         id: `c-${c.id}`,
         title: 'New College Onboarded',

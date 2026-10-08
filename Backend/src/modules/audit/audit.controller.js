@@ -11,7 +11,8 @@ export const getAuditLogsController = async (req, res) => {
     search,
     startDate,
     endDate,
-    userId
+    userId,
+    role
   } = req.query;
 
   const result = await getAuditLogs({
@@ -24,7 +25,8 @@ export const getAuditLogsController = async (req, res) => {
     search,
     startDate,
     endDate,
-    userId
+    userId,
+    role
   });
 
   return res.json({

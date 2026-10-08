@@ -1,36 +1,52 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { 
-  ShieldCheck, 
-  History, 
-  Search, 
-  Filter, 
-  RefreshCw, 
-  FileSpreadsheet, 
-  Calendar, 
-  Clock, 
-  User, 
-  Activity, 
-  AlertTriangle, 
-  CheckCircle2, 
-  XCircle, 
-  Eye, 
-  FileText, 
-  Copy, 
-  Check, 
-  Layers, 
-  Laptop, 
-  Globe, 
-  ChevronLeft, 
-  ChevronRight, 
-  Lock, 
+import {
+  ShieldCheck,
+  History,
+  Search,
+  Filter,
+  RefreshCw,
+  FileSpreadsheet,
+  Calendar,
+  Clock,
+  User,
+  GraduationCap,
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Eye,
+  FileText,
+  Copy,
+  Check,
+  Layers,
+  Laptop,
+  Globe,
+  ChevronLeft,
+  ChevronRight,
+  Lock,
   Info,
-  X
+  X,
+  ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import { api } from '../../../services/api';
 import { useAuth } from '../../../contexts/AuthContext';
+import {
+  describeAuditEvent,
+  getDisplayDescription,
+  getDisplayTargetRecord,
+  getInstitutionalModuleName,
+  getDetailedChanges
+} from './auditDescriber';
+
+const ROLE_OPTIONS = [
+  { value: 'ALL', label: 'All Roles' },
+  { value: 'ADMIN', label: 'Admin' },
+  { value: 'TEACHER', label: 'Teacher' },
+  { value: 'STUDENT', label: 'Student' }
+];
 
 const MODULE_OPTIONS = [
   { value: 'ALL', label: 'All Modules' },
@@ -80,6 +96,64 @@ const DATE_RANGE_PRESETS = [
 ];
 
 // Robust matching helpers for filters
+export const matchesRole = (recordRole, filterRole) => {
+  if (!filterRole || filterRole === 'ALL') return true;
+  const rr = String(recordRole || '').toLowerCase();
+  const fr = String(filterRole).toLowerCase();
+  if (fr === 'admin') {
+    return rr.includes('admin') || rr.includes('principal') || rr.includes('super');
+  }
+  if (fr === 'teacher') {
+    return rr.includes('teach') || rr.includes('faculty') || rr.includes('prof') || rr.includes('hod') || rr.includes('instructor');
+  }
+  if (fr === 'student') {
+    return rr.includes('student');
+  }
+  return rr.includes(fr);
+};
+
+export const getRoleDetails = (role) => {
+  const r = String(role || '').toLowerCase();
+  if (r.includes('super') || (r.includes('admin') && r.includes('super'))) {
+    return {
+      label: 'Super Admin',
+      badgeClass: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+      avatarClass: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+      iconType: 'admin'
+    };
+  }
+  if (r.includes('admin') || r.includes('principal')) {
+    return {
+      label: 'Admin',
+      badgeClass: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
+      avatarClass: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
+      iconType: 'admin'
+    };
+  }
+  if (r.includes('teach') || r.includes('faculty') || r.includes('prof') || r.includes('hod') || r.includes('instructor')) {
+    return {
+      label: 'Teacher',
+      badgeClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+      avatarClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+      iconType: 'teacher'
+    };
+  }
+  if (r.includes('student')) {
+    return {
+      label: 'Student',
+      badgeClass: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
+      avatarClass: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
+      iconType: 'student'
+    };
+  }
+  return {
+    label: role ? (role.charAt(0).toUpperCase() + role.slice(1)) : 'User',
+    badgeClass: 'bg-slate-100 dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10',
+    avatarClass: 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10',
+    iconType: 'user'
+  };
+};
+
 export const matchesModule = (recordModule, filterModule) => {
   if (!filterModule || filterModule === 'ALL') return true;
   const rm = String(recordModule || '').toUpperCase();
@@ -122,124 +196,300 @@ export const matchesStatus = (recordStatus, filterStatus) => {
 };
 
 const INITIAL_DEMO_LOGS = [
+  // ── ADMIN ──
   {
-    id: 'audit-init-001',
-    userName: 'Admin User',
-    userEmail: 'admin@college.edu',
+    id: 'audit-001',
+    userName: 'Ravi',
+    userEmail: 'ravi.admin@college.edu',
     userRole: 'admin',
     action: 'LOGIN',
     module: 'AUTH',
     entity: 'UserSession',
-    entityId: 'sess-001',
-    description: 'Admin user authenticated successfully into management portal',
+    entityId: null,
+    description: 'Ravi (Admin) logged in successfully',
+    targetRecord: 'User: Ravi',
     oldValue: null,
     newValue: { status: 'AUTHENTICATED', role: 'admin' },
-    ipAddress: '127.0.0.1',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0',
+    ipAddress: '192.168.1.10',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
     status: 'SUCCESS',
-    createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString()
+    createdAt: new Date(Date.now() - 3 * 60 * 1000).toISOString()
   },
   {
-    id: 'audit-init-002',
-    userName: 'System Sentinel',
-    userEmail: 'system@internal',
-    userRole: 'system',
-    action: 'SETTINGS_UPDATE',
-    module: 'SETTINGS',
-    entity: 'SecurityPolicy',
-    entityId: 'sys-audit-init',
-    description: 'Audit logging engine initialized with immutable PostgreSQL trail',
-    oldValue: { auditLogging: 'DISABLED' },
-    newValue: { auditLogging: 'ACTIVE', retentionDays: 365, immutable: true },
-    ipAddress: '127.0.0.1',
-    userAgent: 'Node.js/CMS-Service-Worker',
+    id: 'audit-002',
+    userName: 'Ravi',
+    userEmail: 'ravi.admin@college.edu',
+    userRole: 'admin',
+    action: 'CREATE',
+    module: 'STUDENTS',
+    entity: 'Student',
+    entityId: null,
+    description: 'Ravi (Admin) added student Arun S',
+    targetRecord: 'Student: Arun S',
+    oldValue: null,
+    newValue: { studentName: 'Arun S', department: 'CSE', rollNo: 'CSE2026-089' },
+    ipAddress: '192.168.1.10',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+    status: 'SUCCESS',
+    createdAt: new Date(Date.now() - 8 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'audit-003',
+    userName: 'Ravi',
+    userEmail: 'ravi.admin@college.edu',
+    userRole: 'admin',
+    action: 'UPDATE',
+    module: 'STUDENTS',
+    entity: 'Student',
+    entityId: null,
+    description: 'Ravi (Admin) updated student Arun S: phone changed',
+    targetRecord: 'Student: Arun S',
+    oldValue: { studentName: 'Arun S', phone: '+91 98765 43210' },
+    newValue: { studentName: 'Arun S', phone: '+91 98765 99999' },
+    ipAddress: '192.168.1.10',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
     status: 'SUCCESS',
     createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString()
   },
   {
-    id: 'audit-init-003',
-    userName: 'Super Admin',
-    userEmail: 'superadmin@cms.edu',
-    userRole: 'superadmin',
-    action: 'ASSIGN_ROLE',
-    module: 'PERMISSION',
-    entity: 'RolePermissions',
-    entityId: 'role-audit-admin',
-    description: 'Updated read-only privileges for System Audit Logs module',
-    oldValue: { canRead: false },
-    newValue: { canRead: true, canExport: true, canDelete: false },
-    ipAddress: '127.0.0.1',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0',
-    status: 'SUCCESS',
-    createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString()
-  },
-  {
-    id: 'audit-init-004',
-    userName: 'Registrar Staff',
-    userEmail: 'registrar@college.edu',
-    userRole: 'staff',
-    action: 'CREATE',
+    id: 'audit-004',
+    userName: 'Ravi',
+    userEmail: 'ravi.admin@college.edu',
+    userRole: 'admin',
+    action: 'DELETE',
     module: 'STUDENTS',
-    entity: 'StudentEnrollment',
-    entityId: 'stu-enroll-1042',
-    description: 'Enrolled new student into Computer Science & Engineering (Batch 2026)',
-    oldValue: null,
-    newValue: { studentName: 'Aarav Sharma', department: 'CSE', rollNo: 'CSE2026-089' },
-    ipAddress: '192.168.1.45',
+    entity: 'Student',
+    entityId: null,
+    description: 'Ravi (Admin) deleted student Arun S',
+    targetRecord: 'Student: Arun S',
+    oldValue: { studentName: 'Arun S', status: 'ARCHIVED' },
+    newValue: null,
+    ipAddress: '192.168.1.10',
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
     status: 'SUCCESS',
-    createdAt: new Date(Date.now() - 45 * 60 * 1000).toISOString()
+    createdAt: new Date(Date.now() - 25 * 60 * 1000).toISOString()
   },
   {
-    id: 'audit-init-005',
-    userName: 'Finance Officer',
-    userEmail: 'accounts@college.edu',
-    userRole: 'staff',
+    id: 'audit-005',
+    userName: 'Ravi',
+    userEmail: 'ravi.admin@college.edu',
+    userRole: 'admin',
+    action: 'ASSIGN_ROLE',
+    module: 'PERMISSION',
+    entity: 'Role',
+    entityId: null,
+    description: "Ravi (Admin) changed Priya's role from Teacher to Admin",
+    targetRecord: 'Role: Priya',
+    oldValue: { userName: 'Priya', role: 'Teacher' },
+    newValue: { userName: 'Priya', role: 'Admin' },
+    ipAddress: '192.168.1.10',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+    status: 'SUCCESS',
+    createdAt: new Date(Date.now() - 35 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'audit-006',
+    userName: 'Ravi',
+    userEmail: 'ravi.admin@college.edu',
+    userRole: 'admin',
+    action: 'SETTINGS_UPDATE',
+    module: 'SETTINGS',
+    entity: 'RegistrationLink',
+    entityId: null,
+    description: 'Ravi (Admin) regenerated the student registration link',
+    targetRecord: 'Security: Registration Link',
+    oldValue: { tokenVersion: 1 },
+    newValue: { tokenVersion: 2, regeneratedAt: new Date().toISOString() },
+    ipAddress: '192.168.1.10',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+    status: 'SUCCESS',
+    createdAt: new Date(Date.now() - 50 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'audit-007',
+    userName: 'Ravi',
+    userEmail: 'ravi.admin@college.edu',
+    userRole: 'admin',
     action: 'COLLECT_FEE',
     module: 'FEES',
     entity: 'FeeReceipt',
-    entityId: 'rcpt-fee-9921',
-    description: 'Collected Semester Tuition Fee payment of INR 45,000 via Online Gateway',
-    oldValue: { paymentStatus: 'PENDING', amountPaid: 0 },
-    newValue: { paymentStatus: 'PAID', amountPaid: 45000, mode: 'UPI' },
-    ipAddress: '192.168.1.62',
+    entityId: null,
+    description: 'Ravi (Admin) recorded a fee payment of Rs. 5,000 for Arun S',
+    targetRecord: 'Fee: Arun S',
+    oldValue: { dueAmount: 5000, status: 'PENDING' },
+    newValue: { amountPaid: 5000, studentName: 'Arun S', status: 'PAID' },
+    ipAddress: '192.168.1.10',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+    status: 'SUCCESS',
+    createdAt: new Date(Date.now() - 65 * 60 * 1000).toISOString()
+  },
+
+  // ── TEACHER ──
+  {
+    id: 'audit-008',
+    userName: 'Jd Guru',
+    userEmail: 'jdguru7777@gmail.com',
+    userRole: 'teacher',
+    action: 'LOGIN',
+    module: 'AUTH',
+    entity: 'UserSession',
+    entityId: null,
+    description: 'Jd Guru (Teacher) logged in successfully',
+    targetRecord: 'User: Jd Guru',
+    oldValue: null,
+    newValue: { status: 'AUTHENTICATED', role: 'teacher' },
+    ipAddress: '192.168.1.42',
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
     status: 'SUCCESS',
-    createdAt: new Date(Date.now() - 70 * 60 * 1000).toISOString()
+    createdAt: new Date(Date.now() - 80 * 60 * 1000).toISOString()
   },
   {
-    id: 'audit-init-006',
-    userName: 'Dean of Academics',
-    userEmail: 'dean.acad@college.edu',
-    userRole: 'faculty',
+    id: 'audit-009',
+    userName: 'Jd Guru',
+    userEmail: 'jdguru7777@gmail.com',
+    userRole: 'teacher',
+    action: 'MARK_ATTENDANCE',
+    module: 'ATTENDANCE',
+    entity: 'AttendanceSession',
+    entityId: null,
+    description: 'Jd Guru (Teacher) marked attendance for Class 10-A',
+    targetRecord: 'Class: 10-A',
+    oldValue: null,
+    newValue: { className: 'Class 10-A', totalPresent: 48, totalAbsent: 2 },
+    ipAddress: '192.168.1.42',
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+    status: 'SUCCESS',
+    createdAt: new Date(Date.now() - 95 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'audit-010',
+    userName: 'Jd Guru',
+    userEmail: 'jdguru7777@gmail.com',
+    userRole: 'teacher',
     action: 'UPDATE',
-    module: 'COURSES',
-    entity: 'CurriculumSyllabus',
-    entityId: 'course-cs-302',
-    description: 'Updated syllabus credits and textbook references for Data Structures & Algorithms',
-    oldValue: { credits: 3, labHours: 2 },
-    newValue: { credits: 4, labHours: 3, revisedYear: 2026 },
-    ipAddress: '192.168.1.18',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+    module: 'EXAMS',
+    entity: 'MarksGrade',
+    entityId: null,
+    description: 'Jd Guru (Teacher) updated Maths marks for Arun S',
+    targetRecord: 'Marks: Arun S',
+    oldValue: { subject: 'Maths', studentName: 'Arun S', marks: 82 },
+    newValue: { subject: 'Maths', studentName: 'Arun S', marks: 95 },
+    ipAddress: '192.168.1.42',
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
     status: 'SUCCESS',
     createdAt: new Date(Date.now() - 110 * 60 * 1000).toISOString()
   },
   {
-    id: 'audit-init-007',
-    userName: 'Attendance Incharge',
-    userEmail: 'faculty.attendance@college.edu',
-    userRole: 'faculty',
-    action: 'MARK_ATTENDANCE',
-    module: 'ATTENDANCE',
-    entity: 'DailyAttendanceSession',
-    entityId: 'att-session-2026-10-06',
-    description: 'Submitted attendance roster for Year 2 Mechanical Engineering Section A',
+    id: 'audit-011',
+    userName: 'Jd Guru',
+    userEmail: 'jdguru7777@gmail.com',
+    userRole: 'teacher',
+    action: 'CREATE',
+    module: 'COURSES',
+    entity: 'Assignment',
+    entityId: null,
+    description: "Jd Guru (Teacher) created assignment 'Algebra Test' for Class 10-A",
+    targetRecord: 'Assignment: Algebra Test',
     oldValue: null,
-    newValue: { presentCount: 54, absentCount: 6, total: 60 },
-    ipAddress: '192.168.1.33',
+    newValue: { title: 'Algebra Test', className: 'Class 10-A', maxMarks: 50 },
+    ipAddress: '192.168.1.42',
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+    status: 'SUCCESS',
+    createdAt: new Date(Date.now() - 130 * 60 * 1000).toISOString()
+  },
+
+  // ── STUDENT ──
+  {
+    id: 'audit-012',
+    userName: 'Arun S',
+    userEmail: 'arun.student@college.edu',
+    userRole: 'student',
+    action: 'LOGIN',
+    module: 'AUTH',
+    entity: 'UserSession',
+    entityId: null,
+    description: 'Arun S (Student) logged in successfully',
+    targetRecord: 'User: Arun S',
+    oldValue: null,
+    newValue: { status: 'AUTHENTICATED', role: 'student' },
+    ipAddress: '192.168.1.77',
     userAgent: 'Mozilla/5.0 (Android 14; Mobile)',
     status: 'SUCCESS',
-    createdAt: new Date(Date.now() - 150 * 60 * 1000).toISOString()
+    createdAt: new Date(Date.now() - 145 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'audit-013',
+    userName: 'Arun S',
+    userEmail: 'arun.student@college.edu',
+    userRole: 'student',
+    action: 'UPDATE',
+    module: 'STUDENTS',
+    entity: 'Profile',
+    entityId: null,
+    description: 'Arun S (Student) updated own profile: phone changed',
+    targetRecord: 'Student: Arun S',
+    oldValue: { phone: '+91 99887 76655' },
+    newValue: { phone: '+91 91234 56789' },
+    ipAddress: '192.168.1.77',
+    userAgent: 'Mozilla/5.0 (Android 14; Mobile)',
+    status: 'SUCCESS',
+    createdAt: new Date(Date.now() - 160 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'audit-014',
+    userName: 'Arun S',
+    userEmail: 'arun.student@college.edu',
+    userRole: 'student',
+    action: 'CREATE',
+    module: 'COURSES',
+    entity: 'Submission',
+    entityId: null,
+    description: "Arun S (Student) submitted assignment 'Algebra Test'",
+    targetRecord: 'Assignment: Algebra Test',
+    oldValue: null,
+    newValue: { assignmentTitle: 'Algebra Test', submittedAt: new Date().toISOString() },
+    ipAddress: '192.168.1.77',
+    userAgent: 'Mozilla/5.0 (Android 14; Mobile)',
+    status: 'SUCCESS',
+    createdAt: new Date(Date.now() - 175 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'audit-015',
+    userName: 'Arun S',
+    userEmail: 'arun.student@college.edu',
+    userRole: 'student',
+    action: 'UPDATE',
+    module: 'AUTH',
+    entity: 'Password',
+    entityId: null,
+    description: 'Arun S (Student) changed own password',
+    targetRecord: 'Security: Account Password',
+    oldValue: null,
+    newValue: { passwordChanged: true },
+    ipAddress: '192.168.1.77',
+    userAgent: 'Mozilla/5.0 (Android 14; Mobile)',
+    status: 'SUCCESS',
+    createdAt: new Date(Date.now() - 190 * 60 * 1000).toISOString()
+  },
+
+  // ── FAILED LOGIN ──
+  {
+    id: 'audit-016',
+    userName: 'Security Sentinel',
+    userEmail: 'jdguru7777@gmail.com',
+    userRole: 'user',
+    action: 'LOGIN',
+    module: 'AUTH',
+    entity: 'AuthSecurity',
+    entityId: null,
+    description: 'Failed login attempt for jdguru7777@gmail.com',
+    targetRecord: 'Account: jdguru7777@gmail.com',
+    oldValue: null,
+    newValue: { email: 'jdguru7777@gmail.com', reason: 'INVALID_CREDENTIALS' },
+    ipAddress: '192.168.1.105',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+    status: 'FAILURE',
+    createdAt: new Date(Date.now() - 210 * 60 * 1000).toISOString()
   }
 ];
 
@@ -253,11 +503,12 @@ export default function AuditLogs() {
   const [stats, setStats] = useState({ totalLogs: INITIAL_DEMO_LOGS.length, todayCount: INITIAL_DEMO_LOGS.length, failureCount: 0 });
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [liveTracking, setLiveTracking] = useState(true);
+  const [liveTracking, setLiveTracking] = useState(false); // Auto-refresh off
 
   // Filters
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [selectedRole, setSelectedRole] = useState('ALL');
   const [selectedModule, setSelectedModule] = useState('ALL');
   const [selectedAction, setSelectedAction] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
@@ -268,7 +519,6 @@ export default function AuditLogs() {
   // Selected Log for Modal
   const [selectedLog, setSelectedLog] = useState(null);
   const [copiedKey, setCopiedKey] = useState(null);
-  const [activeTab, setActiveTab] = useState('diff'); // 'diff' | 'raw'
 
   // Debounce search input
   useEffect(() => {
@@ -318,6 +568,7 @@ export default function AuditLogs() {
 
       if (collegeId && collegeId !== 'default_college_id') params.collegeId = collegeId;
       if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
+      if (selectedRole !== 'ALL') params.role = selectedRole;
       if (selectedModule !== 'ALL') params.module = selectedModule;
       if (selectedAction !== 'ALL') params.action = selectedAction;
       if (selectedStatus !== 'ALL') params.status = selectedStatus;
@@ -327,12 +578,15 @@ export default function AuditLogs() {
       const response = await api.get('/audit-logs', { params });
       const raw = response?.data;
       const data = raw?.data || raw || response || {};
-      const fetchedLogs = Array.isArray(data) 
-        ? data 
-        : (data.logs || raw?.logs || response?.logs || []);
+      const validLogs = (Array.isArray(fetchedLogs) ? fetchedLogs : []).filter(l => {
+        const act = String(l.action || '').toUpperCase();
+        const ent = String(l.entity || '').toUpperCase();
+        const mod = String(l.module || '').toUpperCase();
+        return !act.includes('REFRESH') && !ent.includes('REFRESH') && !mod.includes('REFRESH');
+      });
 
-      if (Array.isArray(fetchedLogs) && fetchedLogs.length > 0) {
-        setLogs(fetchedLogs);
+      if (validLogs.length > 0) {
+        setLogs(validLogs);
         if (data.stats || raw?.stats || response?.stats) {
           setStats(data.stats || raw?.stats || response?.stats);
         }
@@ -344,12 +598,13 @@ export default function AuditLogs() {
       setIsRefreshing(false);
     }
   }, [
-    collegeId, 
-    debouncedSearch, 
-    selectedModule, 
-    selectedAction, 
-    selectedStatus, 
-    startDate, 
+    collegeId,
+    debouncedSearch,
+    selectedRole,
+    selectedModule,
+    selectedAction,
+    selectedStatus,
+    startDate,
     endDate
   ]);
 
@@ -369,7 +624,18 @@ export default function AuditLogs() {
 
   // Compute Displayed Logs: Fully reactive client-side filter ensures instant feedback
   const displayedLogs = useMemo(() => {
-    let result = [...logs];
+    let result = logs.filter(log => {
+      const act = String(log.action || '').toUpperCase();
+      const ent = String(log.entity || '').toUpperCase();
+      const mod = String(log.module || '').toUpperCase();
+      const desc = String(log.description || '').toLowerCase();
+      return !act.includes('REFRESH') && !ent.includes('REFRESH') && !mod.includes('REFRESH') && !desc.includes('session refresh');
+    });
+
+    // Role filter (Teacher vs Admin)
+    if (selectedRole !== 'ALL') {
+      result = result.filter(log => matchesRole(log.userRole, selectedRole));
+    }
 
     // Module filter
     if (selectedModule !== 'ALL') {
@@ -389,16 +655,21 @@ export default function AuditLogs() {
     // Keyword search
     if (debouncedSearch && debouncedSearch.trim()) {
       const q = debouncedSearch.trim().toLowerCase();
-      result = result.filter(log =>
-        (log.userName && log.userName.toLowerCase().includes(q)) ||
-        (log.userEmail && log.userEmail.toLowerCase().includes(q)) ||
-        (log.description && log.description.toLowerCase().includes(q)) ||
-        (log.entity && log.entity.toLowerCase().includes(q)) ||
-        (log.entityId && String(log.entityId).toLowerCase().includes(q)) ||
-        (log.ipAddress && log.ipAddress.toLowerCase().includes(q)) ||
-        (log.action && log.action.toLowerCase().includes(q)) ||
-        (log.module && log.module.toLowerCase().includes(q))
-      );
+      result = result.filter(log => {
+        const desc = getDisplayDescription(log).toLowerCase();
+        const target = getDisplayTargetRecord(log).toLowerCase();
+        return (
+          (log.userName && log.userName.toLowerCase().includes(q)) ||
+          (log.userEmail && log.userEmail.toLowerCase().includes(q)) ||
+          (log.userRole && log.userRole.toLowerCase().includes(q)) ||
+          desc.includes(q) ||
+          target.includes(q) ||
+          (log.entity && log.entity.toLowerCase().includes(q)) ||
+          (log.ipAddress && log.ipAddress.toLowerCase().includes(q)) ||
+          (log.action && log.action.toLowerCase().includes(q)) ||
+          (log.module && log.module.toLowerCase().includes(q))
+        );
+      });
     }
 
     // Date range filter
@@ -415,7 +686,7 @@ export default function AuditLogs() {
     }
 
     return result;
-  }, [logs, selectedModule, selectedAction, selectedStatus, debouncedSearch, startDate, endDate]);
+  }, [logs, selectedRole, selectedModule, selectedAction, selectedStatus, debouncedSearch, startDate, endDate]);
 
   // Total pages based on displayed results
   const totalPages = Math.max(1, Math.ceil(displayedLogs.length / pagination.limit));
@@ -430,6 +701,7 @@ export default function AuditLogs() {
   const handleResetFilters = () => {
     setSearch('');
     setDebouncedSearch('');
+    setSelectedRole('ALL');
     setSelectedModule('ALL');
     setSelectedAction('ALL');
     setSelectedStatus('ALL');
@@ -442,6 +714,7 @@ export default function AuditLogs() {
   const hasActiveFilters = useMemo(() => {
     return (
       search !== '' ||
+      selectedRole !== 'ALL' ||
       selectedModule !== 'ALL' ||
       selectedAction !== 'ALL' ||
       selectedStatus !== 'ALL' ||
@@ -449,7 +722,7 @@ export default function AuditLogs() {
       startDate !== '' ||
       endDate !== ''
     );
-  }, [search, selectedModule, selectedAction, selectedStatus, datePreset, startDate, endDate]);
+  }, [search, selectedRole, selectedModule, selectedAction, selectedStatus, datePreset, startDate, endDate]);
 
   // ── EXPORT AS REAL EXCEL SPREADSHEET (.xlsx) ──
   const handleExportExcel = () => {
@@ -460,26 +733,30 @@ export default function AuditLogs() {
     }
 
     try {
-      const exportData = recordsToExport.map((l, index) => ({
-        'S.No': index + 1,
-        'Log ID': l.id,
-        'Date & Time (UTC)': new Date(l.createdAt).toUTCString(),
-        'Local Date': formatDate(l.createdAt),
-        'Local Time': formatTime(l.createdAt),
-        'Actor Name': l.userName || 'System',
-        'Actor Email': l.userEmail || 'system@internal',
-        'Actor Role': (l.userRole || 'system').toUpperCase(),
-        'Action': l.action || 'ACTION',
-        'Module': l.module || 'SYSTEM',
-        'Entity': l.entity || 'N/A',
-        'Entity ID': l.entityId || 'N/A',
-        'Status': l.status || 'SUCCESS',
-        'Description': l.description || '',
-        'IP Address': l.ipAddress || '127.0.0.1',
-        'User Agent / Device': l.userAgent || 'Unknown',
-        'Old Value (Before)': l.oldValue ? JSON.stringify(l.oldValue) : '',
-        'New Value (After)': l.newValue ? JSON.stringify(l.newValue) : ''
-      }));
+      const exportData = recordsToExport.map((l, index) => {
+        const roleDetails = getRoleDetails(l.userRole);
+        const displayDesc = getDisplayDescription(l);
+        const displayTarget = getDisplayTargetRecord(l);
+        return {
+          'S.No': index + 1,
+          'Log ID': l.id,
+          'Date & Time (UTC)': new Date(l.createdAt).toUTCString(),
+          'Local Date': formatDate(l.createdAt),
+          'Local Time': formatTime(l.createdAt),
+          'Performed By': l.userName || roleDetails.label,
+          'Performed By Email': l.userEmail || 'system@internal',
+          'Role': roleDetails.label.toUpperCase(),
+          'Action': l.action || 'ACTION',
+          'Module': l.module || 'SYSTEM',
+          'Target Record': displayTarget,
+          'Status': l.status || 'SUCCESS',
+          'Description': displayDesc,
+          'IP Address': l.ipAddress || '127.0.0.1',
+          'User Agent / Device': l.userAgent || 'Unknown',
+          'Old Value (Before)': l.oldValue ? JSON.stringify(l.oldValue) : '',
+          'New Value (After)': l.newValue ? JSON.stringify(l.newValue) : ''
+        };
+      });
 
       // Create sheet & set generous column widths
       const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -489,15 +766,14 @@ export default function AuditLogs() {
         { wch: 28 }, // Date UTC
         { wch: 14 }, // Local Date
         { wch: 12 }, // Local Time
-        { wch: 20 }, // Actor Name
-        { wch: 28 }, // Actor Email
-        { wch: 14 }, // Actor Role
+        { wch: 22 }, // Performed By
+        { wch: 28 }, // Performed By Email
+        { wch: 14 }, // Role
         { wch: 18 }, // Action
         { wch: 18 }, // Module
-        { wch: 22 }, // Entity
-        { wch: 24 }, // Entity ID
+        { wch: 24 }, // Target Record
         { wch: 12 }, // Status
-        { wch: 48 }, // Description
+        { wch: 55 }, // Description
         { wch: 16 }, // IP Address
         { wch: 42 }, // User Agent
         { wch: 40 }, // Old Value
@@ -566,6 +842,19 @@ export default function AuditLogs() {
     };
   };
 
+  const getActionTypeSubtitle = (action) => {
+    const act = String(action || '').toUpperCase();
+    if (act.includes('DELETE') || act.includes('REMOVE')) return 'Record Removal';
+    if (act.includes('CREATE') || act.includes('ADD') || act.includes('INSERT')) return 'New Entry Created';
+    if (act.includes('UPDATE') || act.includes('EDIT') || act.includes('MODIFY')) return 'Record Modification';
+    if (act.includes('LOGIN') || act.includes('AUTH')) return 'Authentication Event';
+    if (act.includes('LOGOUT')) return 'Session Termination';
+    if (act.includes('FEE') || act.includes('COLLECT')) return 'Fee Transaction';
+    if (act.includes('ATTENDANCE')) return 'Attendance Submission';
+    if (act.includes('ROLE') || act.includes('PERMISSION')) return 'Role Assignment';
+    return 'System Event';
+  };
+
   // Format Helper for Modules
   const getModuleBadge = (mod) => {
     const m = String(mod || '').toUpperCase();
@@ -618,7 +907,7 @@ export default function AuditLogs() {
 
   // High-risk calculation
   const highRiskCount = useMemo(() => {
-    return displayedLogs.filter(l => 
+    return displayedLogs.filter(l =>
       (l.action && (l.action.includes('DELETE') || l.action.includes('PERMISSION') || l.action.includes('ROLE'))) ||
       l.status === 'FAILURE'
     ).length;
@@ -637,10 +926,6 @@ export default function AuditLogs() {
               <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
                 System Audit Logs
               </h1>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <Lock className="w-3 h-3" />
-                Immutable & Read-Only
-              </span>
             </div>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               Cryptographically verified trail of every create, update, delete, login, permission, attendance, fee, and settings action.
@@ -649,36 +934,23 @@ export default function AuditLogs() {
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Real-time Toggle */}
-          <button
-            onClick={() => setLiveTracking(!liveTracking)}
-            className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
-              liveTracking 
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-                : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 border-transparent hover:border-slate-300 dark:hover:border-white/10'
-            }`}
-            title={liveTracking ? 'Auto-refresh active (every 10s)' : 'Click to enable live real-time sync'}
-          >
-            <span className={`w-2 h-2 rounded-full ${liveTracking ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
-            {liveTracking ? 'Live Sync Active' : 'Live Sync Paused'}
-          </button>
+        <div className="flex items-center gap-3 shrink-0 flex-nowrap">
 
           {/* Refresh button */}
           <button
             onClick={() => fetchAuditLogs(false)}
             disabled={isLoading || isRefreshing}
-            className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium border border-slate-200 dark:border-white/10 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-semibold border border-slate-200 dark:border-white/10 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0"
             title="Refresh logs now"
           >
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-primary-400' : ''}`} />
-            <span className="hidden sm:inline">Refresh</span>
+            <span>Refresh</span>
           </button>
 
           {/* EXCEL EXPORT BUTTON (.xlsx) */}
           <button
             onClick={handleExportExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-sm font-semibold shadow-sm transition-all"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-sm font-semibold shadow-sm transition-all whitespace-nowrap shrink-0"
             title="Export filtered records as formatted Excel spreadsheet (.xlsx)"
           >
             <FileSpreadsheet className="w-4 h-4" />
@@ -708,8 +980,8 @@ export default function AuditLogs() {
           },
           {
             title: 'Successful Operations',
-            value: displayedLogs.length > 0 
-              ? `${Math.max(0, Math.round(((displayedLogs.filter(l => l.status !== 'FAILURE').length) / displayedLogs.length) * 100))}%` 
+            value: displayedLogs.length > 0
+              ? `${Math.max(0, Math.round(((displayedLogs.filter(l => l.status !== 'FAILURE').length) / displayedLogs.length) * 100))}%`
               : '100%',
             sub: 'System integrity rating',
             icon: CheckCircle2,
@@ -717,7 +989,7 @@ export default function AuditLogs() {
             bg: 'bg-emerald-500/10'
           },
           {
-            title: 'High Risk / Security Events',
+            title: 'Security Alerts',
             value: highRiskCount.toLocaleString(),
             sub: 'Deletions & role adjustments',
             icon: AlertTriangle,
@@ -752,7 +1024,7 @@ export default function AuditLogs() {
       {/* ── 3. Search & Filter Bar ── */}
       <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-sm space-y-4">
         <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between">
-          
+
           {/* Search Input */}
           <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -760,7 +1032,7 @@ export default function AuditLogs() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search user, email, description, IP, record ID, or entity..."
+              placeholder="Search admin, teacher, student, email, description, record..."
               className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 transition-all"
             />
             {search && (
@@ -771,6 +1043,24 @@ export default function AuditLogs() {
                 Clear
               </button>
             )}
+          </div>
+
+          {/* Role Filter (Teacher & Admin) */}
+          <div className="w-full sm:w-auto">
+            <select
+              value={selectedRole}
+              onChange={(e) => {
+                setSelectedRole(e.target.value);
+                setPagination(p => ({ ...p, page: 1 }));
+              }}
+              className="w-full sm:w-48 px-3 py-2.5 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+            >
+              {ROLE_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Module Filter */}
@@ -839,11 +1129,10 @@ export default function AuditLogs() {
               <button
                 key={preset.value}
                 onClick={() => handleDatePresetChange(preset.value)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  datePreset === preset.value
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${datePreset === preset.value
                     ? 'bg-primary-500/20 text-primary-400 border border-primary-500/30'
                     : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10'
-                }`}
+                  }`}
               >
                 {preset.label}
               </button>
@@ -889,7 +1178,7 @@ export default function AuditLogs() {
 
       {/* ── 4. Main Audit Logs Table ── */}
       <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-3xl shadow-sm overflow-hidden">
-        
+
         {/* Table Header Info */}
         <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
@@ -909,7 +1198,7 @@ export default function AuditLogs() {
             <thead>
               <tr className="border-b border-slate-100 dark:border-white/5 bg-slate-50/75 dark:bg-white/[0.02] text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 <th className="py-3.5 px-4">Timestamp</th>
-                <th className="py-3.5 px-4">User / Actor</th>
+                <th className="py-3.5 px-4">Performed By</th>
                 <th className="py-3.5 px-4">Action</th>
                 <th className="py-3.5 px-4">Module</th>
                 <th className="py-3.5 px-4">Target Record / Description</th>
@@ -941,8 +1230,8 @@ export default function AuditLogs() {
                         No audit records matched
                       </h4>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        {hasActiveFilters 
-                          ? 'No logs match your selected filter criteria. Try resetting or selecting another module/action.' 
+                        {hasActiveFilters
+                          ? 'No logs match your selected filter criteria. Try resetting or selecting another module/action.'
                           : 'System operations will appear here as they are performed.'}
                       </p>
                       {hasActiveFilters && (
@@ -962,8 +1251,8 @@ export default function AuditLogs() {
                   const moduleStyle = getModuleBadge(log.module);
 
                   return (
-                    <tr 
-                      key={log.id} 
+                    <tr
+                      key={log.id}
                       className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors group cursor-pointer"
                       onClick={() => setSelectedLog(log)}
                     >
@@ -978,24 +1267,37 @@ export default function AuditLogs() {
                         </div>
                       </td>
 
-                      {/* 2. User / Actor */}
+                      {/* 2. Performed By */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10 shrink-0">
-                            {(log.userName || 'S').charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                              <span>{log.userName || 'System'}</span>
-                              <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-slate-100 dark:bg-white/5 text-slate-500 uppercase">
-                                {log.userRole || 'user'}
-                              </span>
+                        {(() => {
+                          const roleDetails = getRoleDetails(log.userRole);
+                          return (
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold border shrink-0 ${roleDetails.avatarClass}`}>
+                                {roleDetails.iconType === 'teacher' ? (
+                                  <GraduationCap className="w-4 h-4" />
+                                ) : roleDetails.iconType === 'admin' ? (
+                                  <ShieldCheck className="w-4 h-4" />
+                                ) : roleDetails.iconType === 'student' ? (
+                                  <User className="w-4 h-4" />
+                                ) : (
+                                  (log.userName || 'U').charAt(0).toUpperCase()
+                                )}
+                              </div>
+                              <div>
+                                <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                  <span>{log.userName || (roleDetails.iconType === 'teacher' ? 'Teacher' : roleDetails.iconType === 'student' ? 'Student' : 'Admin')}</span>
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border uppercase ${roleDetails.badgeClass}`}>
+                                    {roleDetails.label}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-slate-400 truncate max-w-[150px]">
+                                  {log.userEmail || (roleDetails.iconType === 'teacher' ? 'teacher@college.edu' : roleDetails.iconType === 'student' ? 'student@college.edu' : 'admin@college.edu')}
+                                </div>
+                              </div>
                             </div>
-                            <div className="text-[11px] text-slate-400 truncate max-w-[150px]">
-                              {log.userEmail || 'system@internal'}
-                            </div>
-                          </div>
-                        </div>
+                          );
+                        })()}
                       </td>
 
                       {/* 3. Action */}
@@ -1015,17 +1317,26 @@ export default function AuditLogs() {
 
                       {/* 5. Target Record / Description */}
                       <td className="py-3.5 px-4">
-                        <div className="max-w-xs xl:max-w-md">
-                          <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
-                            {log.description || `${log.action} on ${log.entity || log.module}`}
-                          </p>
-                          {(log.entity || log.entityId) && (
-                            <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                              {log.entity && <span className="font-semibold text-slate-500">{log.entity}:</span>}
-                              {log.entityId && <span className="font-mono text-slate-400 truncate">{log.entityId}</span>}
+                        {(() => {
+                          const displayDesc = getDisplayDescription(log);
+                          const displayTarget = getDisplayTargetRecord(log);
+                          return (
+                            <div className="max-w-xs xl:max-w-md">
+                              <p
+                                className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate"
+                                title={displayDesc}
+                              >
+                                {displayDesc}
+                              </p>
+                              <p
+                                className="text-[11px] text-slate-400 dark:text-slate-500 font-medium truncate mt-0.5"
+                                title={displayTarget}
+                              >
+                                {displayTarget}
+                              </p>
                             </div>
-                          )}
-                        </div>
+                          );
+                        })()}
                       </td>
 
                       {/* 6. IP & Device */}
@@ -1036,10 +1347,10 @@ export default function AuditLogs() {
                         <div className="text-[11px] text-slate-400 truncate max-w-[120px] flex items-center gap-1 mt-0.5">
                           <Laptop className="w-3 h-3 text-slate-500 shrink-0" />
                           <span className="truncate" title={log.userAgent}>
-                            {log.userAgent && log.userAgent.includes('Windows') ? 'Windows' : 
-                             log.userAgent && log.userAgent.includes('Mac') ? 'macOS' : 
-                             log.userAgent && log.userAgent.includes('Android') ? 'Android' : 
-                             log.userAgent && log.userAgent.includes('iPhone') ? 'iOS' : 'Client'}
+                            {log.userAgent && log.userAgent.includes('Windows') ? 'Windows' :
+                              log.userAgent && log.userAgent.includes('Mac') ? 'macOS' :
+                                log.userAgent && log.userAgent.includes('Android') ? 'Android' :
+                                  log.userAgent && log.userAgent.includes('iPhone') ? 'iOS' : 'Client'}
                           </span>
                         </div>
                       </td>
@@ -1097,8 +1408,8 @@ export default function AuditLogs() {
               <option value="100" className="bg-white dark:bg-slate-900">100</option>
             </select>
             <span className="text-xs text-slate-400">
-              {displayedLogs.length > 0 
-                ? `Showing ${(pagination.page - 1) * pagination.limit + 1} - ${Math.min(pagination.page * pagination.limit, displayedLogs.length)} of ${displayedLogs.length}` 
+              {displayedLogs.length > 0
+                ? `Showing ${(pagination.page - 1) * pagination.limit + 1} - ${Math.min(pagination.page * pagination.limit, displayedLogs.length)} of ${displayedLogs.length}`
                 : 'No matching records'}
             </span>
           </div>
@@ -1127,218 +1438,267 @@ export default function AuditLogs() {
         </div>
       </div>
 
-      {/* ── 5. Detailed Inspection Modal ── */}
+      {/* ── 5. Redesigned Enterprise Audit Record Inspector Modal ── */}
       <AnimatePresence>
-        {selectedLog && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white dark:bg-[#0B1120] border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden"
+        {selectedLog && (() => {
+          const roleDetails = getRoleDetails(selectedLog.userRole);
+          const actionBadge = getActionBadge(selectedLog.action);
+          const displayDescription = getDisplayDescription(selectedLog);
+          const displayTarget = getDisplayTargetRecord(selectedLog);
+          const moduleName = getInstitutionalModuleName(selectedLog.module);
+          const changes = getDetailedChanges(selectedLog);
+          const isSuccess = selectedLog.status !== 'FAILURE';
+
+          return (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 dark:bg-black/75 backdrop-blur-sm"
+              onClick={() => setSelectedLog(null)}
             >
-              {/* Modal Header */}
-              <div className="p-6 border-b border-slate-100 dark:border-white/10 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-primary-500/10 flex items-center justify-center text-primary-400">
-                    <FileText className="w-5 h-5" />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden"
+              >
+                {/* Modal Header */}
+                <div className="p-6 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-2xl bg-primary-50 dark:bg-primary-950/50 border border-primary-200/50 dark:border-primary-800/50 flex items-center justify-center text-primary-600 dark:text-primary-400">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+                        <span>Audit Record Inspector</span>
+                        <span className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-0.5 rounded-md border font-semibold ${actionBadge.bg}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${actionBadge.dot}`} />
+                          {selectedLog.action}
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Institutional Audit Trail • College Management System
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                      <span>Audit Record Inspector</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-md border font-mono ${getActionBadge(selectedLog.action).bg}`}>
-                        {selectedLog.action}
+
+                  <div className="flex items-center gap-2.5">
+                    {/* Status Badge */}
+                    {isSuccess ? (
+                      <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 px-2.5 py-1 rounded-xl">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Success
                       </span>
-                    </h3>
-                    <p className="text-xs text-slate-400 font-mono mt-0.5">
-                      Log ID: {selectedLog.id}
-                    </p>
+                    ) : (
+                      <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 px-2.5 py-1 rounded-xl">
+                        <XCircle className="w-3.5 h-3.5" />
+                        Failed
+                      </span>
+                    )}
+                    <button
+                      onClick={() => setSelectedLog(null)}
+                      className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                      title="Close"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleCopy(selectedLog, 'log_json')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition-colors"
-                    title="Copy full JSON"
-                  >
-                    {copiedKey === 'log_json' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedKey === 'log_json' ? 'Copied' : 'Copy JSON'}</span>
-                  </button>
-                  <button
-                    onClick={() => setSelectedLog(null)}
-                    className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
+                {/* Modal Body */}
+                <div className="p-6 overflow-y-auto space-y-5 flex-1">
 
-              {/* Modal Body */}
-              <div className="p-6 overflow-y-auto space-y-6 flex-1 text-sm">
-                
-                {/* Immutability Banner */}
-                <div className="p-3.5 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl flex items-center gap-3 text-indigo-400 text-xs">
-                  <Lock className="w-4 h-4 shrink-0" />
-                  <span>
-                    <strong>Immutable Record:</strong> This log cannot be updated, rewritten, or deleted. All values reflect the exact state recorded at the time of execution.
-                  </span>
-                </div>
-
-                {/* Metadata Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
-                    <span className="text-xs font-semibold text-slate-400 block mb-1">Actor / Initiator</span>
-                    <p className="font-bold text-slate-900 dark:text-white">{selectedLog.userName || 'System'}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{selectedLog.userEmail || 'system@internal'}</p>
-                    <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-primary-500/10 text-primary-400 uppercase">
-                      Role: {selectedLog.userRole || 'system'}
-                    </span>
-                  </div>
-
-                  <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
-                    <span className="text-xs font-semibold text-slate-400 block mb-1">Module & Target</span>
-                    <p className="font-bold text-slate-900 dark:text-white">Module: {selectedLog.module}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">Entity: {selectedLog.entity || 'N/A'}</p>
-                    <p className="text-[11px] font-mono text-slate-400 mt-1 truncate" title={selectedLog.entityId}>
-                      Entity ID: {selectedLog.entityId || 'N/A'}
-                    </p>
-                  </div>
-
-                  <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
-                    <span className="text-xs font-semibold text-slate-400 block mb-1">Network & Environment</span>
-                    <p className="font-mono text-xs text-slate-800 dark:text-slate-200">IP: {selectedLog.ipAddress || '127.0.0.1'}</p>
-                    <p className="text-[11px] text-slate-400 mt-1 break-words line-clamp-2" title={selectedLog.userAgent}>
-                      User Agent: {selectedLog.userAgent || 'Unknown'}
-                    </p>
-                  </div>
-
-                  <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5 md:col-span-2 lg:col-span-3">
-                    <span className="text-xs font-semibold text-slate-400 block mb-1">Action Description</span>
-                    <p className="text-sm font-medium text-slate-900 dark:text-white">
-                      {selectedLog.description}
-                    </p>
-                    <p className="text-xs text-slate-400 font-mono mt-1">
-                      Recorded at: {new Date(selectedLog.createdAt).toUTCString()} ({new Date(selectedLog.createdAt).toLocaleString()})
-                    </p>
-                  </div>
-                </div>
-
-                {/* Diff / Snapshot Section */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/10 pb-2">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-bold text-slate-900 dark:text-white">Data Change Snapshot</span>
-                      <div className="flex items-center bg-slate-100 dark:bg-white/5 rounded-lg p-0.5 text-xs">
-                        <button
-                          onClick={() => setActiveTab('diff')}
-                          className={`px-3 py-1 rounded-md transition-colors ${
-                            activeTab === 'diff' 
-                              ? 'bg-white dark:bg-slate-800 font-semibold text-slate-900 dark:text-white shadow-sm' 
-                              : 'text-slate-500'
-                          }`}
-                        >
-                          Side-by-Side Diff
-                        </button>
-                        <button
-                          onClick={() => setActiveTab('raw')}
-                          className={`px-3 py-1 rounded-md transition-colors ${
-                            activeTab === 'raw' 
-                              ? 'bg-white dark:bg-slate-800 font-semibold text-slate-900 dark:text-white shadow-sm' 
-                              : 'text-slate-500'
-                          }`}
-                        >
-                          Raw Record JSON
-                        </button>
-                      </div>
+                  {/* 1. Description Highlight Card */}
+                  <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-800 rounded-2xl">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                        Description
+                      </span>
+                      <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                        {formatRelativeTime(selectedLog.createdAt)}
+                      </span>
                     </div>
+                    <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-white leading-relaxed">
+                      {displayDescription}
+                    </p>
                   </div>
 
-                  {activeTab === 'diff' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Old Value */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs font-semibold text-rose-500">
-                          <span className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-rose-500" />
-                            Old Value (Before Modification)
-                          </span>
-                          {selectedLog.oldValue && (
-                            <button
-                              onClick={() => handleCopy(selectedLog.oldValue, 'old_val')}
-                              className="text-slate-400 hover:text-slate-600 dark:hover:text-white text-[11px]"
-                            >
-                              {copiedKey === 'old_val' ? 'Copied' : 'Copy'}
-                            </button>
-                          )}
-                        </div>
-                        <div className="p-3 bg-slate-950 text-slate-300 rounded-2xl font-mono text-xs max-h-60 overflow-y-auto border border-slate-800">
-                          {selectedLog.oldValue ? (
-                            <pre className="whitespace-pre-wrap break-all">
-                              {JSON.stringify(selectedLog.oldValue, null, 2)}
-                            </pre>
-                          ) : (
-                            <div className="text-slate-600 italic py-4 text-center">
-                              No prior state recorded (New entity creation or authentication action)
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                  {/* 2. Information Hierarchy Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
 
-                      {/* New Value */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs font-semibold text-emerald-500">
-                          <span className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                            New Value (After Modification)
-                          </span>
-                          {selectedLog.newValue && (
-                            <button
-                              onClick={() => handleCopy(selectedLog.newValue, 'new_val')}
-                              className="text-slate-400 hover:text-slate-600 dark:hover:text-white text-[11px]"
-                            >
-                              {copiedKey === 'new_val' ? 'Copied' : 'Copy'}
-                            </button>
+                    {/* Card 1: Performed By */}
+                    <div className="p-4 bg-white dark:bg-slate-900/30 rounded-2xl border border-slate-200/80 dark:border-slate-800/80">
+                      <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-2">
+                        Performed By
+                      </span>
+                      <div className="flex items-start gap-2.5">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold border shrink-0 ${roleDetails.avatarClass}`}>
+                          {roleDetails.iconType === 'teacher' ? (
+                            <GraduationCap className="w-4 h-4" />
+                          ) : roleDetails.iconType === 'admin' ? (
+                            <ShieldCheck className="w-4 h-4" />
+                          ) : (
+                            <User className="w-4 h-4" />
                           )}
                         </div>
-                        <div className="p-3 bg-slate-950 text-slate-300 rounded-2xl font-mono text-xs max-h-60 overflow-y-auto border border-slate-800">
-                          {selectedLog.newValue ? (
-                            <pre className="whitespace-pre-wrap break-all">
-                              {JSON.stringify(selectedLog.newValue, null, 2)}
-                            </pre>
-                          ) : (
-                            <div className="text-slate-600 italic py-4 text-center">
-                              No new state recorded (Entity deletion or state clearing)
-                            </div>
-                          )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-bold text-slate-900 dark:text-white text-sm truncate">
+                              {selectedLog.userName || 'System'}
+                            </p>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider ${roleDetails.badgeClass}`}>
+                              {roleDetails.label}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 truncate mt-0.5">
+                            {selectedLog.userEmail || 'system@internal'}
+                          </p>
                         </div>
                       </div>
                     </div>
-                  ) : (
-                    /* Raw JSON Tab */
-                    <div className="space-y-2">
-                      <div className="p-4 bg-slate-950 text-slate-300 rounded-2xl font-mono text-xs max-h-80 overflow-y-auto border border-slate-800">
-                        <pre className="whitespace-pre-wrap break-all">
-                          {JSON.stringify(selectedLog, null, 2)}
-                        </pre>
+
+                    {/* Card 2: Action */}
+                    <div className="p-4 bg-white dark:bg-slate-900/30 rounded-2xl border border-slate-200/80 dark:border-slate-800/80">
+                      <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-2">
+                        Action
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border font-bold ${actionBadge.bg}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${actionBadge.dot}`} />
+                          {selectedLog.action}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-2">
+                        {getActionTypeSubtitle(selectedLog.action)}
+                      </p>
+                    </div>
+
+                    {/* Card 3: Target Record */}
+                    <div className="p-4 bg-white dark:bg-slate-900/30 rounded-2xl border border-slate-200/80 dark:border-slate-800/80">
+                      <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-2">
+                        Target Record
+                      </span>
+                      <p className="font-bold text-slate-900 dark:text-white text-sm truncate" title={displayTarget}>
+                        {displayTarget}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Affected Record Entity
+                      </p>
+                    </div>
+
+                    {/* Card 4: Module */}
+                    <div className="p-4 bg-white dark:bg-slate-900/30 rounded-2xl border border-slate-200/80 dark:border-slate-800/80">
+                      <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-2">
+                        Module
+                      </span>
+                      <p className="font-bold text-slate-900 dark:text-white text-sm truncate">
+                        {moduleName}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Institutional System Scope
+                      </p>
+                    </div>
+
+                    {/* Card 5: Date & Time */}
+                    <div className="p-4 bg-white dark:bg-slate-900/30 rounded-2xl border border-slate-200/80 dark:border-slate-800/80">
+                      <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-2">
+                        Date & Time
+                      </span>
+                      <p className="font-bold text-slate-900 dark:text-white text-sm">
+                        {formatDate(selectedLog.createdAt)}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1 font-mono">
+                        {formatTime(selectedLog.createdAt)}
+                      </p>
+                    </div>
+
+                    {/* Card 6: IP Address */}
+                    <div className="p-4 bg-white dark:bg-slate-900/30 rounded-2xl border border-slate-200/80 dark:border-slate-800/80">
+                      <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-2">
+                        IP Address
+                      </span>
+                      <div className="flex items-center gap-1.5 text-slate-900 dark:text-white text-sm font-mono font-bold">
+                        <Globe className="w-3.5 h-3.5 text-slate-400" />
+                        <span>{selectedLog.ipAddress || '127.0.0.1'}</span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Client Network Address
+                      </p>
+                    </div>
+
+                  </div>
+
+                  {/* 3. Changes Made Section (Displayed ONLY when actual changes exist) */}
+                  {changes.length > 0 && (
+                    <div className="p-5 bg-white dark:bg-slate-900/40 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <History className="w-4 h-4 text-primary-500" />
+                          <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                            Changes Made
+                          </h4>
+                        </div>
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 border border-primary-200 dark:border-primary-900/40">
+                          {changes.length} {changes.length === 1 ? 'Field Modified' : 'Fields Modified'}
+                        </span>
+                      </div>
+
+                      <div className="space-y-3">
+                        {changes.map((change, idx) => (
+                          <div
+                            key={idx}
+                            className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800"
+                          >
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-2.5">
+                              {change.field}
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-[1fr,auto,1fr] items-center gap-2.5 sm:gap-3">
+                              {/* Before */}
+                              <div className="p-2.5 rounded-xl bg-rose-50/70 dark:bg-rose-950/20 border border-rose-200/70 dark:border-rose-900/30">
+                                <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider block mb-0.5">
+                                  Before
+                                </span>
+                                <span className="text-xs font-semibold text-rose-900 dark:text-rose-200 break-words">
+                                  {change.before}
+                                </span>
+                              </div>
+
+                              {/* Arrow */}
+                              <div className="flex justify-center text-slate-400 dark:text-slate-500">
+                                <ArrowRight className="w-4 h-4" />
+                              </div>
+
+                              {/* After */}
+                              <div className="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-900/30">
+                                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block mb-0.5">
+                                  After
+                                </span>
+                                <span className="text-xs font-semibold text-emerald-900 dark:text-emerald-200 break-words">
+                                  {change.after}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
-                </div>
-              </div>
 
-              {/* Modal Footer */}
-              <div className="p-4 border-t border-slate-100 dark:border-white/10 flex justify-end">
-                <button
-                  onClick={() => setSelectedLog(null)}
-                  className="px-5 py-2.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-semibold transition-colors"
-                >
-                  Close Inspection
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
+                </div>
+
+                {/* Modal Footer */}
+                <div className="p-4 px-6 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-end bg-slate-50/50 dark:bg-slate-900/20">
+                  <button
+                    onClick={() => setSelectedLog(null)}
+                    className="px-5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
     </div>
   );
