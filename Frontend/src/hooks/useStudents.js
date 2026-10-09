@@ -51,16 +51,21 @@ export function useStudents(collegeId) {
   const bulkImport = useMutation({
     mutationFn: (data) => api.post('/students/bulk', { data }),
     onSuccess: (res) => {
-      const stats = res.data?.data || {};
-      toast.success(`Imported ${stats.successful || 0} students successfully!`);
+      const stats = res?.data?.data || res?.data || res || {};
+      const successCount = stats.successful ?? stats.count ?? 0;
+      if (successCount > 0) {
+        toast.success(`Imported ${successCount} student${successCount === 1 ? '' : 's'} successfully!`);
+      }
       if (stats.failed > 0) {
-        toast.error(`${stats.failed} failed.`);
+        const firstErr = stats.errors?.[0] ? `: ${stats.errors[0]}` : '';
+        toast.error(`${stats.failed} row(s) failed${firstErr}`);
         console.error('Import errors:', stats.errors);
       }
       queryClient.invalidateQueries({ queryKey: ['students', collegeId] });
+      queryClient.invalidateQueries({ queryKey: ['students'] });
     },
     onError: (err) => {
-      toast.error(err.message || 'Failed to bulk import students');
+      toast.error(err.message || 'Failed to import students');
     }
   });
 

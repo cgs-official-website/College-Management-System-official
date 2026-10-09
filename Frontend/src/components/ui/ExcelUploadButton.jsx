@@ -72,7 +72,7 @@ export function ExcelUploadButton({
       if (fields && fields.length > 0) {
         const instructionsData = [
           {
-            'Column Name': '--- BULK IMPORT INSTRUCTIONS ---',
+            'Column Name': '--- IMPORT INSTRUCTIONS ---',
             'Requirement': '',
             'Data Type': '',
             'Description': 'Please review the column specifications below before preparing your import file.',
@@ -131,10 +131,15 @@ export function ExcelUploadButton({
         const headersInFile = Object.keys(jsonData[0] || {});
 
         for (const reqField of requiredFields) {
-          const hasHeader = headersInFile.some(h =>
-            h.toLowerCase().replace(/[^a-z0-9]/g, '') === reqField.name.toLowerCase().replace(/[^a-z0-9]/g, '') ||
-            h.toLowerCase().includes(reqField.name.toLowerCase())
-          );
+          const reqClean = reqField.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const hasHeader = headersInFile.some(h => {
+            const hClean = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+            return hClean === reqClean ||
+              h.toLowerCase().includes(reqField.name.toLowerCase()) ||
+              reqField.name.toLowerCase().includes(h.toLowerCase()) ||
+              (reqClean.includes('admission') && (hClean.includes('admission') || hClean.includes('admno') || hClean.includes('studentid'))) ||
+              (reqClean.includes('studentname') && (hClean.includes('name') || hClean.includes('firstname')));
+          });
           if (!hasHeader) {
             errors.push(`Missing required column: "${reqField.name}"`);
           }

@@ -12,6 +12,128 @@ import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
 import { api } from '../../../services/api';
 import { useQueryClient } from '@tanstack/react-query';
 
+const STUDENT_IMPORT_FIELDS = [
+  {
+    name: 'Admission_No',
+    required: true,
+    type: 'String',
+    description: 'Unique Student Admission Number / ID',
+    example: 'ADM-2026-001'
+  },
+  {
+    name: 'Student_Name',
+    required: true,
+    type: 'String',
+    description: 'Full name of the student',
+    example: 'Rahul Sharma'
+  },
+  {
+    name: 'Email_ID',
+    required: false,
+    type: 'String',
+    description: 'Student login email address (auto-generated if omitted)',
+    example: 'rahul.sharma@example.com'
+  },
+  {
+    name: 'Department',
+    required: false,
+    type: 'String',
+    description: 'Department name (e.g. Computer Science & Engineering)',
+    example: 'Computer Science & Engineering'
+  },
+  {
+    name: 'Course',
+    required: false,
+    type: 'String',
+    description: 'Degree program / course (e.g. B.Tech CSE, MBA)',
+    example: 'B.Tech Computer Science'
+  },
+  {
+    name: 'Section',
+    required: false,
+    type: 'String',
+    description: 'Class section name (e.g. Section A)',
+    example: 'Section A'
+  },
+  {
+    name: 'Roll_No',
+    required: false,
+    type: 'String',
+    description: 'Class Roll Number',
+    example: '2026-CS-001'
+  },
+  {
+    name: 'Student_Reg_No',
+    required: false,
+    type: 'String',
+    description: 'University / Board Registration Number',
+    example: 'REG-2026-089'
+  },
+  {
+    name: 'Date_of_Birth',
+    required: false,
+    type: 'Date (YYYY-MM-DD)',
+    description: 'Student date of birth',
+    example: '2005-06-15'
+  },
+  {
+    name: 'Gender',
+    required: false,
+    type: 'String',
+    description: 'Male / Female / Other',
+    example: 'Male'
+  },
+  {
+    name: 'Student_Mobile',
+    required: false,
+    type: 'String',
+    description: '10-digit mobile number',
+    example: '9876543210'
+  },
+  {
+    name: 'Parent_Name',
+    required: false,
+    type: 'String',
+    description: 'Father / Mother / Guardian Name',
+    example: 'Rajesh Sharma'
+  },
+  {
+    name: 'Parent_Mobile',
+    required: false,
+    type: 'String',
+    description: 'Parent 10-digit mobile number',
+    example: '9876543211'
+  },
+  {
+    name: 'Address',
+    required: false,
+    type: 'String',
+    description: 'Residential address',
+    example: '123 Anna Salai, Chennai, TN'
+  },
+  {
+    name: 'Residence_Type',
+    required: false,
+    type: 'String',
+    description: 'Day Scholar or Hosteller',
+    example: 'Day Scholar'
+  },
+  {
+    name: 'Blood_Group',
+    required: false,
+    type: 'String',
+    description: 'Blood Group (e.g. O+, A+, B+)',
+    example: 'O+'
+  },
+  {
+    name: 'Year_of_Study',
+    required: false,
+    type: 'String',
+    description: 'Batch Year / Year of study (e.g. 2026)',
+    example: '2026'
+  }
+];
+
 export default function StudentList() {
   const confirm = useConfirm();
   const { userData } = useAuth();
@@ -26,15 +148,15 @@ export default function StudentList() {
   const [activatingId, setActivatingId] = useState(null);
 
   // Split students by status
-  const pendingStudents = students.filter(s => s.status === 'pending');
-  const activeStudents = students.filter(s => s.status === 'active');
+  const pendingStudents = students.filter(s => (s.status || '').toLowerCase() === 'pending');
+  const activeStudents = students.filter(s => (s.status || '').toLowerCase() === 'active');
 
   const tabStudents = activeTab === 'pending' ? pendingStudents
     : activeTab === 'active' ? activeStudents
     : students;
 
   const filteredStudents = tabStudents.filter(student => {
-    const searchString = `${student.firstName} ${student.lastName} ${student.admissionNo} ${student.registerNumber || ''} ${student.studentRegNo || ''} ${student.rollNumber || ''}`.toLowerCase();
+    const searchString = `${student.firstName || ''} ${student.lastName || ''} ${student.name || ''} ${student.admissionNo || ''} ${student.admissionNumber || ''} ${student.registerNumber || ''} ${student.studentRegNo || ''} ${student.rollNumber || ''} ${student.email || ''}`.toLowerCase();
     return searchString.includes(searchTerm.toLowerCase());
   });
 
@@ -210,6 +332,11 @@ export default function StudentList() {
           <ExcelUploadButton
             onUpload={bulkImport}
             isLoading={isImporting}
+            title="Import Students"
+            label="Import"
+            sampleFileName="students_import_template.xlsx"
+            description="Upload an Excel (.xlsx, .xls) or CSV file with student records. Required: Admission_No and Student_Name."
+            fields={STUDENT_IMPORT_FIELDS}
           />
           <Button onClick={handleOpenAdd}>
             <Plus className="w-4 h-4 mr-2" />

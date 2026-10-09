@@ -50,13 +50,15 @@ export function useStaff(collegeId) {
   const bulkImport = useMutation({
     mutationFn: (data) => api.post('/staff/bulk', { data }),
     onSuccess: (res) => {
-      const stats = res.data?.data || {};
-      toast.success(`Imported ${stats.successful || 0} staff successfully!`);
+      const stats = res?.data?.data || res?.data || res || {};
+      const successCount = stats.successful ?? stats.count ?? 0;
+      toast.success(`Imported ${successCount} staff successfully!`);
       if (stats.failed > 0) {
         toast.error(`${stats.failed} failed.`);
         console.error('Import errors:', stats.errors);
       }
       queryClient.invalidateQueries({ queryKey: ['staff', collegeId] });
+      queryClient.invalidateQueries({ queryKey: ['staff'] });
     },
     onError: (err) => {
       toast.error(err.message || 'Failed to bulk import staff');

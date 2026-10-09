@@ -52,7 +52,7 @@ export function BulkImportModal({ isOpen, onClose, onImport, isLoading }) {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Bulk Import Students" maxWidth="max-w-md">
+    <Modal isOpen={isOpen} onClose={onClose} title="Import Students" maxWidth="max-w-md">
       <div className="space-y-6">
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Upload an Excel (.xlsx) or CSV file containing student data. Ensure headers match the expected format (firstName, lastName, email, class, etc.).
