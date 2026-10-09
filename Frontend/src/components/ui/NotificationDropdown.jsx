@@ -66,25 +66,25 @@ export function NotificationDropdown() {
   };
 
   const getIcon = (type) => {
-    switch(type) {
+    switch (type) {
       case 'booking_approval':
-      case 'success': 
+      case 'success':
         return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
       case 'booking_rejection':
-      case 'error': 
+      case 'error':
         return <X className="w-5 h-5 text-rose-500" />;
       case 'booking_request':
         return <Building className="w-5 h-5 text-amber-500" />;
-      case 'warning': 
+      case 'warning':
         return <AlertTriangle className="w-5 h-5 text-amber-500" />;
-      default: 
+      default:
         return <Info className="w-5 h-5 text-primary-500" />;
     }
   };
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <button 
+      <button
         onClick={() => {
           setIsOpen(!isOpen);
           if (!isOpen) fetchNotifications();
@@ -120,14 +120,14 @@ export function NotificationDropdown() {
               </div>
               <div className="flex items-center gap-2">
                 {unreadCount > 0 && (
-                  <button 
+                  <button
                     onClick={handleMarkAllAsRead}
                     className="text-[11px] font-bold text-primary-600 hover:text-primary-700 dark:text-primary-400 hover:underline"
                   >
                     Mark all read
                   </button>
                 )}
-                <button 
+                <button
                   onClick={() => setIsOpen(false)}
                   className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
                 >
@@ -147,12 +147,11 @@ export function NotificationDropdown() {
                   const isUnread = !notification.isRead && !notification.readBy?.includes(userId);
 
                   return (
-                    <div 
-                      key={notification.id} 
+                    <div
+                      key={notification.id}
                       onClick={() => handleMarkAsRead(notification.id, notification.link)}
-                      className={`p-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer flex gap-3 items-start ${
-                        isUnread ? 'bg-primary-50/50 dark:bg-primary-500/5' : ''
-                      }`}
+                      className={`p-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer flex gap-3 items-start ${isUnread ? 'bg-primary-50/50 dark:bg-primary-500/5' : ''
+                        }`}
                     >
                       <div className="shrink-0 mt-0.5 p-2 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200/60 dark:border-white/5">
                         {getIcon(notification.type)}

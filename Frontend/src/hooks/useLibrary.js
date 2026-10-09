@@ -71,8 +71,9 @@ export function useLibrary(collegeId) {
   const bulkImport = async (data) => {
     try {
       const response = await api.post('/library/bulk', { data });
-      const stats = response.data?.data || {};
-      toast.success(`Imported ${stats.successful || 0} books successfully!`);
+      const stats = response?.data?.data || response?.data || response || {};
+      const successCount = stats.successful ?? stats.count ?? 0;
+      toast.success(`Imported ${successCount} books successfully!`);
       if (stats.failed > 0) {
         toast.error(`${stats.failed} failed.`);
       }
