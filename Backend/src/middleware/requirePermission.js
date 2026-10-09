@@ -17,12 +17,13 @@ export const requirePermission = (moduleKey, action) => async (req, res, next) =
     }
 
     const { role, customRoleId, collegeId, userId } = req.user;
-    console.log(`[requirePermission] Checking access for role='${role}', module='${moduleKey}', action='${action}', user='${userId}'`);
+    console.log(`[requirePermission] role='${role}', customRoleId='${customRoleId}', module='${moduleKey}', action='${action}'`);
 
     // 1. System roles (superadmin, admin) have full access by default
     if (role === 'superadmin' || role === 'admin') {
       return next();
     }
+    
 
     // 2. If no custom role is assigned, deny access
     if (!customRoleId) {
