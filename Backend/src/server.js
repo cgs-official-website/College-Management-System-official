@@ -211,10 +211,13 @@ app.use('/api/v1/email-templates', emailTemplatesRoutes);
 app.use('/api/v1/landing-page', landingPageRoutes);
 import reportsRoutes from './modules/reports/reports.routes.js';
 import auditRoutes from './modules/audit/audit.routes.js';
+import trafficRoutes from './modules/traffic/traffic.routes.js';
 app.use('/api/v1/reports', reportsRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/v1/audit-logs', auditRoutes);
 app.use('/api/audit-logs', auditRoutes);
+app.use('/api/v1/traffic', trafficRoutes);
+app.use('/api/traffic', trafficRoutes);
 
 // Sentry error handler if initialized
 Sentry.setupExpressErrorHandler(app);
