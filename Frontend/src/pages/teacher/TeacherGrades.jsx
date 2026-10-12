@@ -103,8 +103,10 @@ export default function TeacherGrades() {
         return toast.error("No marks entered to save");
       }
 
+      const selectedClass = courses.find(c => c.id === selectedCourse);
+
       await api.post('/exams/batch-marks', {
-        courseId: selectedCourse,
+        courseId: selectedClass?.courseId,
         examType: examType,
         maxMarks: Number(maxMarks),
         records
