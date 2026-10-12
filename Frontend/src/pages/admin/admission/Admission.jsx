@@ -13,10 +13,10 @@ export default function Admission() {
   const confirm = useConfirm();
   const { userData } = useAuth();
   const collegeId = userData?.collegeId || 'default_college_id';
-  
+
   const { admissions, isLoading, addAdmission, updateAdmission, deleteAdmission, isAdding, isUpdating } = useAdmissions(collegeId);
   const { addStudent } = useStudents(collegeId);
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAdmission, setEditingAdmission] = useState(null);
@@ -49,16 +49,16 @@ export default function Admission() {
     try {
       if (editingAdmission) {
         if (data.status === 'Approved' && editingAdmission.status !== 'Approved') {
-          const isConfirmed = await confirm({ 
+          const isConfirmed = await confirm({
             title: "Approve & Enroll",
             message: "Are you sure you want to approve this application and automatically enroll them as a student?",
             confirmText: "Approve & Enroll",
-            isDestructive: false 
+            isDestructive: false
           });
           if (!isConfirmed) return;
         }
         await updateAdmission({ id: editingAdmission.id, data });
-        
+
         if (data.status === 'Approved' && editingAdmission.status !== 'Approved') {
           await enrollStudent(data);
         }
@@ -84,7 +84,7 @@ export default function Admission() {
         gender: 'Not Specified',
         address: ''
       });
-    } catch(err) {
+    } catch (err) {
       console.error("Error auto-enrolling:", err);
     }
   };
@@ -132,7 +132,7 @@ export default function Admission() {
             <UserPlus className="w-7 h-7 text-slate-400" />
           </div>
         </motion.div>
-        
+
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Pending Review</p>
@@ -161,7 +161,7 @@ export default function Admission() {
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search className="h-4 w-4 text-slate-400" />
           </div>
-          <Input 
+          <Input
             placeholder="Search applicants by name or program..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -233,14 +233,14 @@ export default function Admission() {
                     <td className="p-4 pr-6 text-right">
                       <div className="flex items-center justify-end gap-2">
                         {(app.status === 'Pending' || app.status === 'pending') && (
-                           <button onClick={() => handleOpenEdit(app)} className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-primary-50 text-primary-600 hover:bg-primary-100 dark:bg-primary-500/10 dark:text-primary-400 dark:hover:bg-primary-500/20 rounded-lg transition-colors border border-primary-200 dark:border-primary-500/20">
-                             Review <ArrowRight className="w-3 h-3" />
-                           </button>
+                          <button onClick={() => handleOpenEdit(app)} className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-primary-50 text-primary-600 hover:bg-primary-100 dark:bg-primary-500/10 dark:text-primary-400 dark:hover:bg-primary-500/20 rounded-lg transition-colors border border-primary-200 dark:border-primary-500/20">
+                            Review <ArrowRight className="w-3 h-3" />
+                          </button>
                         )}
                         {(app.status !== 'Pending' && app.status !== 'pending') && (
-                           <button onClick={() => handleOpenEdit(app)} className="p-2 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm">
-                             <Edit className="w-4 h-4" />
-                           </button>
+                          <button onClick={() => handleOpenEdit(app)} className="p-2 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm">
+                            <Edit className="w-4 h-4" />
+                          </button>
                         )}
                         <button onClick={() => handleDelete(app.id)} className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm">
                           <Trash2 className="w-4 h-4" />
@@ -255,7 +255,7 @@ export default function Admission() {
         </div>
       </div>
 
-      <AdmissionFormModal 
+      <AdmissionFormModal
         isOpen={isFormOpen}
         onClose={() => setIsFormOpen(false)}
         onSubmit={handleSubmit}

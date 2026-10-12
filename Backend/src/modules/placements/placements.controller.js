@@ -95,3 +95,44 @@ export const deleteItem = async (req, res) => {
   logger.info(`[info] req=${req.id || ''} college=${collegeId} placementId=${id} actor=${actorId} Deleted placement drive`);
   res.json({ success: true, message: 'Placement drive deleted successfully' });
 };
+
+export const updateItem = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const actorId = req.user?.id || req.user?.userId;
+  const { id } = req.params;
+  
+  // Need to import updatePlacementSchema dynamically or rely on createPlacementSchema.partial()
+  // Since it might not be imported at the top, we'll just validate manually or use req.body
+  const payload = req.body;
+
+  const existing = await prisma.placement.findFirst({
+    where: { id, collegeId }
+  });
+
+  if (!existing) {
+    return res.status(404).json({ success: false, error: { code: 'PLACEMENT_NOT_FOUND', message: 'Placement drive not found' } });
+  }
+
+  const existingEligibility = typeof existing.eligibility === 'object' && existing.eligibility !== null ? existing.eligibility : {};
+  
+  const eligibility = {
+    ...existingEligibility,
+    role: payload.role !== undefined ? payload.role : existingEligibility.role,
+    ctc: payload.ctc !== undefined ? payload.ctc : existingEligibility.ctc,
+    driveDate: payload.driveDate !== undefined ? payload.driveDate : existingEligibility.driveDate,
+    status: payload.status !== undefined ? payload.status : existingEligibility.status,
+    studentsPlaced: payload.studentsPlaced !== undefined ? payload.studentsPlaced : existingEligibility.studentsPlaced,
+    eligibilityCriteria: payload.eligibilityCriteria !== undefined ? payload.eligibilityCriteria : existingEligibility.eligibilityCriteria,
+  };
+
+  const item = await prisma.placement.update({
+    where: { id },
+    data: {
+      companyName: payload.companyName !== undefined ? payload.companyName : existing.companyName,
+      eligibility
+    }
+  });
+
+  logger.info(`[info] req=${req.id || ''} college=${collegeId} placementId=${item.id} actor=${actorId} Updated placement drive '${item.companyName}'`);
+  res.json({ success: true, data: item });
+};

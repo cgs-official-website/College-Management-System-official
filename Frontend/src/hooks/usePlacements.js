@@ -30,6 +30,22 @@ export const usePlacements = () => {
     }
   });
 
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, ...updateData }) => {
+      const response = await api.patch(`/placements/${id}`, updateData);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['placements'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'placements'] });
+      broadcastSync('placements');
+      toast.success('Placement drive updated successfully!');
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to update placement drive');
+    }
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id) => {
       await api.delete(`/placements/${id}`);
@@ -58,8 +74,10 @@ export const usePlacements = () => {
     isLoading: query.isLoading,
     isError: query.isError,
     isAdding: createMutation.isPending,
+    isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
     createItem: createMutation.mutateAsync,
+    updateItem: updateMutation.mutateAsync,
     deleteItem: deleteMutation.mutateAsync,
     refetch: query.refetch
   };

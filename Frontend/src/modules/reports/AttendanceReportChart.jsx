@@ -9,10 +9,11 @@ import {
   Tooltip as RechartsTooltip,
   Legend
 } from 'recharts';
-import { 
+import {
   Users, UserCheck, UserX, Clock, TrendingUp, TrendingDown,
   Calendar, Sparkles, CheckCircle2, AlertCircle, BarChart3, Activity
 } from 'lucide-react';
+import ReportExportMenu from './ReportExportMenu';
 
 // Custom smooth tooltip for the charts
 const CustomChartTooltip = ({ active, payload, label }) => {
@@ -28,9 +29,9 @@ const CustomChartTooltip = ({ active, payload, label }) => {
         {payload.map((entry, index) => (
           <div key={`item-${index}`} className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-1.5">
-              <span 
-                className="w-2.5 h-2.5 rounded-full shadow-sm" 
-                style={{ backgroundColor: entry.color || entry.stroke || entry.fill }} 
+              <span
+                className="w-2.5 h-2.5 rounded-full shadow-sm"
+                style={{ backgroundColor: entry.color || entry.stroke || entry.fill }}
               />
               <span className="text-slate-300 capitalize">{entry.name}:</span>
             </div>
@@ -44,9 +45,9 @@ const CustomChartTooltip = ({ active, payload, label }) => {
   );
 };
 
-export default function AttendanceReportChart({ 
-  trendData = [], 
-  summary = {}, 
+export default function AttendanceReportChart({
+  trendData = [],
+  summary = {},
   groupedResults = [],
   selectedRange = 30,
   onRangeChange = null
@@ -56,8 +57,8 @@ export default function AttendanceReportChart({
   // Aggregate stats from trendData and summary
   const stats = useMemo(() => {
     const totalStudents = summary?.totalStudents || 0;
-    const overallPercentage = summary?.overallPercentage !== undefined 
-      ? summary.overallPercentage 
+    const overallPercentage = summary?.overallPercentage !== undefined
+      ? summary.overallPercentage
       : 0;
 
     let totalPresent = 0;
@@ -72,8 +73,8 @@ export default function AttendanceReportChart({
     });
 
     const totalRecords = totalPresent + totalAbsent + totalLate;
-    const avgPresentRate = totalRecords > 0 
-      ? Math.round(((totalPresent + totalLate) / totalRecords) * 100) 
+    const avgPresentRate = totalRecords > 0
+      ? Math.round(((totalPresent + totalLate) / totalRecords) * 100)
       : overallPercentage;
 
     return {
@@ -100,8 +101,8 @@ export default function AttendanceReportChart({
 
       const total = (item.presentCount || 0) + (item.absentCount || 0) + (item.lateCount || 0);
       const attendancePct = Number(item.attendancePercentage || 0);
-      const absentPct = total > 0 
-        ? Number(((item.absentCount / total) * 100).toFixed(1)) 
+      const absentPct = total > 0
+        ? Number(((item.absentCount / total) * 100).toFixed(1))
         : Math.max(0, 100 - attendancePct);
 
       return {
@@ -112,6 +113,42 @@ export default function AttendanceReportChart({
       };
     });
   }, [trendData]);
+
+  // Export datasets for Excel, CSV, and PDF downloads
+  const attendanceExportData = useMemo(() => {
+    if (activeView === 'classes' && groupedResults?.length > 0) {
+      return groupedResults.map((item, idx) => ({
+        'S.No': idx + 1,
+        'Class': item.name || `Class ${idx + 1}`,
+        'Attendance Rate': `${item.attendancePercentage ?? 0}%`,
+        'Total Students': item.totalStudents || item.total || 'N/A',
+        'Performance Status': (item.attendancePercentage ?? 0) >= 85 ? 'Optimal' : (item.attendancePercentage ?? 0) >= 75 ? 'Healthy' : 'Needs Follow-up'
+      }));
+    }
+
+    return formattedTrendData.map((item, idx) => {
+      const total = (item.presentCount || 0) + (item.absentCount || 0) + (item.lateCount || 0);
+      return {
+        'S.No': idx + 1,
+        'Date': item.date,
+        'Display Date': item.displayDate,
+        'Present Count': item.presentCount || 0,
+        'Absent Count': item.absentCount || 0,
+        'Late Count': item.lateCount || 0,
+        'Total Records': total,
+        'Attendance Rate': `${item.attendancePercentage ?? 0}%`,
+        'Absent Rate': `${item.absentPercentage ?? 0}%`,
+        'Status': (item.attendancePercentage ?? 0) >= 85 ? 'Optimal' : (item.attendancePercentage ?? 0) >= 75 ? 'Healthy' : 'Low'
+      };
+    });
+  }, [activeView, groupedResults, formattedTrendData]);
+
+  const attendanceExportSummary = useMemo(() => ({
+    'Average Attendance': `${stats.overallPercentage}%`,
+    'Total Present': stats.totalPresent.toLocaleString(),
+    'Total Absent': stats.totalAbsent.toLocaleString(),
+    'Observation Window': `${stats.daysTracked} Days`
+  }), [stats]);
 
   if (!trendData || trendData.length === 0) {
     return (
@@ -140,13 +177,12 @@ export default function AttendanceReportChart({
               <Sparkles className="w-3.5 h-3.5 text-primary-500" />
               Overall Attendance
             </span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-              stats.overallPercentage >= 85 
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${stats.overallPercentage >= 85
                 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                 : stats.overallPercentage >= 75
-                ? 'bg-primary-500/15 text-primary-600 dark:text-primary-400'
-                : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
-            }`}>
+                  ? 'bg-primary-500/15 text-primary-600 dark:text-primary-400'
+                  : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+              }`}>
               {stats.overallPercentage >= 85 ? 'Optimal' : stats.overallPercentage >= 75 ? 'Healthy' : 'Low'}
             </span>
           </div>
@@ -159,8 +195,8 @@ export default function AttendanceReportChart({
             </span>
           </div>
           <div className="w-full bg-slate-200/80 dark:bg-white/10 h-1.5 rounded-full overflow-hidden mt-3">
-            <div 
-              className="bg-primary-500 h-full rounded-full transition-all duration-700 ease-out" 
+            <div
+              className="bg-primary-500 h-full rounded-full transition-all duration-700 ease-out"
               style={{ width: `${Math.min(100, stats.overallPercentage)}%` }}
             />
           </div>
@@ -241,11 +277,10 @@ export default function AttendanceReportChart({
           <button
             type="button"
             onClick={() => setActiveView('bars')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all duration-200 ${
-              activeView === 'bars'
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all duration-200 ${activeView === 'bars'
                 ? 'bg-white dark:bg-[#0A0F1C] text-primary-600 dark:text-primary-400 shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
+              }`}
           >
             <BarChart3 className="w-3.5 h-3.5" />
             <span>Daily Attendance</span>
@@ -254,11 +289,10 @@ export default function AttendanceReportChart({
             <button
               type="button"
               onClick={() => setActiveView('classes')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all duration-200 ${
-                activeView === 'classes'
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all duration-200 ${activeView === 'classes'
                   ? 'bg-white dark:bg-[#0A0F1C] text-primary-600 dark:text-primary-400 shadow-sm'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
+                }`}
             >
               <Users className="w-3.5 h-3.5" />
               <span>By Class</span>
@@ -266,26 +300,37 @@ export default function AttendanceReportChart({
           )}
         </div>
 
-        {/* Range Selector Pill */}
-        {onRangeChange && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500 dark:text-slate-400 mr-1 font-medium">Window:</span>
-            {[7, 14, 30].map(days => (
-              <button
-                key={days}
-                type="button"
-                onClick={() => onRangeChange(days)}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
-                  selectedRange === days
-                    ? 'bg-primary-600 text-white shadow-sm'
-                    : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200/70 dark:hover:bg-white/10'
-                }`}
-              >
-                {days}D
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Right side controls: Range Selector Pill and Export Menu */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {onRangeChange && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-slate-500 dark:text-slate-400 mr-1 font-medium">Window:</span>
+              {[7, 14, 30].map(days => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => onRangeChange(days)}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${selectedRange === days
+                      ? 'bg-primary-600 text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200/70 dark:hover:bg-white/10'
+                    }`}
+                >
+                  {days}D
+                </button>
+              ))}
+            </div>
+          )}
+
+          <ReportExportMenu
+            data={attendanceExportData}
+            fileName={`Attendance_${activeView === 'classes' ? 'By_Class' : 'Daily_Trend'}`}
+            title={`Attendance Report (${activeView === 'classes' ? 'Class Performance' : `${stats.daysTracked}D Daily Trend`})`}
+            subtitle="Institutional Student Attendance Tracking Telemetry"
+            summary={attendanceExportSummary}
+            buttonText="Download Attendance"
+            size="sm"
+          />
+        </div>
       </div>
 
       {/* 3. Smooth Dynamic Chart Container */}
@@ -293,8 +338,8 @@ export default function AttendanceReportChart({
         <ResponsiveContainer width="100%" height="100%">
           {activeView === 'bars' ? (
             /* Paired Thin Bar Graph: Present (Blue) & Absent (Red) */
-            <BarChart 
-              data={formattedTrendData} 
+            <BarChart
+              data={formattedTrendData}
               margin={{ top: 15, right: 15, left: -20, bottom: 0 }}
               barGap={4}
             >
@@ -308,33 +353,33 @@ export default function AttendanceReportChart({
                   <stop offset="100%" stopColor="#dc2626" stopOpacity={0.8} />
                 </linearGradient>
               </defs>
-              <CartesianGrid 
-                strokeDasharray="4 4" 
-                vertical={false} 
-                stroke="currentColor" 
-                className="text-slate-200/80 dark:text-white/[0.06]" 
+              <CartesianGrid
+                strokeDasharray="4 4"
+                vertical={false}
+                stroke="currentColor"
+                className="text-slate-200/80 dark:text-white/[0.06]"
               />
-              <XAxis 
-                dataKey="displayDate" 
-                stroke="#94a3b8" 
-                fontSize={12} 
-                tickLine={false} 
-                axisLine={false} 
+              <XAxis
+                dataKey="displayDate"
+                stroke="#94a3b8"
+                fontSize={12}
+                tickLine={false}
+                axisLine={false}
                 tickMargin={10}
               />
-              <YAxis 
-                stroke="#94a3b8" 
-                fontSize={11} 
-                tickLine={false} 
-                axisLine={false} 
+              <YAxis
+                stroke="#94a3b8"
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
                 tickFormatter={(value) => `${value}%`}
                 domain={[0, 100]}
               />
               <RechartsTooltip content={<CustomChartTooltip />} />
-              <Legend 
-                verticalAlign="top" 
-                align="right" 
-                height={32} 
+              <Legend
+                verticalAlign="top"
+                align="right"
+                height={32}
                 iconType="circle"
                 formatter={(val) => (
                   <span className="text-xs text-slate-600 dark:text-slate-300 font-medium ml-1">
@@ -343,68 +388,68 @@ export default function AttendanceReportChart({
                 )}
               />
               {/* Thin Present Bar */}
-              <Bar 
-                dataKey="attendancePercentage" 
-                name="Present %" 
+              <Bar
+                dataKey="attendancePercentage"
+                name="Present %"
                 fill="url(#presentBarGrad)"
-                radius={[4, 4, 0, 0]} 
+                radius={[4, 4, 0, 0]}
                 barSize={16}
               />
               {/* Thin Absent Bar (Red) */}
-              <Bar 
-                dataKey="absentPercentage" 
-                name="Absent %" 
+              <Bar
+                dataKey="absentPercentage"
+                name="Absent %"
                 fill="url(#absentBarGrad)"
-                radius={[4, 4, 0, 0]} 
+                radius={[4, 4, 0, 0]}
                 barSize={16}
               />
             </BarChart>
           ) : (
             /* Class Performance Bar Chart */
-            <BarChart 
-              data={groupedResults} 
+            <BarChart
+              data={groupedResults}
               layout="vertical"
               margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
             >
-              <CartesianGrid 
-                strokeDasharray="4 4" 
-                horizontal={false} 
-                stroke="currentColor" 
-                className="text-slate-200/80 dark:text-white/[0.06]" 
+              <CartesianGrid
+                strokeDasharray="4 4"
+                horizontal={false}
+                stroke="currentColor"
+                className="text-slate-200/80 dark:text-white/[0.06]"
               />
-              <XAxis 
-                type="number" 
-                domain={[0, 100]} 
-                unit="%" 
-                stroke="#94a3b8" 
+              <XAxis
+                type="number"
+                domain={[0, 100]}
+                unit="%"
+                stroke="#94a3b8"
                 fontSize={11}
                 tickLine={false}
                 axisLine={false}
               />
-              <YAxis 
-                type="category" 
-                dataKey="name" 
-                stroke="#94a3b8" 
+              <YAxis
+                type="category"
+                dataKey="name"
+                stroke="#94a3b8"
                 fontSize={11}
                 tickLine={false}
                 axisLine={false}
                 width={80}
               />
-              <RechartsTooltip 
+              <RechartsTooltip
                 formatter={(val) => [`${val}%`, 'Attendance Rate']}
-                contentStyle={{ 
-                  backgroundColor: '#0f172a', 
-                  borderRadius: '10px', 
-                  border: '1px solid rgba(255, 255, 255, 0.1)', 
+                contentStyle={{
+                  backgroundColor: '#0f172a',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
                   color: '#fff',
                   fontSize: '12px'
                 }}
               />
-              <Bar 
-                dataKey="attendancePercentage" 
-                name="Attendance" 
-                fill="#3b82f6" 
-                radius={[0, 6, 6, 0]} 
+              <Bar
+                dataKey="attendancePercentage"
+                name="Attendance"
+                fill="#3b82f6"
+                radius={[0, 6, 6, 0]}
                 barSize={20}
               />
             </BarChart>

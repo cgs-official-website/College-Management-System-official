@@ -1,30 +1,23 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ShieldCheck,
   History,
   Search,
-  Filter,
   RefreshCw,
   FileSpreadsheet,
   Calendar,
   Clock,
   User,
   GraduationCap,
-  Activity,
   AlertTriangle,
   CheckCircle2,
   XCircle,
   Eye,
   FileText,
-  Copy,
-  Check,
-  Layers,
   Laptop,
   Globe,
   ChevronLeft,
   ChevronRight,
-  Lock,
-  Info,
   X,
   ArrowRight
 } from 'lucide-react';
@@ -498,7 +491,7 @@ export default function AuditLogs() {
   const collegeId = userData?.collegeId;
 
   // State
-  const [logs, setLogs] = useState([]);
+  const [logs, setLogs] = useState(INITIAL_DEMO_LOGS);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
   const [stats, setStats] = useState({ totalLogs: 0, todayCount: 0, failureCount: 0 });
   const [isLoading, setIsLoading] = useState(true);

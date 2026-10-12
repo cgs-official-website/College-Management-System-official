@@ -9,6 +9,7 @@ import {
   Search, ExternalLink, Calendar, ChevronLeft, ChevronRight,
   TrendingUp, CreditCard, Filter
 } from 'lucide-react';
+import ReportExportMenu from './ReportExportMenu';
 
 const STATUS_COLORS = {
   'PAID': '#10b981',
@@ -104,6 +105,27 @@ export default function FinancialSummaryChart({
       return matchesSearch && matchesStatus;
     });
   }, [feesList, searchTerm, statusFilter]);
+
+  // Export dataset for current filtered fees
+  const tableExportData = useMemo(() => {
+    return filteredFees.map((f, idx) => {
+      const due = Number(f.amountDue ?? f.amount ?? 0);
+      const paid = Number(f.amountPaid ?? 0);
+      return {
+        'S.No': idx + 1,
+        'Transaction ID': f.id || `TXN-${idx + 1}`,
+        'Student Name': f.studentName || f.student?.user?.name || 'N/A',
+        'Class': f.studentClass || f.student?.course?.name || 'N/A',
+        'Fee Category': f.feeType || 'Tuition Fee',
+        'Amount Due': due,
+        'Amount Paid': paid,
+        'Balance': Math.max(0, due - paid),
+        'Due Date': f.dueDate || 'N/A',
+        'Status': (f.status || 'Pending').toUpperCase(),
+        'Payment Method': f.paymentMethod || 'N/A'
+      };
+    });
+  }, [filteredFees]);
 
   // Pagination slice
   const totalPages = Math.ceil(filteredFees.length / ITEMS_PER_PAGE) || 1;
@@ -256,7 +278,7 @@ export default function FinancialSummaryChart({
                     dataKey="amount" 
                     fill="#f59e0b" 
                     radius={[6, 6, 0, 0]} 
-                    barSize={36} 
+                    barSize={20} 
                     name="Amount" 
                   />
                 </BarChart>
@@ -376,6 +398,20 @@ export default function FinancialSummaryChart({
               <span>Manage Fees</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </Link>
+
+            <ReportExportMenu
+              data={tableExportData}
+              fileName={`Fee_Transactions_${statusFilter.toLowerCase()}`}
+              title={`Fee Records (${statusFilter})`}
+              subtitle="Detailed student financial transactions and balance status"
+              summary={{
+                'Records': tableExportData.length,
+                'Filter Status': statusFilter
+              }}
+              disabled={tableExportData.length === 0}
+              buttonText="Download"
+              size="sm"
+            />
           </div>
         </div>
 

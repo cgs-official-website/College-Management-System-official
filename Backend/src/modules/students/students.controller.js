@@ -43,7 +43,7 @@ export const getStudents = async (req, res) => {
 
   const formatted = students.map(s => {
     const custom = (typeof s.customFields === 'object' && s.customFields !== null && !Array.isArray(s.customFields)) ? s.customFields : {};
-    
+
     // Resolve firstName & lastName: customFields -> User.name -> email prefix fallback for legacy
     let fName = custom.firstName;
     let lName = custom.lastName;
@@ -182,7 +182,7 @@ export const getStudentById = async (req, res) => {
   }
 
   const custom = (typeof student.customFields === 'object' && student.customFields !== null && !Array.isArray(student.customFields)) ? student.customFields : {};
-  
+
   let fName = custom.firstName;
   let lName = custom.lastName;
   if ((!fName || fName === '') && student.user?.name) {
@@ -269,7 +269,7 @@ export const createStudent = async (req, res) => {
 
   // Ensure department exists or find/create a default department
   let deptId = payload.departmentId;
-  
+
   if (!deptId && payload.courseId) {
     const course = await prisma.course.findUnique({
       where: { id: payload.courseId }
@@ -509,7 +509,7 @@ export const updateStudent = async (req, res) => {
     }
   }
 
-  const registerNumber = payload.registerNumber !== undefined 
+  const registerNumber = payload.registerNumber !== undefined
     ? (payload.registerNumber?.trim() || null)
     : (payload.studentRegNo !== undefined ? (payload.studentRegNo?.trim() || null) : (payload.regNo !== undefined ? (payload.regNo?.trim() || null) : undefined));
 
@@ -668,7 +668,7 @@ export const bulkImportStudents = async (req, res) => {
   if (!collegeId) {
     return res.status(400).json({ success: false, error: { message: 'College ID is required' } });
   }
-  
+
   if (!Array.isArray(data) || data.length === 0) {
     return res.status(400).json({ success: false, error: { message: 'No data provided for import' } });
   }
@@ -716,7 +716,7 @@ export const bulkImportStudents = async (req, res) => {
     const parsed = new Date(strVal);
     return !isNaN(parsed) ? parsed : null;
   };
-  
+
   // Phase 1: Pre-process and sequential cache resolution for Dept/Course/Section
   const processedRows = [];
   for (const [index, row] of data.entries()) {
@@ -930,7 +930,7 @@ export const bulkImportStudents = async (req, res) => {
   const uniqueEmails = new Set();
   const uniqueAdmissions = new Set();
   const deduplicatedRows = [];
-  
+
   // We process in reverse so the LAST occurrence in the excel sheet wins if there's a duplicate
   for (const row of [...processedRows].reverse()) {
     if (!uniqueEmails.has(row.cleanEmail) && !uniqueAdmissions.has(row.admissionNo)) {
@@ -948,20 +948,20 @@ export const bulkImportStudents = async (req, res) => {
   // Global Sweep: Clean up any existing soft-deleted records for these incoming students
   const incomingAdmissions = Array.from(uniqueAdmissions);
   const incomingEmails = Array.from(uniqueEmails);
-  
+
   if (incomingAdmissions.length > 0 || incomingEmails.length > 0) {
     const staleById = incomingAdmissions.length > 0 ? await prisma.student.findMany({
       where: { collegeId, admissionNumber: { in: incomingAdmissions }, deletedAt: { not: null } },
       select: { id: true, userId: true },
     }) : [];
-    
+
     const staleByEmail = incomingEmails.length > 0 ? await prisma.student.findMany({
       where: { collegeId, deletedAt: { not: null }, user: { is: { email: { in: incomingEmails } } } },
       select: { id: true, userId: true },
     }) : [];
 
     const staleMap = new Map([...staleById, ...staleByEmail].map((s) => [s.id, s]));
-    
+
     // Delete them safely before import starts
     for (const stale of staleMap.values()) {
       await prisma.$transaction(async (tx) => {
@@ -974,7 +974,7 @@ export const bulkImportStudents = async (req, res) => {
   const BATCH_SIZE = 5;
   for (let i = 0; i < deduplicatedRows.length; i += BATCH_SIZE) {
     const batch = deduplicatedRows.slice(i, i + BATCH_SIZE);
-    
+
     await Promise.all(batch.map(async (row) => {
       const { index, admissionNo, studentName, fName, lName, cleanEmail, dobFormatted, dateOfAdmission, studentMobile, parentMobile, parentName, motherName, gender, address, city, district, state, pincode, bloodGroup, batchYear, residenceType, rollNo, registerNumber, deptId, courseId, sectionId } = row;
 

@@ -1,16 +1,15 @@
 import React, { useState, useMemo } from 'react';
-import { Download, Users, Wallet, GraduationCap, Calendar } from 'lucide-react';
+import { Users, Wallet, GraduationCap, Calendar } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useStudents } from '../../../hooks/useStudents';
 import { useStaff } from '../../../hooks/useStaff';
 import { useFees } from '../../../hooks/useFees';
-import { Button } from '../../../components/ui/Button';
-import { toast } from 'react-hot-toast';
 import { useAttendanceReport } from '../../../modules/reports/useAttendanceReport';
 import AttendanceReportChart from '../../../modules/reports/AttendanceReportChart';
 import DemographicsChart from '../../../modules/reports/DemographicsChart';
 import StaffOverviewChart from '../../../modules/reports/StaffOverviewChart';
 import FinancialSummaryChart from '../../../modules/reports/FinancialSummaryChart';
+import ReportExportMenu from '../../../modules/reports/ReportExportMenu';
 
 export default function Reports() {
   const { userData } = useAuth();
@@ -41,111 +40,73 @@ export default function Reports() {
   const groupedResults = attendanceData?.data?.groupedResults || attendanceData?.groupedResults || [];
   const hasExportableAttendance = trendData.length > 0;
 
-  const [isExporting, setIsExporting] = useState(null);
-
-  // Helper function to export array of objects to CSV
-  const exportToCSV = (data, filename) => {
-    if (!data || !data.length) {
-      toast.error("No data available to export.");
-      setIsExporting(null);
-      return;
-    }
-
-    const headers = Object.keys(data[0]);
-    const csvRows = [];
-    
-    csvRows.push(headers.join(','));
-    
-    for (const row of data) {
-      const values = headers.map(header => {
-        const val = row[header] !== undefined && row[header] !== null ? row[header] : 'N/A';
-        return `"${String(val).replace(/"/g, '""')}"`;
-      });
-      csvRows.push(values.join(','));
-    }
-
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.setAttribute('hidden', '');
-    a.setAttribute('href', url);
-    a.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setIsExporting(null);
-  };
-
-  // Export handlers
-  const generateStudentReport = () => {
-    setIsExporting('students');
-    const exportData = students.map(s => ({
-      ID: s.id,
-      FirstName: s.firstName,
-      LastName: s.lastName,
-      Email: s.email || 'N/A',
-      Phone: s.phone || 'N/A',
-      Class: s.class,
-      Section: s.section,
-      Gender: s.gender,
-      JoinDate: s.createdAt?.toDate ? new Date(s.createdAt.toDate()).toLocaleDateString() : (s.createdAt ? new Date(s.createdAt).toLocaleDateString() : 'N/A')
+  // Export Data Preparation (Excel, CSV, PDF)
+  const studentExportData = useMemo(() => {
+    return (students || []).map((s, idx) => ({
+      'S.No': idx + 1,
+      'Student ID': s.id || `STU-${idx + 1}`,
+      'Full Name': `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'N/A',
+      'Class': s.class || 'N/A',
+      'Section': s.section || 'N/A',
+      'Gender': s.gender || 'N/A',
+      'Email': s.email || 'N/A',
+      'Phone': s.phone || 'N/A',
+      'Join Date': s.createdAt?.toDate 
+        ? new Date(s.createdAt.toDate()).toLocaleDateString() 
+        : (s.createdAt ? new Date(s.createdAt).toLocaleDateString() : 'N/A')
     }));
-    exportToCSV(exportData, 'Student_Demographics_Report');
-  };
+  }, [students]);
 
-  const generateStaffReport = () => {
-    setIsExporting('staff');
-    const exportData = staff.map(s => ({
-      ID: s.id,
-      Name: `${s.firstName} ${s.lastName}`,
-      Role: s.role,
-      Department: s.department,
-      Email: s.email,
-      Phone: s.phone || 'N/A',
-      Status: s.status,
-      JoinDate: s.joinDate
+  const staffExportData = useMemo(() => {
+    return (staff || []).map((s, idx) => ({
+      'S.No': idx + 1,
+      'Staff ID': s.id || `EMP-${idx + 1}`,
+      'Full Name': `${s.firstName || ''} ${s.lastName || ''}`.trim() || s.name || 'N/A',
+      'Role': s.role || 'N/A',
+      'Department': s.department || 'N/A',
+      'Email': s.email || 'N/A',
+      'Phone': s.phone || 'N/A',
+      'Status': s.status || 'Active',
+      'Join Date': s.joinDate || 'N/A'
     }));
-    exportToCSV(exportData, 'Staff_Directory_Report');
-  };
+  }, [staff]);
 
-  const generateFinancialReport = () => {
-    setIsExporting('financial');
-    if (!fees || !fees.length) {
-      toast.error("No fee records available to export.");
-      setIsExporting(null);
-      return;
-    }
-    const exportData = fees.map(f => ({
-      TransactionID: f.id || 'N/A',
-      StudentName: f.studentName || f.student?.user?.name || 'N/A',
-      Class: f.studentClass || f.student?.course?.name || 'N/A',
-      FeeType: f.feeType || 'Tuition Fee',
-      AmountDue: f.amountDue ?? f.amount ?? 0,
-      AmountPaid: f.amountPaid ?? 0,
-      DueDate: f.dueDate || 'N/A',
-      Status: (f.status || 'Pending').toUpperCase(),
-      PaymentMethod: f.paymentMethod || 'N/A'
-    }));
-    exportToCSV(exportData, 'Financial_Fee_Report');
-  };
+  const financialExportData = useMemo(() => {
+    return (fees || []).map((f, idx) => {
+      const due = Number(f.amountDue ?? f.amount ?? 0);
+      const paid = Number(f.amountPaid ?? 0);
+      return {
+        'S.No': idx + 1,
+        'Transaction ID': f.id || `TXN-${idx + 1}`,
+        'Student Name': f.studentName || f.student?.user?.name || 'N/A',
+        'Class': f.studentClass || f.student?.course?.name || 'N/A',
+        'Fee Type': f.feeType || 'Tuition Fee',
+        'Amount Due': due,
+        'Amount Paid': paid,
+        'Balance': Math.max(0, due - paid),
+        'Due Date': f.dueDate || 'N/A',
+        'Status': (f.status || 'Pending').toUpperCase(),
+        'Payment Method': f.paymentMethod || 'N/A'
+      };
+    });
+  }, [fees]);
 
-  const generateAttendanceReport = () => {
-    setIsExporting('attendance');
-    const exportData = trendData.map(day => ({
-      Date: day.date,
-      PresentCount: day.presentCount,
-      AbsentCount: day.absentCount,
-      LateCount: day.lateCount,
-      AttendancePercentage: `${day.attendancePercentage}%`
-    }));
-    
-    if (exportData && exportData.length > 0) {
-      exportToCSV(exportData, 'Attendance_Trend_Report');
-    } else {
-      toast.error("No attendance data available to export.");
-      setIsExporting(null);
-    }
-  };
+  const attendanceExportData = useMemo(() => {
+    return (trendData || []).map((day, idx) => {
+      const total = (day.presentCount || 0) + (day.absentCount || 0) + (day.lateCount || 0);
+      const rate = Number(day.attendancePercentage || 0);
+      return {
+        'S.No': idx + 1,
+        'Date': day.date,
+        'Present Count': day.presentCount || 0,
+        'Absent Count': day.absentCount || 0,
+        'Late Count': day.lateCount || 0,
+        'Total Tracked': total,
+        'Attendance Rate': `${rate}%`,
+        'Compliance Status': rate >= 85 ? 'Optimal' : rate >= 75 ? 'Healthy' : 'Low'
+      };
+    });
+  }, [trendData]);
 
   // --- Data Aggregations for Charts --- //
 
@@ -158,13 +119,19 @@ export default function Reports() {
       const cls = s.class || 'Unknown';
       cMap[cls] = (cMap[cls] || 0) + 1;
       
-      const gen = s.gender || 'Unknown';
+      const rawGen = s.gender || 'Others';
+      let gen = rawGen.charAt(0).toUpperCase() + rawGen.slice(1).toLowerCase();
+      if (gen === 'Unknown') gen = 'Others';
+      
       gMap[gen] = (gMap[gen] || 0) + 1;
     });
     
     return {
       studentsByClass: Object.keys(cMap).map(k => ({ name: k, count: cMap[k] })),
-      studentsByGender: Object.keys(gMap).map(k => ({ name: k, value: gMap[k] }))
+      studentsByGender: Object.keys(gMap).map(k => ({ name: k, value: gMap[k] })).sort((a, b) => {
+        const order = { 'Male': 1, 'Female': 2, 'Others': 3 };
+        return (order[a.name] || 4) - (order[b.name] || 4);
+      })
     };
   }, [students]);
 
@@ -267,7 +234,7 @@ export default function Reports() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Reports & Analytics</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Visual insights and data exports for your institution.
+            Visual insights and multi-format data exports in Excel (.xlsx), CSV (.csv), and PDF (.pdf) formats.
           </p>
         </div>
       </div>
@@ -279,16 +246,19 @@ export default function Reports() {
             <GraduationCap className="w-5 h-5 text-primary-500" />
             Student Demographics
           </h2>
-          <Button 
-            size="sm" 
-            variant="outline" 
-            onClick={generateStudentReport} 
-            isLoading={isExporting === 'students'} 
-            disabled={loadingStudents}
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
+          <ReportExportMenu
+            data={studentExportData}
+            fileName="Student_Demographics_Report"
+            title="Student Demographics Report"
+            subtitle="Enrolled student roster, class sections, and contact directory"
+            summary={{
+              'Total Students': students?.length || 0,
+              'Active Classes': studentsByClass?.length || 0
+            }}
+            disabled={loadingStudents || !students?.length}
+            buttonText="Export Students"
+            size="sm"
+          />
         </div>
         {loadingStudents ? (
           <div className="h-64 flex items-center justify-center text-slate-500">Loading data...</div>
@@ -304,16 +274,19 @@ export default function Reports() {
             <Users className="w-5 h-5 text-emerald-500" />
             Staff Overview
           </h2>
-          <Button 
-            size="sm" 
-            variant="outline" 
-            onClick={generateStaffReport} 
-            isLoading={isExporting === 'staff'} 
-            disabled={loadingStaff}
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
+          <ReportExportMenu
+            data={staffExportData}
+            fileName="Staff_Directory_Report"
+            title="Staff Directory & Overview Report"
+            subtitle="Faculty departments, institutional roles, and employment directory"
+            summary={{
+              'Total Staff': staff?.length || 0,
+              'Departments': staffByDept?.length || 0
+            }}
+            disabled={loadingStaff || !staff?.length}
+            buttonText="Export Staff"
+            size="sm"
+          />
         </div>
         {loadingStaff ? (
           <div className="h-64 flex items-center justify-center text-slate-500">Loading data...</div>
@@ -334,16 +307,21 @@ export default function Reports() {
               Revenue collection, outstanding dues, and student transaction breakdown
             </p>
           </div>
-          <Button 
-            size="sm" 
-            variant="outline" 
-            onClick={generateFinancialReport} 
-            isLoading={isExporting === 'financial'} 
+          <ReportExportMenu
+            data={financialExportData}
+            fileName="Financial_Fee_Report"
+            title="Financial & Fee Summary Report"
+            subtitle="Fee collection ledger, pending balances, and transaction history"
+            summary={{
+              'Total Invoiced': `Rs. ${financialSummary.totalFees.toLocaleString()}`,
+              'Total Collected': `Rs. ${financialSummary.totalCollected.toLocaleString()}`,
+              'Outstanding Dues': `Rs. ${financialSummary.totalPending.toLocaleString()}`,
+              'Collection Rate': `${financialSummary.collectionRate}%`
+            }}
             disabled={loadingFees || !fees?.length}
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Export Fee Report
-          </Button>
+            buttonText="Export Fee Report"
+            size="sm"
+          />
         </div>
         {loadingFees ? (
           <div className="h-64 flex items-center justify-center text-slate-500">Loading fee data...</div>
@@ -369,16 +347,19 @@ export default function Reports() {
               Institutional attendance health, daily trend tracking, and class engagement
             </p>
           </div>
-          <Button 
-            size="sm" 
-            variant="outline" 
-            onClick={generateAttendanceReport} 
-            isLoading={isExporting === 'attendance'} 
+          <ReportExportMenu
+            data={attendanceExportData}
+            fileName="Attendance_Overview_Report"
+            title="Attendance Overview Report"
+            subtitle="Institutional attendance telemetry and daily tracking"
+            summary={{
+              'Average Attendance': `${summary?.overallPercentage || (trendData.length > 0 ? Math.round(trendData.reduce((acc, d) => acc + (d.attendancePercentage || 0), 0) / trendData.length) : 0)}%`,
+              'Observation Days': trendData.length
+            }}
             disabled={loadingAttendance || !hasExportableAttendance}
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Export Attendance
-          </Button>
+            buttonText="Export Attendance"
+            size="sm"
+          />
         </div>
         {loadingAttendance ? (
           <div className="flex items-center justify-center h-64 text-slate-500">

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Briefcase, X, Plus, Trash2, Calendar, Award, TrendingUp, Building } from 'lucide-react';
+import { Briefcase, X, Plus, Trash2, Calendar, Award, TrendingUp, Building, Edit2 } from 'lucide-react';
 import { usePlacements } from '../../../hooks/usePlacements';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
@@ -9,9 +9,10 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 
 export default function PlacementsDashboard() {
   const confirm = useConfirm();
-  const { items, stats, isLoading, isAdding, createItem, deleteItem } = usePlacements();
+  const { items, stats, isLoading, isAdding, isUpdating, createItem, updateItem, deleteItem } = usePlacements();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editId, setEditId] = useState(null);
   const [formData, setFormData] = useState({
     companyName: '',
     role: '',
@@ -21,21 +22,41 @@ export default function PlacementsDashboard() {
     studentsPlaced: 0,
   });
 
+  const handleEdit = (drive) => {
+    setEditId(drive.id);
+    setFormData({
+      companyName: drive.company || drive.companyName || '',
+      role: drive.role || '',
+      ctc: drive.ctc || '',
+      driveDate: drive.driveDate ? drive.driveDate.split('T')[0] : '',
+      eligibilityCriteria: drive.eligibilityCriteria || '',
+      studentsPlaced: drive.studentsPlaced || 0,
+    });
+    setIsModalOpen(true);
+  };
+
   const handleAddDrive = async (e) => {
     e.preventDefault();
     if (!formData.companyName.trim()) return;
 
     try {
-      await createItem({
+      const payload = {
         companyName: formData.companyName.trim(),
         role: formData.role.trim() || 'Software Engineer',
         ctc: formData.ctc.trim() ? `${formData.ctc.trim()}${formData.ctc.includes('LPA') ? '' : ' LPA'}` : '6.5 LPA',
         driveDate: formData.driveDate || new Date().toISOString(),
         eligibilityCriteria: formData.eligibilityCriteria.trim() || 'Min 60% aggregate',
         studentsPlaced: Number(formData.studentsPlaced) || 0,
-      });
+      };
+
+      if (editId) {
+        await updateItem({ id: editId, ...payload });
+      } else {
+        await createItem(payload);
+      }
 
       setIsModalOpen(false);
+      setEditId(null);
       setFormData({
         companyName: '',
         role: '',
@@ -71,7 +92,18 @@ export default function PlacementsDashboard() {
           <p className="text-slate-500 dark:text-slate-400 mt-1">Manage placement drives, internships, and student recruitment.</p>
         </div>
         <Button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setEditId(null);
+            setFormData({
+              companyName: '',
+              role: '',
+              ctc: '',
+              driveDate: '',
+              eligibilityCriteria: '',
+              studentsPlaced: 0,
+            });
+            setIsModalOpen(true);
+          }}
           className="flex items-center gap-2 shadow-lg shadow-primary-500/20"
         >
           <Plus className="w-4 h-4" />
@@ -180,13 +212,22 @@ export default function PlacementsDashboard() {
                       {drive.eligibilityCriteria}
                     </td>
                     <td className="py-4 px-4 text-right">
-                      <button 
-                        onClick={() => handleDelete(drive.id, drive.company || drive.companyName)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
-                        title="Delete Drive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex justify-end items-center gap-1">
+                        <button 
+                          onClick={() => handleEdit(drive)}
+                          className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                          title="Edit Drive"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(drive.id, drive.company || drive.companyName)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                          title="Delete Drive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -196,11 +237,14 @@ export default function PlacementsDashboard() {
         </div>
       </motion.div>
 
-      {/* Add Placement Drive Modal */}
+      {/* Add/Edit Placement Drive Modal */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Add Placement Drive"
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditId(null);
+        }}
+        title={editId ? "Edit Placement Drive" : "Add Placement Drive"}
         maxWidth="max-w-lg"
       >
         <form onSubmit={handleAddDrive} className="space-y-4">
@@ -253,11 +297,14 @@ export default function PlacementsDashboard() {
           />
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-white/5">
-            <Button variant="secondary" type="button" onClick={() => setIsModalOpen(false)}>
+            <Button variant="secondary" type="button" onClick={() => {
+              setIsModalOpen(false);
+              setEditId(null);
+            }}>
               Cancel
             </Button>
-            <Button type="submit" isLoading={isAdding}>
-              Save Placement Drive
+            <Button type="submit" isLoading={isAdding || isUpdating}>
+              {editId ? "Update Placement Drive" : "Save Placement Drive"}
             </Button>
           </div>
         </form>
