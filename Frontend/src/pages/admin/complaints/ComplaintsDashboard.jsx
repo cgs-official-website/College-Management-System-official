@@ -174,7 +174,7 @@ export default function ComplaintsDashboard() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-200 dark:border-white/10 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-white/[0.02]">
-                <th className="py-4 px-6">Complainant (Student)</th>
+                <th className="py-4 px-6">Complaint</th>
                 <th className="py-4 px-6">Student ID</th>
                 <th className="py-4 px-6">Subject & Description</th>
                 <th className="py-4 px-6">Category</th>

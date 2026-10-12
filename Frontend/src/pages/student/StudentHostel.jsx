@@ -63,6 +63,22 @@ const StudentHostel = () => {
                 <p className="text-xs text-slate-500">Hostel warden & support contact</p>
               </div>
             </div>
+            {(hostel.wardenName || hostel.wardenPhone) && (
+              <div className="space-y-2 text-sm mb-3">
+                {hostel.wardenName && (
+                  <p className="text-slate-700 dark:text-slate-200">
+                    <span className="text-slate-500">Warden: </span>
+                    <span className="font-bold">{hostel.wardenName}</span>
+                  </p>
+                )}
+                {hostel.wardenPhone && (
+                  <p className="text-slate-700 dark:text-slate-200">
+                    <span className="text-slate-500">Phone: </span>
+                    <span className="font-bold">{hostel.wardenPhone}</span>
+                  </p>
+                )}
+              </div>
+            )}
             <p className="text-sm text-slate-600 dark:text-slate-300">
               For room issues, maintenance requests, or night-out passes, please contact your block resident warden or raise a ticket under <strong>Complaints</strong>.
             </p>

@@ -34,7 +34,7 @@ export const getStudentProfile = async (req, res) => {
         residenceType: student.residenceType || 'Day Scholar',
         isHosteller: (student.residenceType || '').toLowerCase().includes('hostel'),
         isDayScholar: !(student.residenceType || '').toLowerCase().includes('hostel'),
-        hostelBlock: student.hostelBlock?.name || null,
+        hostelBlock: parseBlock(student.hostelBlock?.name).name,
         hostelRoom: student.hostelRoom,
         collegeName: student.college?.name,
         collegeLogo: student.college?.logoUrl,
@@ -747,6 +747,22 @@ export const createStudentComplaint = async (req, res) => {
   }
 };
 
+const parseBlock = (rawName) => {
+  if (!rawName) return { name: null, wardenName: null, wardenPhone: null };
+  if (rawName.startsWith('{')) {
+    try {
+      const p = JSON.parse(rawName);
+      return {
+        name: p.name || rawName,
+        wardenName: p.wardenName || null,
+        wardenPhone: p.wardenPhone || null,
+      };
+    } catch {
+    }
+  }
+  return { name: rawName, wardenName: null, wardenPhone: null };
+};
+
 export const getStudentHostel = async (req, res) => {
   try {
     const student = req.student;
@@ -762,15 +778,26 @@ export const getStudentHostel = async (req, res) => {
       });
     }
 
+    const room = student.hostelRoomId
+  ? await prisma.hostelRoom.findUnique({
+      where: { id: student.hostelRoomId },
+      select: { roomNo: true, roomType: true, floor: true },
+    })
+  : null;
+
     res.json({
-      success: true,
-      data: {
-        isHosteller: true,
-        blockName: student.hostelBlock?.name || 'Main Hostel Block',
-        roomNo: student.hostelRoom || 'N/A',
-        residenceType: student.residenceType || 'Hostel'
-      }
-    });
+    success: true,
+    data: {
+      isHosteller: true,
+      blockName: student.hostelBlock?.name || 'Main Hostel Block',
+      roomNo: room?.roomNo || student.hostelRoom || 'N/A',
+      roomType: room?.roomType || null,
+      floor: room?.floor || null,
+      residenceType: student.residenceType || 'Hostel',
+      wardenName: student.hostelBlock?.wardenName || null,
+      wardenPhone: student.hostelBlock?.wardenPhone || null,
+    },
+  });
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
   }
