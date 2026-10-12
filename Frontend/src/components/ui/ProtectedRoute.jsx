@@ -1,0 +1,74 @@
+import React from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import { FaSpinner } from 'react-icons/fa';
+
+// Returns the home dashboard path for a given role
+const getRoleDashboard = (role) => {
+  switch (role) {
+    case 'student':  return '/student/dashboard';
+    case 'admin':    return '/admin/dashboard';
+    case 'superadmin': return '/super';
+    case 'parent':   return '/parent';
+    case 'teacher':
+    case 'hod':
+    case 'faculty':  return '/teacher';
+    default:         return '/login';
+  }
+};
+
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const { currentUser, userRole, userData, loading } = useAuth();
+  const location = useLocation();
+  const role = typeof userRole === 'string' ? userRole.trim().toLowerCase() : '';
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center flex flex-col items-center">
+          <FaSpinner className="animate-spin text-4xl text-primary mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">Loading Zuna Workspace...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    let loginPath = '/login';
+    if (location.pathname === '/admin' || location.pathname.startsWith('/admin/')) {
+      loginPath = '/admin/login';
+    } else if (location.pathname === '/super' || location.pathname.startsWith('/super/')) {
+      loginPath = '/super/login';
+    }
+    return <Navigate to={loginPath} state={{ from: location }} replace />;
+  }
+
+  // Superadmin has universal access
+  if (role !== 'superadmin') {
+    const collegeStatus = userData?.collegeStatus || userData?.college?.status;
+    
+    // If college is pending approval, block admin routes and route to pending approval
+    if (collegeStatus === 'pending') {
+      return <Navigate to="/pending-approval" replace />;
+    }
+
+    if (collegeStatus === 'rejected') {
+      return <Navigate to="/rejected" replace />;
+    }
+
+    if (collegeStatus === 'suspended') {
+      return <Navigate to="/pending-approval" replace />;
+    }
+  }
+
+  // If roles are specified and user's role is not in the allowed list,
+  // redirect to their OWN dashboard (not /login) so they don't get
+  // bounced back to a wrong dashboard via the Login page auto-redirect.
+  if (allowedRoles && (!role || !allowedRoles.includes(role))) {
+    return <Navigate to={getRoleDashboard(role)} replace />;
+  }
+
+  return children;
+};
+
+export default ProtectedRoute;

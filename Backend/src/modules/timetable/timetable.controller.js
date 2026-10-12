@@ -1,0 +1,528 @@
+import { prisma, logger } from '../../server.js';
+import { createTimetableSlotSchema, updateTimetableSlotSchema } from './timetable.schema.js';
+import { findClashes, validateTimeRange } from './timetable.clash.js';
+
+const DAY_MAP_TO_NAME = {
+  1: 'Monday',
+  2: 'Tuesday',
+  3: 'Wednesday',
+  4: 'Thursday',
+  5: 'Friday',
+  6: 'Saturday',
+  0: 'Sunday'
+};
+
+const DAY_NAME_TO_INT = {
+  'Monday': 1,
+  'Tuesday': 2,
+  'Wednesday': 3,
+  'Thursday': 4,
+  'Friday': 5,
+  'Saturday': 6,
+  'Sunday': 0
+};
+
+async function ensureDefaultAcademicEntities(collegeId) {
+  let dept = await prisma.department.findFirst({ where: { collegeId } });
+  if (!dept) {
+    dept = await prisma.department.create({
+      data: {
+        collegeId,
+        name: 'General Academics',
+        code: 'GEN'
+      }
+    });
+  }
+
+  let course = await prisma.course.findFirst({ where: { collegeId } });
+  if (!course) {
+    course = await prisma.course.create({
+      data: {
+        collegeId,
+        departmentId: dept.id,
+        name: 'General Engineering',
+        code: 'ENG101',
+        semester: 1,
+        credits: 4
+      }
+    });
+  }
+
+  let section = await prisma.section.findFirst({ where: { collegeId } });
+  if (!section) {
+    section = await prisma.section.create({
+      data: {
+        collegeId,
+        courseId: course.id,
+        name: 'Section A',
+        capacity: 60
+      }
+    });
+  }
+
+  let teacher = await prisma.teacher.findFirst({ where: { collegeId } });
+  if (!teacher) {
+    let teacherUser = await prisma.user.findFirst({ where: { collegeId, role: 'teacher' } });
+    if (!teacherUser) {
+      teacherUser = await prisma.user.create({
+        data: {
+          collegeId,
+          email: `faculty_${Date.now()}@college.edu`,
+          role: 'teacher',
+          passwordHash: 'hash123'
+        }
+      });
+    }
+
+    teacher = await prisma.teacher.create({
+      data: {
+        collegeId,
+        userId: teacherUser.id,
+        departmentId: dept.id,
+        designation: 'Assistant Professor',
+        joiningDate: new Date()
+      }
+    });
+  }
+
+  return { deptId: dept.id, courseId: course.id, sectionId: section.id, teacherId: teacher.id };
+}
+
+export const getTimetable = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const userId = req.user?.id || req.user?.userId;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { teacherProfile: true }
+  });
+
+  const where = { collegeId };
+
+  if (user?.role === 'teacher' || user?.role === 'hod') {
+    if (user.teacherProfile) {
+      where.teacherId = user.teacherProfile.id;
+    }
+  }
+
+  const slots = await prisma.timetableSlot.findMany({
+    where,
+    include: {
+      course: true,
+      teacher: { include: { user: true } },
+      section: true
+    },
+    orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }]
+  });
+
+  const formatted = slots.map(slot => {
+    const dayName = typeof slot.dayOfWeek === 'number' ? DAY_MAP_TO_NAME[slot.dayOfWeek] || 'Monday' : slot.dayOfWeek;
+    let teacherFullName = slot.teacher?.user?.name;
+    if (!teacherFullName || teacherFullName.trim() === '') {
+      const email = slot.teacher?.user?.email || '';
+      if (email.includes('@')) {
+        const handle = email.split('@')[0];
+        teacherFullName = handle
+          .replace(/\./g, ' ')
+          .replace(/\b\w/g, c => c.toUpperCase());
+      } else {
+        teacherFullName = 'Faculty Member';
+      }
+    }
+
+    return {
+      id: slot.id,
+      subject: slot.course?.name || 'Class Session',
+      courseName: slot.course?.name || 'Academic Course',
+      courseCode: slot.course?.code || null,
+      courseId: slot.courseId,
+      teacherName: teacherFullName,
+      teacherEmail: slot.teacher?.user?.email || '',
+      teacherId: slot.teacherId,
+      dayOfWeek: dayName,
+      startTime: slot.startTime || '09:00',
+      endTime: slot.endTime || '10:00',
+      room: slot.room || 'Room 101',
+      status: 'approved',
+    };
+  });
+
+  res.json({
+    success: true,
+    data: formatted
+  });
+};
+
+export const scheduleSlot = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const actorId = req.user?.id || req.user?.userId;
+  const payload = createTimetableSlotSchema.parse(req.body);
+
+  const timeError = validateTimeRange(payload.startTime, payload.endTime);
+  if (timeError) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_TIME_RANGE', message: timeError }
+    });
+  }
+
+  const defaults = await ensureDefaultAcademicEntities(collegeId);
+
+  const dayInt = typeof payload.dayOfWeek === 'string'
+    ? (DAY_NAME_TO_INT[payload.dayOfWeek] !== undefined ? DAY_NAME_TO_INT[payload.dayOfWeek] : 1)
+    : Number(payload.dayOfWeek);
+
+  let targetCourseId = defaults.courseId;
+  let targetDeptId = defaults.deptId;
+  let targetSectionId = defaults.sectionId;
+
+  if (payload.courseId) {
+    const course = await prisma.course.findFirst({
+      where: {
+        id: payload.courseId,
+        collegeId
+      },
+      include: { sections: true }
+    });
+
+    if (course) {
+      targetCourseId = course.id;
+      if (course.departmentId) targetDeptId = course.departmentId;
+      if (course.sections && course.sections.length > 0) {
+        targetSectionId = course.sections[0].id;
+      }
+    }
+  }
+
+  if (payload.subject && payload.subject.trim()) {
+    const trimmedSubject = payload.subject.trim();
+    let subjectCourse = await prisma.course.findFirst({
+      where: {
+        collegeId,
+        name: { equals: trimmedSubject, mode: 'insensitive' }
+      },
+      include: { sections: true }
+    });
+
+    if (!subjectCourse) {
+      subjectCourse = await prisma.course.create({
+        data: {
+          collegeId,
+          departmentId: targetDeptId,
+          name: trimmedSubject,
+          code: `SUB-${Math.floor(100 + Math.random() * 900)}`,
+          semester: 1,
+          credits: 3
+        },
+        include: { sections: true }
+      });
+    }
+
+    targetCourseId = subjectCourse.id;
+    if (subjectCourse.departmentId) targetDeptId = subjectCourse.departmentId;
+    if (subjectCourse.sections && subjectCourse.sections.length > 0) {
+      targetSectionId = subjectCourse.sections[0].id;
+    }
+  }
+
+  let targetTeacherId = defaults.teacherId;
+  if (payload.teacherId) {
+    const teacher = await prisma.teacher.findFirst({
+      where: {
+        id: payload.teacherId,
+        collegeId
+      }
+    });
+
+    if (!teacher) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_TEACHER',
+          message: 'Teacher not found or does not belong to this college'
+        }
+      });
+    }
+
+    targetTeacherId = teacher.id;
+  }
+  
+    const clashes = await findClashes(prisma, {
+    collegeId,
+    dayOfWeek: dayInt,
+    startTime: payload.startTime,
+    endTime: payload.endTime,
+    teacherId: targetTeacherId,
+    room: payload.room.trim()
+  });
+
+  if (clashes.length > 0) {
+    return res.status(409).json({
+      success: false,
+      error: {
+        code: 'TIMETABLE_CLASH',
+        message: clashes.map((c) => c.message).join(' '),
+        details: clashes
+      }
+    });
+  }
+
+  const slot = await prisma.timetableSlot.create({
+    data: {
+      collegeId,
+      departmentId: targetDeptId,
+      courseId: targetCourseId,
+      sectionId: targetSectionId,
+      teacherId: targetTeacherId,
+      dayOfWeek: dayInt,
+      startTime: payload.startTime,
+      endTime: payload.endTime,
+      room: payload.room.trim()
+    },
+    include: {
+      course: true,
+      teacher: { include: { user: true } }
+    }
+  });
+
+  logger.info(`[info] req=${req.id || ''} college=${collegeId} slotId=${slot.id} actor=${actorId} Scheduled class '${payload.subject}' on ${payload.dayOfWeek}`);
+  
+  const createdTeacherFullName = slot.teacher?.user?.name
+    || (() => {
+      const emailPrefix = slot.teacher?.user?.email ? slot.teacher.user.email.split('@')[0] : 'Staff';
+      const parts = emailPrefix.split('.');
+      return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+    })()
+    || slot.teacher?.user?.email
+    || payload.teacherName
+    || 'Faculty Member';
+
+  res.status(201).json({
+    success: true,
+    data: {
+      id: slot.id,
+      subject: slot.course?.name || payload.subject,
+      courseName: slot.course?.name || payload.courseName,
+      courseId: slot.courseId,
+      teacherName: createdTeacherFullName,
+      teacherId: slot.teacherId,
+      dayOfWeek: payload.dayOfWeek,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      room: slot.room,
+      status: 'approved'
+    }
+  });
+};
+
+export const updateSlot = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const actorId = req.user?.id || req.user?.userId;
+  const { id } = req.params;
+  const payload = updateTimetableSlotSchema.parse(req.body);
+
+  const existing = await prisma.timetableSlot.findFirst({
+    where: { id, collegeId }
+  });
+
+  if (!existing) {
+    return res.status(404).json({ success: false, error: { code: 'SLOT_NOT_FOUND', message: 'Timetable slot not found' } });
+  }
+
+  const updateData = {};
+  if (payload.subject && payload.subject.trim()) {
+    const trimmedSubject = payload.subject.trim();
+    let subjectCourse = await prisma.course.findFirst({
+      where: {
+        collegeId,
+        name: { equals: trimmedSubject, mode: 'insensitive' }
+      }
+    });
+
+    if (!subjectCourse) {
+      subjectCourse = await prisma.course.create({
+        data: {
+          collegeId,
+          departmentId: existing.departmentId,
+          name: trimmedSubject,
+          code: `SUB-${Math.floor(100 + Math.random() * 900)}`,
+          semester: 1,
+          credits: 3
+        }
+      });
+    }
+    updateData.courseId = subjectCourse.id;
+  } else if (payload.courseId) {
+    const course = await prisma.course.findFirst({
+      where: {
+        id: payload.courseId,
+        collegeId
+      }
+    });
+
+    if (!course) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_COURSE',
+          message: 'Course not found or does not belong to this college'
+        }
+      });
+    }
+
+    updateData.courseId = course.id;
+  }
+  if (payload.teacherId) {
+    const teacher = await prisma.teacher.findFirst({
+      where: {
+        id: payload.teacherId,
+        collegeId
+      }
+    });
+
+    if (!teacher) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_TEACHER',
+          message: 'Teacher not found or does not belong to this college'
+        }
+      });
+    }
+
+    updateData.teacherId = teacher.id;
+  }
+  if (payload.startTime) updateData.startTime = payload.startTime;
+  if (payload.endTime) updateData.endTime = payload.endTime;
+  if (payload.room) updateData.room = payload.room.trim();
+  if (payload.dayOfWeek !== undefined) {
+    updateData.dayOfWeek = typeof payload.dayOfWeek === 'string'
+      ? (DAY_NAME_TO_INT[payload.dayOfWeek] !== undefined ? DAY_NAME_TO_INT[payload.dayOfWeek] : 1)
+      : Number(payload.dayOfWeek);
+  }
+  
+  const merged = {
+    dayOfWeek: updateData.dayOfWeek ?? existing.dayOfWeek,
+    startTime: updateData.startTime ?? existing.startTime,
+    endTime: updateData.endTime ?? existing.endTime,
+    teacherId: updateData.teacherId ?? existing.teacherId,
+    room: updateData.room ?? existing.room
+  };
+
+  const timeError = validateTimeRange(merged.startTime, merged.endTime);
+  if (timeError) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_TIME_RANGE', message: timeError }
+    });
+  }
+
+  const clashes = await findClashes(prisma, { collegeId, ...merged, excludeId: id });
+  if (clashes.length > 0) {
+    return res.status(409).json({
+      success: false,
+      error: {
+        code: 'TIMETABLE_CLASH',
+        message: clashes.map((c) => c.message).join(' '),
+        details: clashes
+      }
+    });
+  }
+
+  const updated = await prisma.timetableSlot.update({
+    where: { id },
+    data: updateData,
+    include: { course: true, teacher: { include: { user: true } } }
+  });
+
+  logger.info(`[info] req=${req.id || ''} college=${collegeId} slotId=${id} actor=${actorId} Updated timetable slot`);
+  
+  const updatedTeacherFullName = updated.teacher?.user?.name
+    || (() => {
+      const emailPrefix = updated.teacher?.user?.email ? updated.teacher.user.email.split('@')[0] : 'Staff';
+      const parts = emailPrefix.split('.');
+      return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+    })()
+    || updated.teacher?.user?.email
+    || 'Faculty Member';
+
+  res.json({
+    success: true,
+    data: {
+      id: updated.id,
+      subject: updated.course?.name || 'Class Session',
+      courseName: updated.course?.name || 'Academic Course',
+      courseId: updated.courseId,
+      teacherName: updatedTeacherFullName,
+      teacherId: updated.teacherId,
+      dayOfWeek: typeof updated.dayOfWeek === 'number' ? DAY_MAP_TO_NAME[updated.dayOfWeek] || 'Monday' : updated.dayOfWeek,
+      startTime: updated.startTime,
+      endTime: updated.endTime,
+      room: updated.room,
+      status: 'approved'
+    }
+  });
+};
+
+export const deleteSlot = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const actorId = req.user?.id || req.user?.userId;
+  const { id } = req.params;
+
+  const existing = await prisma.timetableSlot.findFirst({
+    where: { id, collegeId }
+  });
+
+  if (!existing) {
+    return res.status(404).json({ success: false, error: { code: 'SLOT_NOT_FOUND', message: 'Timetable slot not found' } });
+  }
+
+  await prisma.timetableSlot.delete({ where: { id } });
+
+  logger.info(`[info] req=${req.id || ''} college=${collegeId} slotId=${id} actor=${actorId} Deleted timetable slot`);
+  res.json({ success: true, message: 'Class schedule removed successfully' });
+};
+
+export const getTodayTimetable = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const userId = req.user?.id || req.user?.userId;
+  
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { teacherProfile: true }
+  });
+
+  if (!user || !user.teacherProfile) {
+    return res.json({ success: true, data: [] });
+  }
+
+  const todayInt = new Date().getDay();
+  const dayName = DAY_MAP_TO_NAME[todayInt];
+
+  const slots = await prisma.timetableSlot.findMany({
+    where: { 
+      collegeId, 
+      teacherId: user.teacherProfile.id,
+      dayOfWeek: todayInt
+    },
+    include: {
+      course: true,
+      section: true
+    },
+    orderBy: {
+      startTime: 'asc'
+    }
+  });
+
+  const formattedSlots = slots.map(slot => ({
+    id: slot.id,
+    subject: slot.subject || slot.course?.name || 'Subject',
+    class: `${slot.course?.name || ''} - ${slot.section?.name || ''}`,
+    time: `${slot.startTime} - ${slot.endTime}`,
+    room: slot.room || 'TBA',
+    type: slot.type || 'Lecture',
+    status: 'upcoming' 
+  }));
+
+  res.json({ success: true, data: formattedSlots });
+};

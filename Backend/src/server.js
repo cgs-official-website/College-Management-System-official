@@ -1,0 +1,286 @@
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import { redis } from './lib/cache.js';
+import * as Sentry from '@sentry/node';
+import helmet from 'helmet';
+
+// ---------------------------------------------------------
+// STARTUP ENVIRONMENT VALIDATION
+// ---------------------------------------------------------
+const REQUIRED_ENV_VARS = ['DATABASE_URL', 'JWT_SECRET'];
+const missingVars = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
+
+import { logger } from './lib/logger.js';
+export { logger } from './lib/logger.js';
+
+if (missingVars.length > 0) {
+  logger.error(`[fatal] Missing required environment variables: ${missingVars.join(', ')}. Shutting down.`);
+  process.exit(1);
+}
+
+if (!process.env.REDIS_URL) {
+  logger.warn('[warn] REDIS_URL not provided. Defaulting to redis://localhost:6379 (Fail-open mode active).');
+}
+
+if (!process.env.SENTRY_DSN) {
+  logger.warn('[warn] SENTRY_DSN not provided. Sentry telemetry disabled in this environment.');
+}
+
+import { prisma } from './lib/prisma.js';
+export { prisma };
+
+const app = express();
+
+import { requestLogger } from './middleware/requestLogger.js';
+import { auditMiddleware } from './middleware/auditMiddleware.js';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+
+// Middlewares
+app.use(cors({
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:3000',
+      process.env.FRONTEND_URL,
+      // Allow all vercel.app subdomains
+    ].filter(Boolean);
+
+    // Allow requests with no origin (mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+
+    const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+
+    // Allow any localhost port, vercel.app domain, railway.app domain, or teamzuna.in domain
+    if (
+      isLocalhost ||
+      allowedOrigins.includes(origin) ||
+      origin.endsWith('.vercel.app') ||
+      origin.endsWith('.railway.app') ||
+      origin.endsWith('.teamzuna.in') ||
+      origin === 'https://teamzuna.in'
+    ) {
+      return callback(null, true);
+    }
+
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
+app.use(helmet());
+app.use(express.json({ limit: '10mb' }));
+app.use(requestLogger);
+app.use(auditMiddleware);
+
+// ---------------------------------------------------------
+// HEALTH CHECK (Railway deployment requirement)
+// ---------------------------------------------------------
+app.get('/health', async (req, res) => {
+  let dbStatus = 'ok';
+  let redisStatus = 'ok';
+
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch (e) {
+    dbStatus = 'down';
+  }
+
+  try {
+    await redis.ping();
+  } catch (e) {
+    redisStatus = 'down';
+  }
+
+  const isHealthy = dbStatus === 'ok'; // DB is strictly required, Redis fail-open
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? 'pass' : 'fail',
+    db: dbStatus,
+    redis: redisStatus
+  });
+});
+
+// ---------------------------------------------------------
+// REDIS TEST ENDPOINT
+// ---------------------------------------------------------
+app.get('/redis-test', async (req, res) => {
+  try {
+    await redis.set('test', 'Hello Redis');
+    const value = await redis.get('test');
+    res.json({
+      message: 'Redis is working!',
+      value: value,
+    });
+  } catch (error) {
+    console.error('Redis test error:', error.message);
+    res.status(500).json({
+      message: 'Redis connection failed',
+      error: error.message,
+    });
+  }
+});
+
+import authRoutes from './modules/auth/auth.routes.js';
+import collegesRoutes from './modules/colleges/colleges.routes.js';
+import admissionsRoutes from './modules/admissions/admissions.routes.js';
+import attendanceRoutes from './modules/attendance/attendance.routes.js';
+import feesRoutes from './modules/fees/fees.routes.js';
+import dashboardsRoutes from './modules/dashboards/dashboards.routes.js';
+import usersRoutes from './modules/users/users.routes.js';
+import examsRoutes from './modules/exams/exams.routes.js';
+import timetableRoutes from './modules/timetable/timetable.routes.js';
+import staffRoutes from './modules/staff/staff.routes.js';
+import studentsRoutes from './modules/students/students.routes.js';
+import rolesRoutes from './modules/roles/roles.routes.js';
+import noticesRoutes from './modules/notices/notices.routes.js';
+import libraryRoutes from './modules/library/library.routes.js';
+import infrastructureRoutes from './modules/infrastructure/infrastructure.routes.js';
+import hostelRoutes from './modules/hostel/hostel.routes.js';
+import transportRoutes from './modules/transport/transport.routes.js';
+import complaintsRoutes from './modules/complaints/complaints.routes.js';
+import placementsRoutes from './modules/placements/placements.routes.js';
+import storeRoutes from './modules/store/store.routes.js';
+import departmentsRoutes from './modules/departments/departments.routes.js';
+import coursesRoutes from './modules/courses/courses.routes.js';
+import sectionsRoutes from './modules/sections/sections.routes.js';
+import ptmRoutes from './modules/ptm/ptm.routes.js';
+import * as stubs from './modules/stubs.js';
+import { getModules } from './modules/roles/roles.controller.js';
+import { authenticate } from './middleware/authenticate.js';
+import { catchAsync } from './lib/catchAsync.js';
+
+// API Routes (Core & Tenant Modules)
+app.use('/api/v1/colleges', collegesRoutes);
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/admin/admissions', admissionsRoutes);
+app.use('/api/v1/students', studentsRoutes);
+app.use('/api/v1/attendance', attendanceRoutes);
+app.use('/api/v1/fees', feesRoutes);
+app.use('/api/v1/dashboards', dashboardsRoutes);
+app.use('/api/v1/users', usersRoutes);
+app.use('/api/v1/roles', rolesRoutes);
+app.get('/api/v1/modules', authenticate, catchAsync(getModules));
+app.use('/api/v1/exams', examsRoutes);
+app.use('/api/v1/timetable', timetableRoutes);
+app.use('/api/v1/staff', staffRoutes);
+app.use('/api/v1/notices', noticesRoutes);
+app.use('/api/v1/library', libraryRoutes);
+app.use('/api/v1/infrastructure', infrastructureRoutes);
+app.use('/api/v1/hostel', hostelRoutes);
+app.use('/api/v1/transport', transportRoutes);
+app.use('/api/v1/complaints', complaintsRoutes);
+app.use('/api/v1/placements', placementsRoutes);
+app.use('/api/v1/store', storeRoutes);
+app.use('/api/v1/departments', departmentsRoutes);
+app.use('/api/v1/courses', coursesRoutes);
+app.use('/api/v1/sections', sectionsRoutes);
+app.use('/api/v1/ptm', ptmRoutes);
+import assignmentsRoutes from './modules/assignments/assignments.routes.js';
+import leavesRoutes from './modules/leaves/leaves.routes.js';
+import payrollRoutes from './modules/payroll/payroll.routes.js';
+import projectsRoutes from './modules/projects/projects.routes.js';
+import apiIntegrationRoutes from './modules/api_integrations/api_integrations.routes.js';
+import inventoryRoutes from './modules/inventory/inventory.routes.js';
+import customRoutes from './modules/custom/custom.routes.js';
+import builderRoutes from './modules/builder/builder.routes.js';
+import dynamicRoutes from './modules/dynamic/dynamic.routes.js';
+import emailTemplatesRoutes from './modules/email/emailTemplates.routes.js';
+import studentPortalRoutes from './modules/student_portal/studentPortal.routes.js';
+import parentPortalRoutes from './modules/parent_portal/parentPortal.routes.js';
+import landingPageRoutes from './modules/landing_page/landingPage.routes.js';
+import subscriptionsRoutes from './modules/subscriptions/subscriptions.routes.js';
+import notificationsRoutes from './modules/notifications/notifications.routes.js';
+import ticketsRoutes from './modules/tickets/tickets.routes.js';
+app.use('/api/v1/student', studentPortalRoutes);
+app.use('/api/v1/parent', parentPortalRoutes);
+app.use('/api/v1/tickets', ticketsRoutes);
+app.use('/api/v1/subscriptions', subscriptionsRoutes);
+app.use('/api/v1/notifications', notificationsRoutes);
+app.use('/api/v1/public', stubs.publicRoutes);
+app.use('/api/v1/mock', stubs.mockDataRoutes);
+app.use('/api/v1/assignments', assignmentsRoutes);
+app.use('/api/v1/leaves', leavesRoutes);
+app.use('/api/v1/payroll', payrollRoutes);
+app.use('/api/v1/projects', projectsRoutes);
+app.use('/api/v1/integrations', apiIntegrationRoutes);
+app.use('/api/v1/inventory', inventoryRoutes);
+app.use('/api/v1/custom', customRoutes);
+app.use('/api/v1/builder', builderRoutes);
+app.use('/api/v1/dynamic', dynamicRoutes);
+app.use('/api/v1/email-templates', emailTemplatesRoutes);
+app.use('/api/v1/landing-page', landingPageRoutes);
+import reportsRoutes from './modules/reports/reports.routes.js';
+import auditRoutes from './modules/audit/audit.routes.js';
+app.use('/api/v1/reports', reportsRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/v1/audit-logs', auditRoutes);
+app.use('/api/audit-logs', auditRoutes);
+
+// Sentry error handler if initialized
+Sentry.setupExpressErrorHandler(app);
+
+// 404 Handler for unmatched routes
+app.use(notFoundHandler);
+
+// Centralized Express Error Handler
+app.use(errorHandler);
+
+const PORT = process.env.PORT || 5000;
+
+import { ensureCollegeCodeSequence } from './lib/collegeCodeGenerator.js';
+import { connectWithRetry } from './lib/prisma.js';
+
+const startServer = (retries = 5, delay = 600) => {
+  const server = app.listen(PORT, () => {
+    logger.info(`[info] Zuna ERP Backend running on port ${PORT}`);
+    // Connect to DB with retries first, then run startup tasks
+    connectWithRetry(5, 3000).then(() => {
+      ensureCollegeCodeSequence().catch(err => {
+        logger.warn(`[warn] Failed to initialize college sequence: ${err.message}`);
+      });
+    });
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE' && retries > 0) {
+      logger.warn(`[warn] Port ${PORT} in use, retrying in ${delay}ms... (${retries} retries left)`);
+      setTimeout(() => {
+        startServer(retries - 1, delay);
+      }, delay);
+    } else if (err.code === 'EADDRINUSE') {
+      logger.error(`[fatal] Port ${PORT} is already in use by another process. Exiting.`);
+      process.exit(1);
+    } else {
+      logger.error(`[fatal] Server error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+  // Graceful shutdown
+  const shutdown = async (signal) => {
+    logger.info(`[info] ${signal} received. Closing HTTP server...`);
+    server.close(async () => {
+      try { await prisma.$disconnect(); } catch (_) {}
+      try { redis.disconnect(); } catch (_) {}
+      if (signal === 'SIGUSR2') {
+        process.kill(process.pid, 'SIGUSR2');
+      } else {
+        process.exit(0);
+      }
+    });
+  };
+
+  process.once('SIGUSR2', () => shutdown('SIGUSR2'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+};
+
+startServer();
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error(`[error] Unhandled Rejection: ${reason?.stack || reason}`);
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error(`[fatal] Uncaught Exception: ${err.stack || err}`);
+});

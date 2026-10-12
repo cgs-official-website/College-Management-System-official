@@ -1,0 +1,80 @@
+import { Router } from 'express';
+import multer from 'multer';
+import { authenticate } from '../../middleware/authenticate.js';
+import { resolveStudent } from './studentResolver.js';
+import { catchAsync } from '../../lib/catchAsync.js';
+import { MAX_PROFILE_IMAGE_SIZE_BYTES } from '../../lib/imageProcessor.js';
+import {
+  getStudentProfile,
+  getStudentProfileImage,
+  uploadStudentProfileImage,
+  deleteStudentProfileImage,
+  getStudentDashboard,
+  getStudentCourses,
+  getStudentAssignments,
+  submitStudentAssignment,
+  getStudentAttendance,
+  getStudentLeaveRequests,
+  createStudentLeaveRequest,
+  getStudentTimetable,
+  getStudentExams,
+  getStudentResults,
+  getStudentFees,
+  payStudentFee,
+  getStudentNotices,
+  getStudentLibrary,
+  getStudentMyBooks,
+  getStudentBookHistory,
+  getStudentPlacements,
+  getStudentComplaints,
+  createStudentComplaint,
+  getStudentHostel,
+  getStudentTransport,
+  getStudentDocuments,
+  uploadStudentPersonalDocument,
+  deleteStudentPersonalDocument
+} from './studentPortal.controller.js';
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_PROFILE_IMAGE_SIZE_BYTES }
+});
+
+const router = Router();
+
+// All student portal endpoints require active student authentication & resolver
+router.use(authenticate, resolveStudent);
+
+router.get('/me', catchAsync(getStudentProfile));
+router.get('/profile', catchAsync(getStudentProfile));
+router.get('/profile/image', catchAsync(getStudentProfileImage));
+router.post('/profile/image', upload.any(), catchAsync(uploadStudentProfileImage));
+router.put('/profile/image', upload.any(), catchAsync(uploadStudentProfileImage));
+router.delete('/profile/image', catchAsync(deleteStudentProfileImage));
+
+router.get('/dashboard', catchAsync(getStudentDashboard));
+router.get('/courses', catchAsync(getStudentCourses));
+router.get('/assignments', catchAsync(getStudentAssignments));
+router.post('/assignments/:id/submit', catchAsync(submitStudentAssignment));
+router.get('/attendance', catchAsync(getStudentAttendance));
+router.get('/leave-requests', catchAsync(getStudentLeaveRequests));
+router.post('/leave-requests', catchAsync(createStudentLeaveRequest));
+router.get('/timetable', catchAsync(getStudentTimetable));
+router.get('/exams', catchAsync(getStudentExams));
+router.get('/results', catchAsync(getStudentResults));
+router.get('/fees', catchAsync(getStudentFees));
+router.post('/fees/pay', catchAsync(payStudentFee));
+router.get('/notices', catchAsync(getStudentNotices));
+router.get('/library', catchAsync(getStudentLibrary));
+router.get('/library/my-books', catchAsync(getStudentMyBooks));
+router.get('/library/my-history', catchAsync(getStudentBookHistory));
+router.get('/placements', catchAsync(getStudentPlacements));
+router.get('/complaints', catchAsync(getStudentComplaints));
+router.post('/complaints', catchAsync(createStudentComplaint));
+router.get('/hostel', catchAsync(getStudentHostel));
+router.get('/transport', catchAsync(getStudentTransport));
+router.get('/documents', catchAsync(getStudentDocuments));
+router.post('/documents', catchAsync(uploadStudentPersonalDocument));
+router.delete('/documents/:id', catchAsync(deleteStudentPersonalDocument));
+
+export default router;

@@ -1,0 +1,36 @@
+import { Router } from 'express';
+import { 
+  getAllColleges, 
+  getCollegeBySlug,
+  getCollegeRegistrationContext,
+  getCollegePublicCourses,
+  onboardCollege, 
+  updateCollegeStatus, 
+  deleteCollege, 
+  getCollege, 
+  updateCollege,
+  getMyCollegeStatus,
+  updateCollegeSubscription
+} from './colleges.controller.js';
+import { authenticate } from '../../middleware/authenticate.js';
+
+const router = Router();
+
+// Current User's College Status (accessible to pending/active admins)
+router.get('/me/status', authenticate, getMyCollegeStatus);
+
+router.get('/slug/:slug', getCollegeBySlug);
+router.get('/registration-context/:identifier', getCollegeRegistrationContext);
+router.get('/registration-context/:identifier/courses', getCollegePublicCourses);
+router.get('/', getAllColleges);
+router.post('/onboard', onboardCollege);
+router.put('/:id/status', updateCollegeStatus);
+router.patch('/:id/status', updateCollegeStatus);
+router.put('/:id/subscription', updateCollegeSubscription);
+router.delete('/:id', deleteCollege);
+
+// Admin accessible routes
+router.get('/:id', authenticate, getCollege);
+router.put('/:id', authenticate, updateCollege);
+
+export default router;

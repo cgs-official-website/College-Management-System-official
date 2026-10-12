@@ -1,0 +1,83 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { api } from '../services/api';
+import toast from 'react-hot-toast';
+import { broadcastSync } from '../utils/syncChannel';
+
+export function useNotices(collegeId) {
+  const queryClient = useQueryClient();
+  const [notices, setNotices] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAdding, setIsAdding] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const fetchNotices = useCallback(async () => {
+    if (!collegeId) return;
+    setIsLoading(true);
+    try {
+      const response = await api.get('/notices');
+      const list = Array.isArray(response?.data)
+        ? response.data
+        : (Array.isArray(response) ? response : []);
+      setNotices(list);
+    } catch (error) {
+      console.error("Error fetching notices:", error);
+      toast.error("Failed to load notices");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [collegeId]);
+
+  useEffect(() => {
+    fetchNotices();
+  }, [fetchNotices]);
+
+  const addNotice = async (data) => {
+    setIsAdding(true);
+    try {
+      await api.post('/notices', data);
+      toast.success("Notice published successfully!");
+      await fetchNotices();
+      queryClient.invalidateQueries({ queryKey: ['student', 'notices'] });
+      broadcastSync('notices');
+    } catch (error) {
+      console.error("Error adding notice:", error);
+      toast.error(error?.message || "Failed to publish notice.");
+      throw error;
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const updateNotice = async ({ id, data }) => {
+    setIsUpdating(true);
+    try {
+      await api.put(`/notices/${id}`, data);
+      toast.success("Notice updated successfully.");
+      await fetchNotices();
+      queryClient.invalidateQueries({ queryKey: ['student', 'notices'] });
+      broadcastSync('notices');
+    } catch (error) {
+      console.error("Error updating notice:", error);
+      toast.error(error?.message || "Failed to update notice.");
+      throw error;
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const deleteNotice = async (id) => {
+    try {
+      await api.delete(`/notices/${id}`);
+      toast.success("Notice deleted");
+      await fetchNotices();
+      queryClient.invalidateQueries({ queryKey: ['student', 'notices'] });
+      broadcastSync('notices');
+    } catch (error) {
+      console.error("Error deleting notice:", error);
+      toast.error("Failed to delete notice");
+    }
+  };
+
+  return { notices, isLoading, addNotice, updateNotice, deleteNotice, isAdding, isUpdating, refresh: fetchNotices };
+}

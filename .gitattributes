@@ -1,0 +1,13 @@
+# Auto detect text files and perform LF normalization on checkout/commit
+* text=auto
+
+# Explicit text files
+*.js text
+*.jsx text
+*.ts text
+*.tsx text
+*.json text
+*.css text
+*.html text
+*.md text
+*.prisma text

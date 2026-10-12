@@ -1,0 +1,84 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '../services/apiClient';
+import toast from 'react-hot-toast';
+import { broadcastSync } from '../utils/syncChannel';
+
+export const usePlacements = () => {
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ['placements'],
+    queryFn: async () => {
+      const response = await api.get('/placements');
+      return response;
+    }
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (newItem) => {
+      const response = await api.post('/placements', newItem);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['placements'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'placements'] });
+      broadcastSync('placements');
+      toast.success('Placement drive added successfully!');
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to add placement drive');
+    }
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, ...updateData }) => {
+      const response = await api.patch(`/placements/${id}`, updateData);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['placements'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'placements'] });
+      broadcastSync('placements');
+      toast.success('Placement drive updated successfully!');
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to update placement drive');
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id) => {
+      await api.delete(`/placements/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['placements'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'placements'] });
+      broadcastSync('placements');
+      toast.success('Placement drive removed.');
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to delete placement drive');
+    }
+  });
+
+  const rawData = query.data?.data || [];
+  const stats = query.data?.stats || {
+    totalDrives: rawData.length,
+    studentsPlaced: 0,
+    topCtc: '0 LPA'
+  };
+
+  return {
+    items: Array.isArray(rawData) ? rawData : [],
+    stats,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    isAdding: createMutation.isPending,
+    isUpdating: updateMutation.isPending,
+    isDeleting: deleteMutation.isPending,
+    createItem: createMutation.mutateAsync,
+    updateItem: updateMutation.mutateAsync,
+    deleteItem: deleteMutation.mutateAsync,
+    refetch: query.refetch
+  };
+};

@@ -1,0 +1,92 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { api } from '../services/api';
+import toast from 'react-hot-toast';
+import { broadcastSync } from '../utils/syncChannel';
+
+export function useFees(collegeId) {
+  const queryClient = useQueryClient();
+  const [fees, setFees] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAdding, setIsAdding] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const fetchFees = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const url = collegeId && collegeId !== 'default_college_id' ? `/fees?collegeId=${collegeId}` : '/fees';
+      const response = await api.get(url);
+      const list = Array.isArray(response?.data) 
+        ? response.data 
+        : (Array.isArray(response?.fees)
+          ? response.fees
+          : (Array.isArray(response) ? response : []));
+      setFees(list);
+    } catch (error) {
+      console.error("Error fetching fees:", error);
+      toast.error("Failed to load fee records");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [collegeId]);
+
+  useEffect(() => {
+    fetchFees();
+  }, [fetchFees]);
+
+  const addFee = async (data) => {
+    setIsAdding(true);
+    try {
+      const response = await api.post('/fees', data);
+      toast.success("Fee record created successfully!");
+      await fetchFees();
+      queryClient.invalidateQueries({ queryKey: ['student', 'fees'] });
+      broadcastSync('fees');
+      return response;
+    } catch (error) {
+      console.error("Error adding fee:", error);
+      const message = error?.message || "Failed to record fee.";
+      toast.error(message);
+      throw error;
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const updateFee = async ({ id, data }) => {
+    setIsUpdating(true);
+    try {
+      const response = await api.put(`/fees/${id}`, data);
+      toast.success("Fee record updated successfully!");
+      await fetchFees();
+      queryClient.invalidateQueries({ queryKey: ['student', 'fees'] });
+      broadcastSync('fees');
+      return response;
+    } catch (error) {
+      console.error("Error updating fee:", error);
+      const message = error?.message || "Failed to update fee record.";
+      toast.error(message);
+      throw error;
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const deleteFee = async (id) => {
+    try {
+      const response = await api.delete(`/fees/${id}`);
+      toast.success("Fee record deleted.");
+      await fetchFees();
+      queryClient.invalidateQueries({ queryKey: ['student', 'fees'] });
+      broadcastSync('fees');
+      return response;
+    } catch (error) {
+      console.error("Error deleting fee:", error);
+      const message = error?.message || "Failed to delete fee record.";
+      toast.error(message);
+      throw error;
+    }
+  };
+
+  return { fees, isLoading, isAdding, isUpdating, addFee, updateFee, deleteFee, refetch: fetchFees };
+}

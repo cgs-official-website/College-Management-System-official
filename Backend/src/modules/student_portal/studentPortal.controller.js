@@ -1,0 +1,1259 @@
+import { prisma, logger } from '../../server.js';
+import { redis, redisKeys } from '../../lib/cache.js';
+import { processStudentProfileImageBuffer, extractBufferFromBase64Payload } from '../../lib/imageProcessor.js';
+import { parseProofMeta, buildProofPayload, toSafeLeave, discardProof } from '../leaves/leaves.controller.js';
+
+export const getStudentProfile = async (req, res) => {
+  try {
+    const student = req.student;
+    
+    const nameParts = (student.user?.name || '').split(' ');
+    const firstName = nameParts[0] || 'Student';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    res.json({
+      success: true,
+      data: {
+        id: student.id,
+        admissionNo: student.admissionNumber,
+        admissionNumber: student.admissionNumber,
+        rollNumber: student.rollNumber,
+        firstName,
+        lastName,
+        name: student.user?.name || `${firstName} ${lastName}`.trim(),
+        email: student.user?.email || student.emailId,
+        mobile: student.studentMobile || student.emergencyContact,
+        department: student.department?.name || '',
+        departmentCode: student.department?.code || '',
+        departmentId: student.departmentId,
+        section: student.section?.name || '',
+        sectionId: student.sectionId,
+        batchYear: student.batchYear,
+        bloodGroup: student.bloodGroup,
+        emergencyContact: student.emergencyContact,
+        residenceType: student.residenceType || 'Day Scholar',
+        isHosteller: (student.residenceType || '').toLowerCase().includes('hostel'),
+        isDayScholar: !(student.residenceType || '').toLowerCase().includes('hostel'),
+        hostelBlock: parseBlock(student.hostelBlock?.name).name,
+        hostelRoom: student.hostelRoom,
+        collegeName: student.college?.name,
+        collegeLogo: student.college?.logoUrl,
+        yearOfStudy: student.yearOfStudy || student.batchYear,
+        status: student.user?.accountStatus || 'active',
+        hasProfileImage: Boolean(student.profileImageMimeType),
+        profileImageUrl: student.profileImageMimeType ? '/api/v1/student/profile/image' : null,
+        createdAt: student.createdAt
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentDashboard = async (req, res) => {
+  try {
+    const student = req.student;
+    const collegeId = student.collegeId;
+    const studentId = student.id;
+
+    const cacheKey = `student:dashboard:${collegeId}:${studentId}`;
+    if (redis.status === 'ready') {
+      const cached = await redis.get(cacheKey).catch(() => null);
+      if (cached) {
+        return res.json({ success: true, data: JSON.parse(cached) });
+      }
+    }
+
+    const attendanceRecords = await prisma.attendance.findMany({
+      where: { studentId }
+    });
+    const totalDays = attendanceRecords.length;
+    const presentDays = attendanceRecords.filter(a => a.status === 'present' || a.status === 'late').length;
+    const attendancePercentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 100;
+
+    const coursesCount = await prisma.course.count({
+      where: {
+        collegeId,
+        departmentId: student.departmentId,
+        deletedAt: null
+      }
+    });
+
+    const assignments = await prisma.assignment.findMany({
+      where: { collegeId },
+      include: {
+        submissions: {
+          where: { studentId }
+        }
+      }
+    });
+    const pendingAssignments = assignments.filter(a => a.submissions.length === 0).length;
+
+    const upcomingExams = await prisma.exam.count({
+      where: {
+        collegeId,
+        date: { gte: new Date() }
+      }
+    });
+
+    const fees = await prisma.fee.findMany({
+      where: { studentId }
+    });
+    const totalFees = fees.reduce((acc, f) => acc + (f.amountDue || 0), 0);
+    const paidFees = fees.reduce((acc, f) => acc + (f.amountPaid || (f.status === 'paid' ? f.amountDue : 0)), 0);
+    const dueFees = Math.max(0, totalFees - paidFees);
+
+    const recentNotices = await prisma.notice.findMany({
+      where: {
+        collegeId,
+        targetAudience: { in: ['all', 'students'] }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5
+    });
+
+    const dashboardData = {
+      student: {
+        name: student.user?.name,
+        admissionNumber: student.admissionNumber,
+        department: student.department?.name,
+        section: student.section?.name,
+        batchYear: student.batchYear
+      },
+      metrics: {
+        attendancePercentage,
+        totalDays,
+        presentDays,
+        coursesCount,
+        pendingAssignments,
+        upcomingExams,
+        totalFees,
+        paidFees,
+        dueFees
+      },
+      recentNotices: recentNotices.map(n => ({
+        id: n.id,
+        title: n.title,
+        content: n.content,
+        date: n.createdAt,
+        priority: n.priority || 'normal'
+      }))
+    };
+
+    if (redis.status === 'ready') {
+      await redis.set(cacheKey, JSON.stringify(dashboardData), 'EX', 120).catch(() => {});
+    }
+
+    res.json({ success: true, data: dashboardData });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentCourses = async (req, res) => {
+  try {
+    const student = req.student;
+    const courses = await prisma.course.findMany({
+      where: {
+        collegeId: student.collegeId,
+        departmentId: student.departmentId,
+        deletedAt: null
+      },
+      include: {
+        department: true
+      },
+      orderBy: { semester: 'asc' }
+    });
+
+    res.json({ success: true, data: courses });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentAssignments = async (req, res) => {
+  try {
+    const student = req.student;
+    const assignments = await prisma.assignment.findMany({
+      where: {
+        collegeId: student.collegeId
+      },
+      include: {
+        course: true,
+        submissions: {
+          where: { studentId: student.id }
+        }
+      },
+      orderBy: { dueDate: 'asc' }
+    });
+
+    const formatted = assignments.map(a => {
+      const sub = a.submissions[0];
+      return {
+        id: a.id,
+        title: a.title,
+        description: a.description,
+        courseName: a.course?.name || 'General Course',
+        courseCode: a.course?.code || '',
+        dueDate: a.dueDate,
+        attachmentUrl: a.attachmentUrl || null,
+        status: sub ? (sub.score !== null ? 'Graded' : 'Submitted') : (new Date(a.dueDate) < new Date() ? 'Overdue' : 'Pending'),
+        submittedAt: sub?.submittedAt || null,
+        score: sub?.score || null,
+        feedback: sub?.feedback || null,
+        submissionFileUrl: sub?.fileUrl || null
+      };
+    });
+
+    res.json({ success: true, data: formatted });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const submitStudentAssignment = async (req, res) => {
+  try {
+    const student = req.student;
+    const { id } = req.params;
+    const { fileUrl } = req.body;
+
+    if (!fileUrl) {
+      return res.status(400).json({ success: false, error: { message: 'Submission file URL is required' } });
+    }
+
+    const assignment = await prisma.assignment.findFirst({
+      where: { id, collegeId: student.collegeId }
+    });
+
+    if (!assignment) {
+      return res.status(404).json({ success: false, error: { message: 'Assignment not found' } });
+    }
+
+    const submission = await prisma.assignmentSubmission.upsert({
+      where: {
+        assignmentId_studentId: {
+          assignmentId: id,
+          studentId: student.id
+        }
+      },
+      update: {
+        fileUrl,
+        submittedAt: new Date(),
+        status: 'submitted'
+      },
+      create: {
+        collegeId: student.collegeId,
+        assignmentId: id,
+        studentId: student.id,
+        fileUrl,
+        status: 'submitted'
+      }
+    });
+
+    res.json({ success: true, data: submission });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentAttendance = async (req, res) => {
+  try {
+    const student = req.student;
+    const attendance = await prisma.attendance.findMany({
+      where: {
+        studentId: student.id
+      },
+      include: {
+        course: true
+      },
+      orderBy: { date: 'desc' }
+    });
+
+    const totalDays = attendance.length;
+    const presentDays = attendance.filter(a => a.status === 'present' || a.status === 'late').length;
+    const absentDays = attendance.filter(a => a.status === 'absent').length;
+    const percentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 100;
+
+    res.json({
+      success: true,
+      data: {
+        percentage,
+        totalDays,
+        presentDays,
+        absentDays,
+        records: attendance
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentLeaveRequests = async (req, res) => {
+  try {
+    const student = req.student;
+    const leaves = await prisma.leaveRequest.findMany({
+      where: {
+        collegeId: student.collegeId,
+        requesterUserId: student.userId
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const data = leaves.map((l) => {
+      const proofMeta = parseProofMeta(l.medicalCertUrl);
+      const { medicalCertUrl, ...rest } = l;
+      return { ...rest, ...proofMeta };
+    });
+
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const createStudentLeaveRequest = async (req, res) => {
+  try {
+    const student = req.student;
+    const { fromDate, toDate, reason, leaveType, proofFileName, proofMimeType, proofDataUrl } = req.body;
+
+    if (!fromDate || !toDate || !reason?.trim()) {
+      return res.status(400).json({ success: false, error: { message: 'From date, to date, and reason are required' } });
+    }
+
+    const from = new Date(fromDate);
+    const to = new Date(toDate);
+
+    if (isNaN(from) || isNaN(to)) {
+      return res.status(400).json({ success: false, error: { message: 'Invalid date supplied' } });
+    }
+    if (to < from) {
+      return res.status(400).json({ success: false, error: { message: 'To date cannot be before from date' } });
+    }
+
+    const { proof, error: proofError } = await buildProofPayload({
+      proofFileName, proofMimeType, proofDataUrl, collegeId: student.collegeId
+    });
+    if (proofError) {
+      return res.status(400).json({ success: false, error: { message: proofError } });
+    }
+
+  let leave;
+  try {
+    leave = await prisma.leaveRequest.create({
+      data: {
+        collegeId: student.collegeId,
+        requesterUserId: student.userId,
+        requesterRole: 'student',
+        fromDate: from,
+        toDate: to,
+        reason: `${leaveType ? `[${leaveType}] ` : ''}${reason.trim()}`,
+        medicalCertUrl: proof,
+        status: 'pending'
+      }
+    });
+  } catch (dbErr) {
+    await discardProof(proof);
+    throw dbErr;
+  }
+
+  res.status(201).json({ success: true, data: toSafeLeave(leave) });
+
+   
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentTimetable = async (req, res) => {
+  try {
+    const student = req.student;
+    let slots = [];
+
+    if (student.sectionId) {
+      slots = await prisma.timetableSlot.findMany({
+        where: {
+          collegeId: student.collegeId,
+          sectionId: student.sectionId
+        },
+        include: {
+          course: true,
+          section: true,
+          teacher: {
+            include: {
+              user: { select: { name: true } }
+            }
+          }
+        },
+        orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }]
+      });
+    }
+
+    if (!slots || slots.length === 0) {
+      slots = await prisma.timetableSlot.findMany({
+        where: {
+          collegeId: student.collegeId,
+          ...(student.departmentId || student.courseId
+            ? {
+                OR: [
+                  ...(student.departmentId ? [{ departmentId: student.departmentId }, { course: { departmentId: student.departmentId } }] : []),
+                  ...(student.courseId ? [{ courseId: student.courseId }] : [])
+                ]
+              }
+            : {})
+        },
+        include: {
+          course: true,
+          section: true,
+          teacher: {
+            include: {
+              user: { select: { name: true } }
+            }
+          }
+        },
+        orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }]
+      });
+    }
+
+    if (!slots || slots.length === 0) {
+      slots = await prisma.timetableSlot.findMany({
+        where: { collegeId: student.collegeId },
+        include: {
+          course: true,
+          section: true,
+          teacher: {
+            include: {
+              user: { select: { name: true } }
+            }
+          }
+        },
+        orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }]
+      });
+    }
+
+    res.json({ success: true, data: slots });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentExams = async (req, res) => {
+  try {
+    const student = req.student;
+    const exams = await prisma.exam.findMany({
+      where: {
+        collegeId: student.collegeId
+      },
+      include: {
+        course: true
+      },
+      orderBy: { date: 'asc' }
+    });
+
+    const formatted = exams.map(e => ({
+      id: e.id,
+      name: e.name,
+      title: e.name,
+      date: e.date,
+      type: e.type,
+      maxMarks: e.maxMarks,
+      course: e.course
+    }));
+
+    res.json({ success: true, data: formatted });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentResults = async (req, res) => {
+  try {
+    const student = req.student;
+    const marks = await prisma.mark.findMany({
+      where: {
+        studentId: student.id
+      },
+      include: {
+        exam: {
+          include: { course: true }
+        }
+      }
+    });
+
+    const formatted = marks.map(m => ({
+      id: m.id,
+      score: m.obtainedMarks,
+      obtainedMarks: m.obtainedMarks,
+      remarks: m.remarks,
+      exam: {
+        id: m.exam?.id,
+        title: m.exam?.name,
+        name: m.exam?.name,
+        maxMarks: m.exam?.maxMarks,
+        type: m.exam?.type,
+        course: m.exam?.course
+      }
+    }));
+
+    res.json({ success: true, data: formatted });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentFees = async (req, res) => {
+  try {
+    const student = req.student;
+    const fees = await prisma.fee.findMany({
+      where: {
+        OR: [
+          { studentId: student.id },
+          { student: { userId: student.userId } }
+        ]
+      },
+      include: {
+        feeStructure: true,
+        transactions: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const totalAmount = fees.reduce((acc, f) => acc + (Number(f.amountDue) || 0), 0);
+    const paidAmount = fees.reduce((acc, f) => acc + (Number(f.amountPaid) || (f.status === 'paid' ? Number(f.amountDue) : 0)), 0);
+    const pendingAmount = Math.max(0, totalAmount - paidAmount);
+
+    const formattedInvoices = fees.map((f) => {
+      const isPaid = f.status === 'paid';
+      const effectivePaid = isPaid && (!f.amountPaid || Number(f.amountPaid) === 0)
+        ? Number(f.amountDue)
+        : Number(f.amountPaid || 0);
+      const resolvedFeeType = f.transactions?.[0]?.gatewayRef || 'Tuition Fee';
+
+      return {
+        ...f,
+        amountPaid: effectivePaid,
+        feeType: resolvedFeeType,
+        feeStructure: {
+          ...(f.feeStructure || {}),
+          name: resolvedFeeType
+        }
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        totalAmount,
+        paidAmount,
+        pendingAmount,
+        invoices: formattedInvoices
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const payStudentFee = async (req, res) => {
+  try {
+    const student = req.student;
+    const { feeId, amount, paymentMethod = 'Razorpay' } = req.body;
+
+    if (!feeId || !amount || Number(amount) <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Valid feeId and positive payment amount are required.' }
+      });
+    }
+
+    const fee = await prisma.fee.findFirst({
+      where: {
+        id: feeId,
+        collegeId: student.collegeId,
+        OR: [
+          { studentId: student.id },
+          { student: { userId: student.userId } }
+        ]
+      }
+    });
+
+    if (!fee) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Fee record not found for this student.' }
+      });
+    }
+
+    const paymentAmount = Number(amount);
+    const currentPaid = Number(fee.amountPaid || 0);
+    const newPaid = currentPaid + paymentAmount;
+    const isFullyPaid = newPaid >= Number(fee.amountDue);
+    const newStatus = isFullyPaid ? 'paid' : 'partial';
+
+    const transactionRef = `TXN-STU-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const transaction = await prisma.paymentTransaction.create({
+      data: {
+        collegeId: student.collegeId,
+        feeId: fee.id,
+        gateway: paymentMethod,
+        gatewayRef: transactionRef,
+        amount: paymentAmount,
+        status: 'success',
+        paidAt: new Date()
+      }
+    });
+
+    const updatedFee = await prisma.fee.update({
+      where: { id: fee.id },
+      data: {
+        amountPaid: newPaid,
+        status: newStatus
+      },
+      include: {
+        feeStructure: true,
+        transactions: true
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Fee payment processed successfully.',
+      data: {
+        transaction,
+        fee: updatedFee,
+        receiptNumber: transactionRef
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentNotices = async (req, res) => {
+  try {
+    const student = req.student;
+    const notices = await prisma.notice.findMany({
+      where: {
+        collegeId: student.collegeId,
+        targetAudience: { in: ['all', 'students'] }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({ success: true, data: notices });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentLibrary = async (req, res) => {
+  try {
+    const student = req.student;
+    const { search, category } = req.query;
+
+    const books = await prisma.libraryItem.findMany({
+      where: {
+        collegeId: student.collegeId,
+        ...(category ? { category: { equals: category, mode: 'insensitive' } } : {}),
+        ...(search ? {
+          OR: [
+            { title: { contains: search, mode: 'insensitive' } },
+            { author: { contains: search, mode: 'insensitive' } },
+            { isbn: { contains: search, mode: 'insensitive' } }
+          ]
+        } : {})
+      },
+      orderBy: { title: 'asc' }
+    });
+    res.json({ success: true, data: books });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentPlacements = async (req, res) => {
+  try {
+    const student = req.student;
+    const drives = await prisma.placement.findMany({
+      where: {
+        collegeId: student.collegeId
+      },
+      orderBy: { id: 'desc' }
+    });
+
+    const formatted = drives.map(d => {
+      const details = typeof d.eligibility === 'object' && d.eligibility !== null ? d.eligibility : {};
+      return {
+        id: d.id,
+        companyName: d.companyName,
+        role: details.role || 'Graduate Trainee',
+        ctc: details.ctc || 'N/A',
+        driveDate: details.driveDate || null,
+        status: details.status || 'upcoming',
+        eligibilityCriteria: details.eligibilityCriteria || 'All final year students eligible',
+        studentsPlaced: Number(details.studentsPlaced || 0)
+      };
+    });
+
+    res.json({ success: true, data: formatted });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentComplaints = async (req, res) => {
+  try {
+    const student = req.student;
+    const complaints = await prisma.complaint.findMany({
+      where: {
+        collegeId: student.collegeId,
+        userId: student.userId
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({ success: true, data: complaints });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const createStudentComplaint = async (req, res) => {
+  try {
+    const student = req.student;
+    const { title, subject, description, category, priority } = req.body;
+
+    const finalSubject = subject || title;
+    if (!finalSubject || !description) {
+      return res.status(400).json({ success: false, error: { message: 'Subject and description are required' } });
+    }
+
+    const complaint = await prisma.complaint.create({
+      data: {
+        collegeId: student.collegeId,
+        userId: student.userId,
+        subject: finalSubject,
+        description,
+        category: category || 'General',
+        priority: priority || 'medium',
+        status: 'open'
+      }
+    });
+
+    res.status(201).json({ success: true, data: complaint });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+const parseBlock = (rawName) => {
+  if (!rawName) return { name: null, wardenName: null, wardenPhone: null };
+  if (rawName.startsWith('{')) {
+    try {
+      const p = JSON.parse(rawName);
+      return {
+        name: p.name || rawName,
+        wardenName: p.wardenName || null,
+        wardenPhone: p.wardenPhone || null,
+      };
+    } catch {
+    }
+  }
+  return { name: rawName, wardenName: null, wardenPhone: null };
+};
+
+export const getStudentHostel = async (req, res) => {
+  try {
+    const student = req.student;
+    const isHosteller = (student.residenceType || '').toLowerCase().includes('hostel');
+
+    if (!isHosteller && !student.hostelBlockId && !student.hostelRoom) {
+      return res.json({
+        success: true,
+        data: {
+          isHosteller: false,
+          message: 'Student is registered as a Day Scholar'
+        }
+      });
+    }
+
+    const room = student.hostelRoomId
+  ? await prisma.hostelRoom.findUnique({
+      where: { id: student.hostelRoomId },
+      select: { roomNo: true, roomType: true, floor: true },
+    })
+  : null;
+
+    res.json({
+    success: true,
+    data: {
+      isHosteller: true,
+      blockName: student.hostelBlock?.name || 'Main Hostel Block',
+      roomNo: room?.roomNo || student.hostelRoom || 'N/A',
+      roomType: room?.roomType || null,
+      floor: room?.floor || null,
+      residenceType: student.residenceType || 'Hostel',
+      wardenName: student.hostelBlock?.wardenName || null,
+      wardenPhone: student.hostelBlock?.wardenPhone || null,
+    },
+  });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentTransport = async (req, res) => {
+  try {
+    const student = req.student;
+    const isHosteller = (student.residenceType || '').toLowerCase().includes('hostel');
+
+    if (isHosteller) {
+      return res.json({
+        success: true,
+        data: {
+          isTransportEligible: false,
+          isHosteller: true,
+          message: 'Transport module is not applicable for hostel residents'
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        isTransportEligible: true,
+        isHosteller: false,
+        transportRequired: student.transportRequired || 'No',
+        route: 'Campus Route 1',
+        pickupPoint: student.address || 'Campus Gate'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentDocuments = async (req, res) => {
+  try {
+    const student = req.student;
+    
+    const institutionalDocs = await prisma.documentVault.findMany({
+      where: { collegeId: student.collegeId }
+    });
+
+    const currentRecord = await prisma.student.findUnique({
+      where: { id: student.id },
+      select: { customFields: true, createdAt: true }
+    });
+
+    const customFields = typeof currentRecord?.customFields === 'object' && currentRecord.customFields !== null 
+      ? currentRecord.customFields 
+      : {};
+    const personalDocs = Array.isArray(customFields.documents) ? customFields.documents : [];
+
+    const formattedInstitutional = institutionalDocs.map(d => ({
+      id: d.id,
+      fileName: d.fileName,
+      documentType: 'Institutional Certificate',
+      fileUrl: '#',
+      fileSize: 'Verified',
+      isPersonal: false,
+      uploadedAt: currentRecord?.createdAt || new Date().toISOString()
+    }));
+
+    const formattedPersonal = personalDocs.map(d => ({
+      ...d,
+      isPersonal: true
+    }));
+
+    res.json({ success: true, data: [...formattedPersonal, ...formattedInstitutional] });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const uploadStudentPersonalDocument = async (req, res) => {
+  try {
+    const student = req.student;
+    const { fileName, documentType, fileUrl, fileSize } = req.body;
+
+    if (!fileName) {
+      return res.status(400).json({ success: false, error: { message: 'File name is required' } });
+    }
+
+    const currentRecord = await prisma.student.findUnique({
+      where: { id: student.id },
+      select: { customFields: true }
+    });
+
+    const customFields = typeof currentRecord?.customFields === 'object' && currentRecord.customFields !== null
+      ? currentRecord.customFields
+      : {};
+
+    const existingDocs = Array.isArray(customFields.documents) ? customFields.documents : [];
+
+    const newDoc = {
+      id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      fileName,
+      documentType: documentType || 'Personal Document',
+      fileUrl: fileUrl || '#',
+      fileSize: fileSize || '1.2 MB',
+      uploadedAt: new Date().toISOString()
+    };
+
+    await prisma.student.update({
+      where: { id: student.id },
+      data: {
+        customFields: {
+          ...customFields,
+          documents: [newDoc, ...existingDocs]
+        }
+      }
+    });
+
+    res.status(201).json({ success: true, data: newDoc });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const deleteStudentPersonalDocument = async (req, res) => {
+  try {
+    const student = req.student;
+    const { id } = req.params;
+
+    const currentRecord = await prisma.student.findUnique({
+      where: { id: student.id },
+      select: { customFields: true }
+    });
+
+    const customFields = typeof currentRecord?.customFields === 'object' && currentRecord.customFields !== null
+      ? currentRecord.customFields
+      : {};
+
+    const existingDocs = Array.isArray(customFields.documents) ? customFields.documents : [];
+    const filteredDocs = existingDocs.filter(d => d.id !== id);
+
+    await prisma.student.update({
+      where: { id: student.id },
+      data: {
+        customFields: {
+          ...customFields,
+          documents: filteredDocs
+        }
+      }
+    });
+
+    res.json({ success: true, message: 'Document deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentProfileImage = async (req, res) => {
+  try {
+    const studentId = req.student.id;
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: {
+        profileImageData: true,
+        profileImageMimeType: true
+      }
+    });
+
+    if (!student || !student.profileImageData) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Profile image not found' }
+      });
+    }
+
+    const imageBuffer = Buffer.from(student.profileImageData, 'base64');
+    const mimeType = student.profileImageMimeType || 'image/webp';
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Length', imageBuffer.length);
+    res.setHeader('Cache-Control', 'private, max-age=3600, stale-while-revalidate=600');
+    return res.end(imageBuffer);
+  } catch (error) {
+    logger.error({ studentId: req.student?.id, err: error.message }, 'Failed to retrieve profile image');
+    return res.status(500).json({ success: false, error: { message: 'Failed to retrieve profile image' } });
+  }
+};
+
+export const uploadStudentProfileImage = async (req, res) => {
+  try {
+    const studentId = req.student.id;
+    const collegeId = req.student.collegeId;
+
+    let buffer = null;
+    const uploadedFile = req.file || (Array.isArray(req.files) ? req.files[0] : null);
+
+    if (uploadedFile && uploadedFile.buffer) {
+      buffer = uploadedFile.buffer;
+    } else if (req.body?.profileImage || req.body?.image || req.body?.data || req.body?.profileImageData) {
+      const payload = req.body.profileImage || req.body.image || req.body.profileImageData || req.body.data || req.body;
+      buffer = extractBufferFromBase64Payload(payload);
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'BAD_REQUEST', message: 'No image file or Base64 data provided' }
+      });
+    }
+
+    const { profileImageData, profileImageMimeType, sizeBytes } = await processStudentProfileImageBuffer(buffer);
+
+    await prisma.student.update({
+      where: { id: studentId },
+      data: {
+        profileImageData,
+        profileImageMimeType
+      }
+    });
+
+    try {
+      if (redis && redis.status === 'ready') {
+        const cacheKey = `student_profile:${collegeId}:${studentId}`;
+        await redis.del(cacheKey);
+      }
+    } catch (cacheErr) {
+      logger.warn({ studentId, err: cacheErr.message }, 'Failed to invalidate student profile cache');
+    }
+
+    logger.info({ studentId, collegeId, mimeType: profileImageMimeType, sizeBytes }, 'Student profile image updated');
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        message: 'Profile image updated successfully',
+        hasProfileImage: true,
+        profileImageUrl: '/api/v1/student/profile/image',
+        mimeType: profileImageMimeType
+      }
+    });
+  } catch (error) {
+    const statusCode = error.status || 500;
+    logger.warn({ studentId: req.student?.id, status: statusCode, errorMsg: error.message }, 'Profile image upload failed');
+    return res.status(statusCode).json({
+      success: false,
+      error: { code: statusCode === 413 ? 'PAYLOAD_TOO_LARGE' : 'BAD_REQUEST', message: error.message }
+    });
+  }
+};
+
+export const deleteStudentProfileImage = async (req, res) => {
+  try {
+    const studentId = req.student.id;
+    const collegeId = req.student.collegeId;
+
+    await prisma.student.update({
+      where: { id: studentId },
+      data: {
+        profileImageData: null,
+        profileImageMimeType: null
+      }
+    });
+
+    try {
+      if (redis && redis.status === 'ready') {
+        const cacheKey = `student_profile:${collegeId}:${studentId}`;
+        await redis.del(cacheKey);
+      }
+    } catch (cacheErr) {
+      logger.warn({ studentId, err: cacheErr.message }, 'Failed to invalidate student profile cache');
+    }
+
+    logger.info({ studentId, collegeId }, 'Student profile image deleted');
+
+    return res.json({
+      success: true,
+      data: {
+        message: 'Profile image deleted successfully',
+        hasProfileImage: false,
+        profileImageUrl: null
+      }
+    });
+  } catch (error) {
+    logger.error({ studentId: req.student?.id, err: error.message }, 'Failed to delete profile image');
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to delete profile image' }
+    });
+  }
+};
+
+const LIB_DAY_MS = 24 * 60 * 60 * 1000;
+const DUE_SOON_DAYS = 3;
+
+const getLibraryRules = async (collegeId) => {
+  const s = await prisma.librarySettings.findUnique({ where: { collegeId } });
+  return {
+    loanDays: s?.loanDays ?? 14,
+    maxBooksPerStudent: s?.maxBooksPerStudent ?? 3,
+    maxRenewals: s?.maxRenewals ?? 2,
+    graceDays: s?.graceDays ?? 0,
+    finePerDay: Number(s?.finePerDay ?? 2),
+  };
+};
+
+const fineStatusOf = (t) => {
+  if (Number(t.fineAmount) <= 0) return 'NONE';
+  if (t.fineWaived) return 'WAIVED';
+  if (t.finePaid) return 'PAID';
+  return 'PENDING';
+};
+
+const bookSelect = {
+  id: true,
+  title: true,
+  author: true,
+  isbn: true,
+  category: true,
+  rackNo: true,
+  location: true,
+};
+
+export const getStudentMyBooks = async (req, res) => {
+  try {
+    const student = req.student;
+    const now = new Date();
+    const rules = await getLibraryRules(student.collegeId);
+
+    const [active, pending] = await Promise.all([
+      prisma.libraryTransaction.findMany({
+        where: { collegeId: student.collegeId, studentId: student.id, status: 'ISSUED' },
+        select: {
+          id: true,
+          issueDate: true,
+          dueDate: true,
+          renewCount: true,
+          remarks: true,
+          book: { select: bookSelect },
+        },
+        orderBy: { dueDate: 'asc' },
+      }),
+      prisma.libraryTransaction.aggregate({
+        where: {
+          collegeId: student.collegeId,
+          studentId: student.id,
+          status: { in: ['RETURNED', 'LOST'] },
+          finePaid: false,
+          fineWaived: false,
+          fineAmount: { gt: 0 },
+        },
+        _sum: { fineAmount: true },
+      }),
+    ]);
+
+    const loans = active.map((t) => {
+      const msLeft = t.dueDate.getTime() - now.getTime();
+      const isOverdue = msLeft < 0;
+      const daysLeft = isOverdue ? 0 : Math.ceil(msLeft / LIB_DAY_MS);
+      const daysOverdue = isOverdue ? Math.ceil(-msLeft / LIB_DAY_MS) : 0;
+      const chargeableDays = Math.max(0, daysOverdue - rules.graceDays);
+      return {
+        id: t.id,
+        issueDate: t.issueDate,
+        dueDate: t.dueDate,
+        remarks: t.remarks,
+        book: t.book,
+        renewCount: t.renewCount,
+        maxRenewals: rules.maxRenewals,
+        renewalsLeft: Math.max(0, rules.maxRenewals - t.renewCount),
+        isOverdue,
+        isDueSoon: !isOverdue && daysLeft <= DUE_SOON_DAYS,
+        daysLeft,
+        daysOverdue,
+        accruingFine: chargeableDays * rules.finePerDay,
+      };
+    });
+
+    const overdueCount = loans.filter((l) => l.isOverdue).length;
+    const dueSoonCount = loans.filter((l) => l.isDueSoon).length;
+
+    let blockedReason = null;
+    if (loans.length >= rules.maxBooksPerStudent) blockedReason = 'You have reached your borrowing limit';
+    else if (overdueCount > 0) blockedReason = 'You have overdue books. Return them to borrow again';
+
+    res.json({
+      success: true,
+      data: {
+        summary: {
+          borrowedCount: loans.length,
+          limit: rules.maxBooksPerStudent,
+          overdueCount,
+          dueSoonCount,
+          pendingFines: Number(pending._sum.fineAmount || 0),
+          accruingFines: loans.reduce((sum, l) => sum + l.accruingFine, 0),
+          canBorrow: !blockedReason,
+          blockedReason,
+          loanDays: rules.loanDays,
+          finePerDay: rules.finePerDay,
+          graceDays: rules.graceDays,
+        },
+        loans,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentBookHistory = async (req, res) => {
+  try {
+    const student = req.student;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
+
+    const where = {
+      collegeId: student.collegeId,
+      studentId: student.id,
+      status: { in: ['RETURNED', 'LOST'] },
+    };
+
+    const [total, rows] = await Promise.all([
+      prisma.libraryTransaction.count({ where }),
+      prisma.libraryTransaction.findMany({
+        where,
+        select: {
+          id: true,
+          issueDate: true,
+          dueDate: true,
+          returnDate: true,
+          status: true,
+          condition: true,
+          lateDays: true,
+          fineAmount: true,
+          finePaid: true,
+          fineWaived: true,
+          renewCount: true,
+          book: { select: bookSelect },
+        },
+        orderBy: { returnDate: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    res.json({
+      success: true,
+      data: rows.map((t) => ({
+        id: t.id,
+        issueDate: t.issueDate,
+        dueDate: t.dueDate,
+        returnDate: t.returnDate,
+        status: t.status,
+        condition: t.condition,
+        lateDays: t.lateDays,
+        fineAmount: Number(t.fineAmount),
+        fineStatus: fineStatusOf(t),
+        renewCount: t.renewCount,
+        book: t.book,
+      })),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
