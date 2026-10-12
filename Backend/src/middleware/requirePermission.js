@@ -17,10 +17,14 @@ export const requirePermission = (moduleKey, action) => async (req, res, next) =
     }
 
     const { role, customRoleId, collegeId, userId } = req.user;
-    console.log(`[requirePermission] Checking access for role='${role}', module='${moduleKey}', action='${action}', user='${userId}'`);
+    console.log(`[requirePermission] role='${role}', customRoleId='${customRoleId}', module='${moduleKey}', action='${action}'`);
 
     // 1. System roles (superadmin, admin) have full access by default
     if (role === 'superadmin' || role === 'admin') {
+      return next();
+    }
+    // Teachers can read students (needed for attendance, grades, PTM)
+    if (role === 'teacher' && moduleKey === 'students' && action === 'read') {
       return next();
     }
 

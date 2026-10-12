@@ -206,7 +206,7 @@ export default function TeacherAssignments() {
               className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="">Select a class</option>
-              {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {courses.map(c => <option key={c.id} value={c.courseId}>{c.name}</option>)}
             </select>
           </div>
 

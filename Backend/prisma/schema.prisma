@@ -331,6 +331,8 @@ model Student {
   hostelBlockId    String?                @db.Uuid
   hostelRoom       String?
   hostelBlock      HostelBlock?           @relation(fields: [hostelBlockId], references: [id])
+  hostelRoomId     String?                @db.Uuid
+  room             HostelRoom?            @relation(fields: [hostelRoomId], references: [id], onDelete: Restrict)
   college          College                @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   department       Department             @relation(fields: [departmentId], references: [id])
   section          Section?               @relation(fields: [sectionId], references: [id])
@@ -371,6 +373,7 @@ model Student {
   @@index([collegeId])
   @@index([collegeId, emailId])
   @@index([collegeId, registerNumber])
+  @@index([hostelRoomId])
 }
 
 model Parent {
@@ -665,12 +668,21 @@ model LibraryItem {
 }
 
 model HostelBlock {
-  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId String       @db.Uuid
-  name      String
-  college   College      @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  students  Student[]
-  rooms     HostelRoom[]
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId   String       @db.Uuid
+  name        String
+  type        String       @default("Boys")
+  wardenName  String?
+  wardenPhone String?
+  status      String       @default("Active")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @default(now()) @updatedAt
+  college     College      @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  students    Student[]
+  rooms       HostelRoom[]
+
+  @@index([collegeId])
+  @@unique([collegeId, name])
 }
 
 model HostelRoom {
@@ -686,6 +698,8 @@ model HostelRoom {
 
   college     College     @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   hostelBlock HostelBlock @relation(fields: [hostelBlockId], references: [id])
+  students      Student[]
+  @@index([collegeId])
 
   @@unique([hostelBlockId, roomNo])
 }

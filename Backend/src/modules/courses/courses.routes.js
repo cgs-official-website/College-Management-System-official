@@ -53,6 +53,7 @@ router.get('/my-classes', async (req, res) => {
 
     const classes = sections.map(sec => ({
       id: sec.id,
+      courseId: sec.course?.id,
       name: `${sec.course?.name || 'Subject'} - ${sec.name || 'Section'}`,
       subject: sec.course?.name || 'Subject',
       code: sec.course?.code || 'CODE',

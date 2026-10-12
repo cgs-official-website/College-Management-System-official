@@ -625,6 +625,14 @@ export const getPtmStudents = async (req, res) => {
     if (!ADMIN_ROLES.includes(role)) {
       const teacher = await getTeacherProfile(req);
       if (!teacher) return res.json({ success: true, data: [] });
+
+      console.log('PTM teacher dept:', teacher.departmentId);
+      const all = await prisma.student.findMany({
+        where: { collegeId },
+        select: { rollNumber: true, departmentId: true, deletedAt: true },
+      });
+      console.log('PTM students:', all);
+
       where.departmentId = teacher.departmentId;
     }
 
