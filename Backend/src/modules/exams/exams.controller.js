@@ -291,7 +291,10 @@ export const enterMarks = async (req, res) => {
 
   const markRecord = await prisma.mark.upsert({
     where: {
-      examId_studentId: { examId, studentId }
+      examId_studentId: {
+        examId,
+        studentId
+      }
     },
     update: {
       obtainedMarks,
@@ -312,6 +315,7 @@ export const enterMarks = async (req, res) => {
 };
 
 export const batchEnterMarks = async (req, res) => {
+  const teacherId = req.user?.id || req.user?.userId;
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const { courseId, examType, maxMarks, records } = batchEnterMarksSchema.parse(req.body);
 
@@ -331,6 +335,7 @@ export const batchEnterMarks = async (req, res) => {
         collegeId,
         courseId,
         maxMarks,
+        type: examType,
         date: new Date()
       }
     });
@@ -349,16 +354,21 @@ export const batchEnterMarks = async (req, res) => {
 
     const markRecord = await prisma.mark.upsert({
       where: {
-        unique_student_exam: {
-          studentId: record.studentId,
-          examId: exam.id
+        examId_studentId: {
+          examId: exam.id,
+          studentId: record.studentId
         }
       },
-      update: { obtainedMarks: record.obtainedMarks },
+      update: {
+        obtainedMarks: record.obtainedMarks,
+        enteredByTeacherId: teacherId
+      },
       create: {
+        collegeId,
         studentId: record.studentId,
         examId: exam.id,
-        obtainedMarks: record.obtainedMarks
+        obtainedMarks: record.obtainedMarks,
+        enteredByTeacherId: teacherId
       }
     });
     results.push(markRecord);

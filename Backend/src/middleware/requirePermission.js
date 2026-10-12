@@ -23,7 +23,10 @@ export const requirePermission = (moduleKey, action) => async (req, res, next) =
     if (role === 'superadmin' || role === 'admin') {
       return next();
     }
-    
+    // Teachers can read students (needed for attendance, grades, PTM)
+    if (role === 'teacher' && moduleKey === 'students' && action === 'read') {
+      return next();
+    }
 
     // 2. If no custom role is assigned, deny access
     if (!customRoleId) {
