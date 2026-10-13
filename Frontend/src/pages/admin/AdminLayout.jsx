@@ -94,6 +94,7 @@ import { useGetEntities } from '../../modules/builder/useBuilder';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
 import StoreDashboard from '../shared/StoreDashboard';
+import StaffSettings from '../shared/StaffSettings';
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -188,6 +189,7 @@ const AdminLayout = () => {
     { name: 'Payslip', path: '/admin/my-payslip', icon: IndianRupee, moduleKey: null, staffOnly: true },
     { name: 'API Integrations', path: '/admin/api-integrations', icon: Zap, moduleKey: 'api_integration' },
     { name: 'Module Builder', path: '/admin/builder', icon: Settings2, moduleKey: 'custom' },
+    { name: 'Profile', path: '/admin/my-settings', icon: User, moduleKey: null, staffOnly: true },
     ...(customEntitiesData?.map(ent => ({
       name: ent.name,
       path: `/admin/dynamic/${ent.slug}`,
@@ -537,6 +539,7 @@ const AdminLayout = () => {
               <Route path="/dynamic/:entitySlug/*" element={hasAccess('custom') ? <DynamicDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/custom/*" element={hasAccess('custom') ? <CustomDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/settings/*" element={hasAccess('settings') ? <Settings /> : <Navigate to="/404" replace />} />
+              <Route path="/my-settings/*" element={!isAdmin ? <StaffSettings /> : <Navigate to="/admin/settings" replace />} />
               <Route path="*" element={<Navigate to="/404" replace />} />
             </Routes>
           </div>

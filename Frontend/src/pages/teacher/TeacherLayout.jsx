@@ -37,8 +37,8 @@ import HODFacilityRequests from './HODFacilityRequests';
 import TeacherAssignments from './TeacherAssignments';
 import TeacherAttendance from './TeacherAttendance';
 import TeacherSchedule from './TeacherSchedule';
+import StaffSettings from '../shared/StaffSettings';
 import TeacherGrades from './TeacherGrades';
-import TeacherSettings from './TeacherSettings';
 import TeacherMyLeaves from './TeacherMyLeaves';
 import TeacherPtm from './TeacherPtm';
 import Timetable from '../admin/timetable/Timetable';
@@ -76,7 +76,7 @@ const TeacherLayout = () => {
     { name: 'Apply for Leave', path: '/teacher/my-leaves', icon: CalendarClock },
     { name: 'Student Leaves', path: '/teacher/student-leaves', icon: CalendarOff },
     { name: 'PTM Meetings', path: '/teacher/ptm', icon: Video },
-    { name: 'Settings', path: '/teacher/settings', icon: SettingsIcon },
+    { name: 'Profile', path: '/teacher/settings', icon: SettingsIcon },
   ];
 
   const canUseFacilities =
@@ -254,7 +254,7 @@ const TeacherLayout = () => {
               <Route path="/my-leaves" element={<TeacherMyLeaves />} />
               <Route path="/student-leaves" element={<LeaveRequestsDashboard />} />
               <Route path="/ptm" element={<TeacherPtm />} />
-              <Route path="/settings" element={<TeacherSettings />} />
+              <Route path="/settings" element={<StaffSettings />} />
               {canViewNotices && <Route path="/notices" element={<NoticeBoard />} />}
               {canUseFacilities && <Route path="/facility-requests" element={<HODFacilityRequests />} />}
               {userData?.role === 'hod' && <Route path="/timetable" element={<Timetable />} />}

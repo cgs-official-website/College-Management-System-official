@@ -33,6 +33,14 @@ const getRoleDestination = (role) => {
   }
 };
 
+const ADMIN_PAGE_ROLES = ['admin', 'teacher', 'hod', 'faculty', 'staff'];
+
+const roleAllowedHere = (role, requiredRole) => {
+  if (!requiredRole) return true;
+  if (requiredRole === 'admin') return ADMIN_PAGE_ROLES.includes(role);
+  return role === requiredRole;
+};
+
 const Login = ({ requiredRole }) => {
   const { register, handleSubmit, formState: { errors } } = useForm();
   const [isLoading, setIsLoading] = useState(false);
@@ -47,17 +55,17 @@ const Login = ({ requiredRole }) => {
   const collegeSlug = new URLSearchParams(location.search).get('college');
 
   useEffect(() => {
-    if (currentUser && userRole && (!requiredRole || userRole === requiredRole)) {
-      const destination = getRoleDestination(userRole);
-      if (destination) {
-        navigate(destination, { replace: true });
-      } else {
-        setIsLoading(false);
-        toast.error('Your account role is not supported. Contact your administrator.');
-        logout();
-      }
+  if (currentUser && userRole && roleAllowedHere(userRole, requiredRole)) {
+    const destination = getRoleDestination(userRole);
+    if (destination) {
+      navigate(destination, { replace: true });
+    } else {
+      setIsLoading(false);
+      toast.error('Your account role is not supported. Contact your administrator.');
+      logout();
     }
-  }, [currentUser, userRole, navigate, requiredRole, logout]);
+  }
+}, [currentUser, userRole, navigate, requiredRole, logout]);
 
   const onSubmit = async (data) => {
     setIsLoading(true);
@@ -67,6 +75,14 @@ const Login = ({ requiredRole }) => {
       const email = data.email.toLowerCase().trim();
       const user = await login(email, data.password, collegeSlug);
       const role = typeof user?.role === 'string' ? user.role.trim().toLowerCase() : '';
+
+      if (!roleAllowedHere(role, requiredRole)) {
+        setIsLoading(false);
+        setError('This account cannot sign in on this page. Please use the correct login page.');
+        logout();
+        return;
+      }
+
       const destination = getRoleDestination(role);
       if (!destination) {
         setIsLoading(false);
@@ -74,6 +90,7 @@ const Login = ({ requiredRole }) => {
         logout();
         return;
       }
+      
       // Redirection is handled by useEffect when AuthContext resolves user role
     } catch (err) {
       console.error("Login Error:", err);

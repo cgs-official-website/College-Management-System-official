@@ -302,6 +302,8 @@ model Teacher {
   emergencyContactName   String?
   emergencyContactNumber String?
   customFields           Json?
+  profileImageData       String? @db.Text
+  profileImageMimeType   String?
 
   @@unique([collegeId, teacherId])
   @@index([collegeId])

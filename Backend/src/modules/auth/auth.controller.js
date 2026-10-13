@@ -955,7 +955,7 @@ export const getMe = async (req, res) => {
               billingSubscription: { select: { subscriptionPlan: { select: { modules: true } } } }
             }
           },
-          teacherProfile: { include: { department: true } },
+          teacherProfile: { omit: { profileImageData: true }, include: { department: true } },
           customRole: { include: { permissions: { include: { module: true } } } }
         }
       });
