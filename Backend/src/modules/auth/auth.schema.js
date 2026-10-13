@@ -91,8 +91,6 @@ export const resetPasswordSchema = z.object({
 
 export const staffSetupSchema = z.object({
   token: z.string().min(1, 'Setup token is required.'),
-  firstName: z.string().trim().min(1, 'First name is required.'),
-  lastName: z.string().trim().optional().default(''),
   password: z.string().min(6, 'Password must be at least 6 characters.'),
   confirmPassword: z.string().min(6, 'Confirm password must be at least 6 characters.'),
 }).refine((data) => data.password === data.confirmPassword, {

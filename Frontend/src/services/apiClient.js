@@ -25,12 +25,12 @@ const routeRoles = () => {
   if (pathname.startsWith('/student/register')) return [];
   if (pathname.startsWith('/teacher/register')) return [];   // teacher registration page — no auth needed
   if (pathname === '/admin/login') return ['admin'];
-  if (pathname === '/admin' || pathname.startsWith('/admin/')) return ['admin', 'teacher', 'hod', 'faculty', 'superadmin'];
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) return ['admin', 'teacher', 'hod', 'faculty', 'superadmin', 'staff'];
   if (pathname === '/student' || pathname.startsWith('/student/')) return ['student', 'superadmin'];
   if (pathname === '/teacher' || pathname.startsWith('/teacher/')) return ['teacher', 'hod', 'faculty', 'superadmin'];
   if (pathname === '/parent' || pathname.startsWith('/parent/')) return ['parent', 'superadmin'];
   if (pathname === '/super' || pathname.startsWith('/super/')) return ['superadmin'];
-  if (pathname === '/dashboard') return ['admin', 'student', 'teacher', 'hod', 'faculty', 'parent', 'superadmin'];
+  if (pathname === '/dashboard') return ['admin', 'student', 'teacher', 'hod', 'faculty', 'parent', 'superadmin', 'staff'];
   if (pathname === '/login' && new URLSearchParams(search).has('college')) return ['student'];
   return [];
 };

@@ -1423,10 +1423,10 @@ export const completeStaffSetup = async (req, res) => {
 
     setupStage = 'hash-password';
     const passwordHash = await bcrypt.hash(payload.password, 10);
-    const fullName = `${payload.firstName} ${payload.lastName}`.trim();
 
     let activatedEmail;
     let collegeName;
+    let staffName;
 
     await prisma.$transaction(async (tx) => {
       setupStage = 'check-teacher-user-college-association';
@@ -1435,6 +1435,7 @@ export const completeStaffSetup = async (req, res) => {
 
       collegeName = teacher.college?.name;
       activatedEmail = teacher.emailId || teacher.user.email;
+      staffName = teacher.user?.name;
 
       setupStage = 'activate-pending-user';
       const updated = await tx.user.updateMany({
@@ -1448,7 +1449,6 @@ export const completeStaffSetup = async (req, res) => {
         data: {
           passwordHash,
           accountStatus: 'active',
-          name: fullName
         }
       });
       if (updated.count !== 1) throw invalidSetupLink('SETUP_ALREADY_COMPLETED');
@@ -1472,7 +1472,7 @@ export const completeStaffSetup = async (req, res) => {
       to: activatedEmail,
       templateName: 'Teacher Account Setup',
       variables: {
-        name: fullName || activatedEmail.split('@')[0],
+        name: staffName || activatedEmail.split('@')[0],
         email: activatedEmail,
         teacherId: claims.teacherId,
         collegeName: collegeName || '',

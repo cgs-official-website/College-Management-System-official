@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Plus, Search, Filter, Mail, Phone, MoreVertical, Edit, Trash2, Building, Shield, Eye } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Search, Filter, Mail, Phone, MoreVertical, Edit, Trash2, Building, Shield, Eye, Link2, Loader2 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useStaff } from '../../../hooks/useStaff';
 import { Button } from '../../../components/ui/Button';
@@ -9,6 +9,7 @@ import { StaffDetailsModal } from './StaffDetailsModal';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
 import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
+import { api } from '../../../services/apiClient';
 
 export default function HRManagement() {
   const confirm = useConfirm();
@@ -20,6 +21,115 @@ export default function HRManagement() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
   const [viewingStaff, setViewingStaff] = useState(null);
+  const [generatingLinkId, setGeneratingLinkId] = useState(null);
+  const [sendingMailId, setSendingMailId] = useState(null);
+  const [mailCooldowns, setMailCooldowns] = useState({});
+
+  useEffect(() => {
+    const hasCooldowns = Object.values(mailCooldowns).some(secs => secs > 0);
+    if (!hasCooldowns) return;
+
+    const timer = setInterval(() => {
+      setMailCooldowns(prev => {
+        const next = { ...prev };
+        let hasChanges = false;
+        for (const [id, secs] of Object.entries(next)) {
+          if (secs > 1) {
+            next[id] = secs - 1;
+            hasChanges = true;
+          } else if (secs === 1) {
+            delete next[id];
+            hasChanges = true;
+          }
+        }
+        return hasChanges ? next : prev;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [mailCooldowns]);
+
+  const copyToClipboard = async (text, successMsg = 'Copied to clipboard!') => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        toast.success(successMsg);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          toast.success(successMsg);
+        } catch (err) {
+          console.error('Fallback copy failed', err);
+          toast.error(
+            <div className="flex flex-col gap-2">
+              <span className="font-bold">Manual copy required:</span>
+              <input readOnly value={text} className="text-xs p-1 rounded bg-slate-100 dark:bg-slate-800 border-none w-full" onClick={e => e.target.select()} />
+            </div>,
+            { duration: 8000 }
+          );
+        }
+        document.body.removeChild(textArea);
+      }
+    } catch (err) {
+      console.error('Failed to copy', err);
+      toast.error(
+        <div className="flex flex-col gap-2">
+          <span className="font-bold">Manual copy required:</span>
+          <input readOnly value={text} className="text-xs p-1 rounded bg-slate-100 dark:bg-slate-800 border-none w-full" onClick={e => e.target.select()} />
+        </div>,
+        { duration: 8000 }
+      );
+    }
+  };
+
+  const handleGenerateSetupLink = async (member) => {
+    setGeneratingLinkId(member.id);
+    try {
+      const response = await api.post(`/staff/${member.id}/setup-link`);
+      const linkData = response?.data ?? response;
+      const setupUrl = linkData?.setupUrl || linkData?.data?.setupUrl;
+
+      if (!setupUrl) {
+        throw new Error('Failed to generate setup link.');
+      }
+
+      await copyToClipboard(setupUrl, 'Teacher setup link copied to clipboard!');
+    } catch (err) {
+      console.error('Error generating setup link:', err);
+      const message = err.response?.data?.error?.message || err.data?.error?.message || err.message || 'Failed to generate setup link.';
+      toast.error(message);
+    } finally {
+      setGeneratingLinkId(null);
+    }
+  };
+
+  const handleSendSetupMail = async (member) => {
+    if (sendingMailId === member.id || mailCooldowns[member.id]) return;
+
+    setSendingMailId(member.id);
+    try {
+      const response = await api.post(`/staff/${member.id}/send-setup-mail`);
+      const resData = response?.data ?? response;
+      const maskedEmail = resData?.maskedEmail || resData?.data?.maskedEmail || member.email;
+
+      toast.success(`Setup link sent to ${maskedEmail}`);
+      setMailCooldowns(prev => ({ ...prev, [member.id]: 30 }));
+    } catch (err) {
+      console.error('Error sending setup email:', err);
+      const message = err.response?.data?.error?.message || err.data?.error?.message || err.message || 'Could not send the email. Please try again or use Generate Link.';
+      toast.error(message);
+    } finally {
+      setSendingMailId(null);
+    }
+  };
 
   const filteredStaff = staff.filter(member => {
     const fullName = `${member.firstName || ''} ${member.lastName || ''} ${member.name || ''}`.toLowerCase();
@@ -62,12 +172,20 @@ export default function HRManagement() {
     }
   };
 
-  const getRoleBadge = (role) => {
+  const getRoleBadge = (role, member) => {
+    if (role === 'staff' || member?.staffType === 'non-teaching') {
+      const customRoleName = member?.customRole || member?.designation || 'Staff';
+      return (
+        <span className="px-2.5 py-1 bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 rounded-md text-xs font-bold uppercase tracking-wider w-max flex items-center gap-1">
+          <Shield className="w-3 h-3" /> {customRoleName}
+        </span>
+      );
+    }
     switch(role) {
       case 'hod': return <span className="px-2.5 py-1 bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 rounded-md text-xs font-bold uppercase tracking-wider flex items-center gap-1 w-max"><Shield className="w-3 h-3"/> HOD</span>;
       case 'teacher': return <span className="px-2.5 py-1 bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-400 rounded-md text-xs font-bold uppercase tracking-wider w-max">Teacher</span>;
       case 'admin': return <span className="px-2.5 py-1 bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400 rounded-md text-xs font-bold uppercase tracking-wider w-max">Admin</span>;
-      default: return <span className="px-2.5 py-1 bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-400 rounded-md text-xs font-bold uppercase tracking-wider w-max">Support</span>;
+      default: return <span className="px-2.5 py-1 bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-400 rounded-md text-xs font-bold uppercase tracking-wider w-max">{member?.customRole || 'Support'}</span>;
     }
   };
 
@@ -118,6 +236,7 @@ export default function HRManagement() {
             <thead>
               <tr className="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 <th className="p-4 pl-6">Staff Member</th>
+                <th className="p-4">Staff ID</th>
                 <th className="p-4">Role & Dept</th>
                 <th className="p-4">Contact Details</th>
                 <th className="p-4">Status</th>
@@ -167,7 +286,7 @@ export default function HRManagement() {
                     </td>
                     <td className="p-4">
                       <div className="flex flex-col gap-1.5">
-                        {getRoleBadge(member.role)}
+                        {getRoleBadge(member.role, member)}
                         <span className="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
                           <Building className="w-3 h-3" /> {member.department || 'N/A'}
                         </span>
@@ -192,6 +311,43 @@ export default function HRManagement() {
                     </td>
                     <td className="p-4 pr-6 text-right">
                       <div className="flex items-center justify-end gap-2 transition-opacity">
+                        {((member.accountStatus || member.status) === 'pending_setup') && (
+                          <>
+                            <button
+                              onClick={() => handleGenerateSetupLink(member)}
+                              disabled={generatingLinkId === member.id}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-500/10 hover:bg-primary-100 dark:hover:bg-primary-500/20 border border-primary-200 dark:border-primary-500/30 rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                              title="Generate Setup Link"
+                            >
+                              {generatingLinkId === member.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Link2 className="w-3.5 h-3.5" />
+                              )}
+                              <span>Generate Link</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleSendSetupMail(member)}
+                              disabled={sendingMailId === member.id || !!mailCooldowns[member.id]}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 border border-indigo-200 dark:border-indigo-500/30 rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={mailCooldowns[member.id] ? `Please wait ${mailCooldowns[member.id]}s before resending` : "Send Setup Email"}
+                            >
+                              {sendingMailId === member.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Mail className="w-3.5 h-3.5" />
+                              )}
+                              <span>
+                                {sendingMailId === member.id
+                                  ? 'Sending...'
+                                  : mailCooldowns[member.id]
+                                    ? `Sent (${mailCooldowns[member.id]}s)`
+                                    : 'Send Mail'}
+                              </span>
+                            </button>
+                          </>
+                        )}
                         <button onClick={() => setViewingStaff(member)} className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="View Profile">
                           <Eye className="w-4 h-4" />
                         </button>

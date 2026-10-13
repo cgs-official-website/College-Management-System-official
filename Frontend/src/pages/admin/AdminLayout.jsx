@@ -50,6 +50,7 @@ import {
   ChevronDown,
   History,
   Store as StoreIcon,
+  AlertCircle,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { api } from '../../services/api';
@@ -511,10 +512,13 @@ const AdminLayout = () => {
 };
 
 const AdminDashboardHome = () => {
-  const { userData } = useAuth();
+  const { userData, userRole, permissions } = useAuth();
   const stats = useDashboardStats(userData?.collegeId);
   const [copiedLink, setCopiedLink] = useState(null); 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  const isStaff = userRole === 'staff';
+  const hasNoModules = isStaff && (!userData?.customRoleId || !Object.values(permissions || {}).some(p => p.canRead));
 
     const handleGenerateLink = async (role) => {
     if (!userData?.collegeId && !userData?.collegeSlug) return;
@@ -628,6 +632,7 @@ const AdminDashboardHome = () => {
                     <span className="flex items-center gap-2"><GraduationCap className="w-4 h-4 text-primary-500" /> Student Link</span>
                     {copiedLink === 'student' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                   </button>
+                  {/*
                   <button onClick={() => handleGenerateLink('teacher')} className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-lg transition-colors">
                     <span className="flex items-center gap-2"><Users className="w-4 h-4 text-teal-500" /> Teacher Link</span>
                     {copiedLink === 'teacher' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
@@ -636,12 +641,24 @@ const AdminDashboardHome = () => {
                     <span className="flex items-center gap-2"><Briefcase className="w-4 h-4 text-indigo-500" /> HOD Link</span>
                     {copiedLink === 'hod' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                   </button>
+                  */}
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
       </div>
+
+      {hasNoModules && (
+        <div className="p-4 md:p-5 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-start gap-3 text-amber-800 dark:text-amber-300 shadow-sm">
+          <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-sm md:text-base">
+              No modules assigned yet. Ask your administrator to assign a role to your account.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
         {[
