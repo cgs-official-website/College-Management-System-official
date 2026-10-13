@@ -92,7 +92,7 @@ export default function TeacherMyLeaves() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">My Leaves</h1>
+        <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Leave Management</h1>
         <p className="text-slate-500 dark:text-slate-400 mt-1">
           Apply for leave. Your request goes to the admin for approval.
         </p>

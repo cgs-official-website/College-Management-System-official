@@ -11,17 +11,22 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 
 export default function NoticeBoard() {
   const confirm = useConfirm();
-  const { userData } = useAuth();
+  const { userData, userRole, permissions } = useAuth();
+  const isAdmin = userRole === 'admin' || userRole === 'superadmin';
+  const can = (a) => isAdmin || permissions?.notices?.[a] === true;
+  const canCreate = can('canCreate');
+  const canUpdate = can('canUpdate');
+  const canDelete = can('canDelete');
   const collegeId = userData?.collegeId || 'default_college_id';
   const { notices, isLoading, addNotice, updateNotice, deleteNotice, isAdding, isUpdating } = useNotices(collegeId);
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingNotice, setEditingNotice] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const filteredNotices = notices.filter(notice => 
+  const filteredNotices = notices.filter(notice =>
     (notice.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (notice.content || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -29,16 +34,19 @@ export default function NoticeBoard() {
   const paginatedNotices = filteredNotices.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const handleOpenAdd = () => {
+    if (!canCreate) return;
     setEditingNotice(null);
     setIsFormOpen(true);
   };
 
   const handleOpenEdit = (notice) => {
+    if (!canUpdate) return;
     setEditingNotice(notice);
     setIsFormOpen(true);
   };
 
   const handleDelete = async (id) => {
+    if (!canDelete) return;
     if (await confirm({ message: "Are you sure you want to delete this notice?" })) {
       await deleteNotice(id);
     }
@@ -78,12 +86,16 @@ export default function NoticeBoard() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Notice Board</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Broadcast announcements to students and staff.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            {canCreate ? 'Broadcast announcements to students and staff.' : 'Announcements from the administration.'}
+          </p>
         </div>
-        <Button onClick={handleOpenAdd}>
-          <Plus className="w-4 h-4 mr-2" />
-          Create Notice
-        </Button>
+        {canCreate && (
+          <Button onClick={handleOpenAdd}>
+            <Plus className="w-4 h-4 mr-2" />
+            Create Notice
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -92,7 +104,7 @@ export default function NoticeBoard() {
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search className="h-4 w-4 text-slate-400" />
           </div>
-          <Input 
+          <Input
             placeholder="Search notices..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -114,13 +126,17 @@ export default function NoticeBoard() {
             <Megaphone className="w-8 h-8 text-slate-400" />
           </div>
           <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">No notices found</h3>
-          <p className="text-slate-500 dark:text-slate-400">Click "Create Notice" to broadcast your first announcement.</p>
+          <p className="text-slate-500 dark:text-slate-400">
+            {canCreate
+              ? 'Click "Create Notice" to broadcast your first announcement.'
+              : 'New announcements will appear here.'}
+          </p>
         </div>
       ) : (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {paginatedNotices.map((notice, idx) => (
-              <motion.div 
+              <motion.div
                 key={notice.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -132,14 +148,28 @@ export default function NoticeBoard() {
                     {getPriorityIcon(notice.priority)}
                     {notice.priority}
                   </span>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => handleOpenEdit(notice)} className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg">
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => handleDelete(notice.id)} className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {(canUpdate || canDelete) && (
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {canUpdate && (
+                        <button
+                          onClick={() => handleOpenEdit(notice)}
+                          title="Edit"
+                          className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          onClick={() => handleDelete(notice.id)}
+                          title="Delete"
+                          className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 line-clamp-2">{notice.title}</h3>
@@ -170,13 +200,15 @@ export default function NoticeBoard() {
         </div>
       )}
 
-      <NoticeFormModal 
-        isOpen={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
-        onSubmit={handleSubmit}
-        initialData={editingNotice}
-        isLoading={isAdding || isUpdating}
-      />
+      {(canCreate || canUpdate) && (
+        <NoticeFormModal
+          isOpen={isFormOpen}
+          onClose={() => setIsFormOpen(false)}
+          onSubmit={handleSubmit}
+          initialData={editingNotice}
+          isLoading={isAdding || isUpdating}
+        />
+      )}
     </div>
   );
 }

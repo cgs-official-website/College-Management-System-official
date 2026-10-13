@@ -1,13 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/apiClient';
 
-export const useGetEntities = () => {
+export const useGetEntities = ({ enabled = true } = {}) => {
   return useQuery({
     queryKey: ['customEntities'],
     queryFn: async () => {
       const { data } = await apiClient.get('/builder/entities');
       return data;
     },
+    enabled,
+    retry: false,
   });
 };
 

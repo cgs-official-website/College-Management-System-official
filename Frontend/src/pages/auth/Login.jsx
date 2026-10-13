@@ -21,6 +21,7 @@ const getRoleDestination = (role) => {
   switch (typeof role === 'string' ? role.trim().toLowerCase() : '') {
     case 'student': return '/student/dashboard';
     case 'admin': return '/admin/dashboard';
+    case 'staff': return '/admin';
     case 'superadmin': return '/super';
     case 'parent': return '/parent';
     case 'teacher':

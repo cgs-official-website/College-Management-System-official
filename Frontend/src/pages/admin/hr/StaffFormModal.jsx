@@ -22,7 +22,7 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
     }
   }, [isOpen]);
 
-  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, watch, setValue, getValues, formState: { errors } } = useForm({
     defaultValues: initialData || {
       firstName: '',
       lastName: '',
@@ -40,6 +40,21 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
   });
 
   const staffType = watch('staffType');
+  const roleCategory = staffType === 'non-teaching' ? 'non_teaching' : 'teaching';
+  const filteredRoles = roles.filter(r => !r.isSystemRole && r.category === roleCategory);
+
+  useEffect(() => {
+    if (isOpen && initialData?.customRoleId && roles.length > 0) {
+      setValue('customRoleId', initialData.customRoleId);
+    }
+  }, [roles, isOpen, initialData, setValue]);
+
+  useEffect(() => {
+    const current = getValues('customRoleId');
+    if (roles.length > 0 && current && !filteredRoles.some(r => r.id === current)) {
+      setValue('customRoleId', '');
+    }
+  }, [staffType, roles]);
 
   useEffect(() => {
     if (isOpen) {
@@ -71,13 +86,15 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
     const selectedRole = roles.find(r => r.id === data.customRoleId);
     const designation = selectedRole ? selectedRole.name : 'Staff';
 
+    const TEACHING_ROLES = ['teacher', 'hod', 'faculty'];
+    const keepExisting = initialData && TEACHING_ROLES.includes(initialData.role);
+
     const payload = {
       ...data,
-      role: data.staffType === 'non-teaching' ? 'staff' : 'teacher',
+      role: data.staffType === 'non-teaching' ? 'staff' : (keepExisting ? initialData.role : 'teacher'),
       name: `${data.firstName} ${data.lastName}`.trim(),
       designation: designation,
       customRoleId: data.customRoleId || null,
-      // Preserve the exact admin-entered Teacher ID.
       teacherId: data.teacherId.trim(),
     };
     
@@ -197,16 +214,22 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
             />
             <div className="space-y-1">
               <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Role / Designation</label>
-              <select 
+              <select
                 {...register('customRoleId')}
                 className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white"
               >
                 <option value="">Standard Staff (No special permissions)</option>
-                {roles.map(r => (
+                {filteredRoles.map(r => (
                   <option key={r.id} value={r.id}>{r.name}</option>
                 ))}
               </select>
+              {filteredRoles.length === 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  No {staffType === 'teaching' ? 'teaching' : 'non-teaching'} roles yet. Create one under Roles & Permissions.
+                </p>
+              )}
             </div>
+            
             {staffType === 'teaching' && (
               <div className="space-y-1">
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Department</label>

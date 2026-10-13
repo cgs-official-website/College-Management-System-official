@@ -29,6 +29,7 @@ export const getRoles = async (req, res) => {
     name: r.name,
     collegeId: r.collegeId,
     isSystemRole: r.isSystemRole,
+    category: r.category,
     userCount: r._count.users,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
@@ -41,7 +42,7 @@ export const getRoles = async (req, res) => {
 export const createRole = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const actorId = req.user?.id || req.user?.userId;
-  const { name } = createRoleSchema.parse(req.body);
+  const { name, category } = createRoleSchema.parse(req.body);
 
   // Check if role name already exists in this college
   const existing = await prisma.role.findFirst({
@@ -63,6 +64,7 @@ export const createRole = async (req, res) => {
     const newRole = await tx.role.create({
       data: {
         name,
+        category, 
         collegeId,
         isSystemRole: false
       }
@@ -137,6 +139,7 @@ export const getRoleById = async (req, res) => {
       name: role.name,
       collegeId: role.collegeId,
       isSystemRole: role.isSystemRole,
+      category: role.category,
       userCount: role._count.users,
       permissions,
       createdAt: role.createdAt,
@@ -149,7 +152,7 @@ export const updateRole = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const actorId = req.user?.id || req.user?.userId;
   const { id } = req.params;
-  const { name } = updateRoleSchema.parse(req.body);
+  const { name, category } = updateRoleSchema.parse(req.body);
 
   const role = await prisma.role.findFirst({
     where: { id, collegeId }
@@ -169,12 +172,34 @@ export const updateRole = async (req, res) => {
     });
   }
 
+    if (name && name.toLowerCase() !== role.name.toLowerCase()) {
+    const clash = await prisma.role.findFirst({
+      where: { collegeId, name: { equals: name, mode: 'insensitive' }, NOT: { id } }
+    });
+    if (clash) {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'ROLE_ALREADY_EXISTS', message: `Role '${name}' already exists in your college.` }
+      });
+    }
+  }
+
+  if (category && category !== role.category) {
+    const inUse = await prisma.user.count({ where: { customRoleId: id } });
+    if (inUse > 0) {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'ROLE_IN_USE', message: `Cannot change category: ${inUse} user(s) have this role.` }
+      });
+    }
+  }
+
   const updated = await prisma.role.update({
     where: { id },
-    data: { name }
+    data: { ...(name ? { name } : {}), ...(category ? { category } : {}) }
   });
 
-  logger.info(`[info] req=${req.id || ''} college=${collegeId} roleId=${id} actor=${actorId} Renamed role to '${name}'`);
+  logger.info(`[info] req=${req.id || ''} college=${collegeId} roleId=${id} actor=${actorId} Updated role`);
   res.json({ success: true, data: updated });
 };
 

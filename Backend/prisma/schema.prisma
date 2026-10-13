@@ -162,6 +162,7 @@ model Role {
   collegeId    String           @db.Uuid
   college      College          @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   isSystemRole Boolean          @default(false)
+  category     String           @default("non_teaching")
   users        User[]           @relation("UserCustomRole")
   permissions  RolePermission[]
   createdAt    DateTime         @default(now())

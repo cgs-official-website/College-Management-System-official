@@ -17,6 +17,6 @@ router.get('/', requirePermission('payroll', 'read'), catchAsync(controller.getP
 router.patch('/:id/status', requirePermission('payroll', 'update'), catchAsync(controller.updatePayrollStatus));
 
 // Staff Routes (viewing own payslips, just needs staff/teacher role)
-router.get('/my-payslips', authorize('teacher', 'staff', 'admin', 'superadmin'), catchAsync(controller.getStaffPayslips));
+router.get('/my-payslips', authorize('teacher', 'hod', 'faculty', 'staff', 'admin', 'superadmin'), catchAsync(controller.getStaffPayslips));
 
 export default router;

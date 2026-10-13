@@ -13,6 +13,7 @@ const getRoleDashboard = (role) => {
     case 'teacher':
     case 'hod':
     case 'faculty':  return '/teacher';
+    case 'staff':    return '/admin';
     default:         return '/login';
   }
 };

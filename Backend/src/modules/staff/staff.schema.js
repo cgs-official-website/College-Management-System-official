@@ -16,7 +16,7 @@ export const createStaffSchema = z.object({
   designation: z.string().min(1, 'Designation is required'),
   joiningDate: z.string().or(z.date()).optional(),
   salaryGrade: z.string().optional(),
-  role: z.string().optional(),
+  role: z.enum(['teacher', 'hod', 'faculty', 'staff']).optional(),
   staffType: z.enum(['teaching', 'non-teaching']).optional().default('teaching'),
   customRoleId: z.string().uuid().nullable().optional(),
   status: z.string().optional().default('active'),

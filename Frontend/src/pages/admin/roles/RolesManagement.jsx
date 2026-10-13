@@ -39,6 +39,7 @@ export default function RolesManagement() {
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newRoleName, setNewRoleName] = useState('');
+  const [newRoleCategory, setNewRoleCategory] = useState('teaching');
   const [isCreating, setIsCreating] = useState(false);
 
   const [isRenameOpen, setIsRenameOpen] = useState(false);
@@ -188,10 +189,11 @@ export default function RolesManagement() {
 
     setIsCreating(true);
     try {
-      const res = await api.post('/roles', { name: newRoleName.trim() });
+      const res = await api.post('/roles', { name: newRoleName.trim(), category: newRoleCategory });
       toast.success(`Role '${newRoleName.trim()}' created!`);
       setIsCreateOpen(false);
       setNewRoleName('');
+      setNewRoleCategory('teaching');
       
       await fetchInitialData();
       if (res.data?.id) {
@@ -360,6 +362,11 @@ export default function RolesManagement() {
                             {role.isSystemRole && (
                               <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300 rounded-md">
                                 System
+                              </span>
+                            )}
+                            {!role.isSystemRole && (
+                              <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-slate-300 rounded-md">
+                                {role.category === 'teaching' ? 'Teaching' : 'Non-Teaching'}
                               </span>
                             )}
                           </div>
@@ -602,6 +609,7 @@ export default function RolesManagement() {
         maxWidth="max-w-md"
       >
         <form onSubmit={handleCreateRole} className="space-y-5">
+          
           <Input
             label="Role Name"
             placeholder="e.g. Accountant, Librarian, Hostel Warden"
@@ -610,6 +618,29 @@ export default function RolesManagement() {
             required
             autoFocus
           />
+
+          <div>
+            <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Category</label>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { value: 'teaching', label: 'Teaching Staff' },
+                { value: 'non_teaching', label: 'Non-Teaching Staff' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setNewRoleCategory(opt.value)}
+                  className={`px-4 py-3 rounded-xl border text-sm font-semibold transition-colors ${
+                    newRoleCategory === opt.value
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-500/10 text-primary-700 dark:text-primary-300'
+                      : 'border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <p className="text-xs text-slate-500 dark:text-slate-400">
             Once created, you can immediately grant or restrict granular access per module.
           </p>

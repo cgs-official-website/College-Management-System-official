@@ -76,7 +76,7 @@ function App() {
             <Route path="/super/*" element={<ProtectedRoute allowedRoles={['superadmin']}><SuperAdminLayout /></ProtectedRoute>} />
 
             {/* Admin/Staff Routes */}
-            <Route path="/admin/*" element={<ProtectedRoute allowedRoles={['admin', 'teacher', 'hod', 'faculty', 'superadmin']}><AdminLayout /></ProtectedRoute>} />
+            <Route path="/admin/*" element={<ProtectedRoute allowedRoles={['admin', 'teacher', 'hod', 'faculty', 'staff', 'superadmin']}><AdminLayout /></ProtectedRoute>} />
 
             {/* Student Portal Routes */}
             <Route path="/student/*" element={<ProtectedRoute allowedRoles={['student', 'superadmin']}><StudentLayout /></ProtectedRoute>} />

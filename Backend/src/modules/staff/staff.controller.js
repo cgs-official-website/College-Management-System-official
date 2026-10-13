@@ -111,6 +111,13 @@ export const createStaff = async (req, res) => {
     if (!role) {
       return res.status(400).json({ success: false, error: { message: 'Invalid custom role' } });
     }
+    const wanted = payload.staffType === 'non-teaching' ? 'non_teaching' : 'teaching';
+    if (role.category !== wanted) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'ROLE_CATEGORY_MISMATCH', message: `This role is for ${role.category.replace('_', '-')} staff.` }
+      });
+    }
   }
 
   // Ensure department exists
@@ -247,16 +254,6 @@ export const updateStaff = async (req, res) => {
   const { id } = req.params;
   const payload = updateStaffSchema.parse(req.body);
 
-  // Validate customRoleId belongs to this college
-  if (payload.customRoleId) {
-    const role = await prisma.role.findFirst({
-      where: { id: payload.customRoleId, collegeId }
-    });
-    if (!role) {
-      return res.status(400).json({ success: false, error: { message: 'Invalid custom role' } });
-    }
-  }
-
   const teacher = await prisma.teacher.findFirst({
     where: { id, collegeId, deletedAt: null },
     include: { user: true }
@@ -264,6 +261,24 @@ export const updateStaff = async (req, res) => {
 
   if (!teacher) {
     return res.status(404).json({ success: false, error: { code: 'STAFF_NOT_FOUND', message: 'Staff member not found' } });
+  }
+
+    // Validate customRoleId belongs to this college and matches the staff category
+  if (payload.customRoleId) {
+    const role = await prisma.role.findFirst({
+      where: { id: payload.customRoleId, collegeId }
+    });
+    if (!role) {
+      return res.status(400).json({ success: false, error: { message: 'Invalid custom role' } });
+    }
+    const effectiveRole = payload.role || teacher.user?.role;
+    const currentType = ['teacher', 'hod', 'faculty'].includes(effectiveRole) ? 'teaching' : 'non_teaching';
+    if (role.category !== currentType) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'ROLE_CATEGORY_MISMATCH', message: `This role is for ${role.category.replace('_', '-')} staff.` }
+      });
+    }
   }
 
   // Normalize and validate teacherId update if provided

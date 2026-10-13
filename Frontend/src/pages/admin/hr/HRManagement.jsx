@@ -118,6 +118,7 @@ export default function HRManagement() {
             <thead>
               <tr className="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 <th className="p-4 pl-6">Staff Member</th>
+                <th className="p-4">Teacher ID</th>
                 <th className="p-4">Role & Dept</th>
                 <th className="p-4">Contact Details</th>
                 <th className="p-4">Status</th>
@@ -167,7 +168,11 @@ export default function HRManagement() {
                     </td>
                     <td className="p-4">
                       <div className="flex flex-col gap-1.5">
-                        {getRoleBadge(member.role)}
+                        {member.customRole ? (
+                          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 rounded-md text-xs font-bold uppercase tracking-wider w-max">
+                            {member.customRole}
+                          </span>
+                        ) : getRoleBadge(member.role)}
                         <span className="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
                           <Building className="w-3 h-3" /> {member.department || 'N/A'}
                         </span>

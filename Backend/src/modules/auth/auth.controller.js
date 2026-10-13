@@ -945,19 +945,33 @@ export const getMe = async (req, res) => {
       return res.json({ success: true, data: { ...user, collegeStatus: user.college?.status || null } });
     }
 
-    // Teacher/HOD/faculty: lean query — skip billing join
-    if (role === 'teacher' || role === 'hod' || role === 'faculty') {
+    if (role !== 'admin' && role !== 'superadmin') {
       const user = await prisma.user.findUnique({
         where: { id: req.user.userId },
         include: {
-          college: { select: { id: true, name: true, slug: true, status: true, logoUrl: true } },
+          college: {
+            select: {
+              id: true, name: true, slug: true, status: true, logoUrl: true,
+              billingSubscription: { select: { subscriptionPlan: { select: { modules: true } } } }
+            }
+          },
           teacherProfile: { include: { department: true } },
           customRole: { include: { permissions: { include: { module: true } } } }
         }
       });
       if (!user) return res.status(404).json({ success: false, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
       const { passwordHash, ...safeUser } = user;
-      return res.json({ success: true, data: { ...safeUser, collegeStatus: user.college?.status || null } });
+      const { billingSubscription, ...collegeSafe } = user.college || {};
+      const planModules = billingSubscription?.subscriptionPlan?.modules;
+      return res.json({
+        success: true,
+        data: {
+          ...safeUser,
+          college: user.college ? collegeSafe : null,
+          collegeStatus: user.college?.status || null,
+          ...(planModules ? { allowedModules: planModules } : {})
+        }
+      });
     }
 
     // Admin / SuperAdmin: full query with billing

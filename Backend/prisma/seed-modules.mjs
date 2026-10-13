@@ -14,6 +14,7 @@ const DEFAULT_MODULES = [
   { key: 'attendance', label: 'Attendance Management' },
   { key: 'fees', label: 'Fees & Financials' },
   { key: 'exams', label: 'Exams & Marks' },
+  { key: 'notices', label: 'Notice Board' },
   { key: 'library', label: 'Library Management' },
   { key: 'hostel', label: 'Hostel Management' },
   { key: 'transport', label: 'Transport & Routes' },

@@ -23,7 +23,8 @@ import {
   Building,
   CalendarClock,
   CalendarOff,
-  Video
+  Video,
+  Megaphone
 } from 'lucide-react';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
@@ -42,6 +43,7 @@ import TeacherMyLeaves from './TeacherMyLeaves';
 import TeacherPtm from './TeacherPtm';
 import Timetable from '../admin/timetable/Timetable';
 import LeaveRequestsDashboard from '../admin/leaves/LeaveRequestsDashboard';
+import NoticeBoard from '../admin/notices/NoticeBoard';
 
 const TeacherLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -70,10 +72,10 @@ const TeacherLayout = () => {
     { name: 'Marks & Grading', path: '/teacher/grades', icon: FileBarChart },
     { name: 'Complaints', path: '/teacher/complaints', icon: MessageSquareWarning },
     { name: 'Projects', path: '/teacher/projects', icon: FolderKanban },
-    { name: 'Payroll', path: '/teacher/payroll', icon: Banknote },
-    { name: 'My Leaves', path: '/teacher/my-leaves', icon: CalendarClock },
+    { name: 'Payslip', path: '/teacher/payroll', icon: Banknote },
+    { name: 'Apply for Leave', path: '/teacher/my-leaves', icon: CalendarClock },
     { name: 'Student Leaves', path: '/teacher/student-leaves', icon: CalendarOff },
-        { name: 'PTM Meetings', path: '/teacher/ptm', icon: Video },
+    { name: 'PTM Meetings', path: '/teacher/ptm', icon: Video },
     { name: 'Settings', path: '/teacher/settings', icon: SettingsIcon },
   ];
 
@@ -87,6 +89,19 @@ const TeacherLayout = () => {
   if (canUseFacilities) {
     navLinks.splice(5, 0, { name: 'Facility Requests', path: '/teacher/facility-requests', icon: Building });
   }
+
+  const canViewNotices = permissions?.notices?.canRead === true;
+  if (canViewNotices) {
+    const i = navLinks.findIndex(l => l.name === 'Payslip');
+    navLinks.splice(i + 1, 0, { name: 'Notice Board', path: '/teacher/notices', icon: Megaphone });
+  }
+
+  const roleLabel =
+  userData?.customRole?.name ||
+  userData?.designation ||
+  userData?.teacherProfile?.designation ||
+  userData?.role ||
+  'Teacher';
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-[#020813] text-slate-900 dark:text-slate-200 overflow-hidden font-sans transition-colors duration-300">
@@ -170,7 +185,7 @@ const TeacherLayout = () => {
                </div>
                <div className="truncate">
                  <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate">{userData?.name || 'Faculty Member'}</p>
-                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">{userData?.designation || userData?.role || 'TEACHER'}</p>
+                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">{roleLabel}</p>
                </div>
              </div>
              <LogOut className="w-5 h-5 text-slate-400 group-hover:text-red-600 transition-colors shrink-0 ml-2" />
@@ -213,7 +228,7 @@ const TeacherLayout = () => {
             >
               <div className="hidden md:block text-right">
                 <p className="text-sm font-bold text-slate-900 dark:text-white leading-none capitalize">{userData?.name || userData?.firstName || 'Teacher'}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 capitalize">{userData?.role || userData?.designation || 'Faculty Member'}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 capitalize">{roleLabel}</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center text-white font-bold shadow-md uppercase">
                 {(userData?.name || userData?.firstName || 'T').charAt(0)}
@@ -240,6 +255,7 @@ const TeacherLayout = () => {
               <Route path="/student-leaves" element={<LeaveRequestsDashboard />} />
               <Route path="/ptm" element={<TeacherPtm />} />
               <Route path="/settings" element={<TeacherSettings />} />
+              {canViewNotices && <Route path="/notices" element={<NoticeBoard />} />}
               {canUseFacilities && <Route path="/facility-requests" element={<HODFacilityRequests />} />}
               {userData?.role === 'hod' && <Route path="/timetable" element={<Timetable />} />}
               <Route path="*" element={<Navigate to="/teacher" replace />} />

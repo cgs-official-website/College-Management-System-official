@@ -83,7 +83,8 @@ import AdminStudentDocuments from './students/AdminStudentDocuments';
 import MobileAppsDashboard from './apps/MobileAppsDashboard';
 import ApiIntegrations from './integrations/ApiIntegrations';
 import InventoryDashboard from './inventory/InventoryDashboard';
-import PayrollDashboard from './payroll/PayrollDashboard';
+import PayrollDashboard from './payroll/PayrollDashboard';      
+import MyPayslip from '../teacher/PayrollDashboard';          
 import TeacherMyLeaves from '../teacher/TeacherMyLeaves';
 import CustomDashboard from '../../modules/custom/CustomDashboard';
 import ModuleBuilder from '../../modules/builder/ModuleBuilder';
@@ -101,7 +102,9 @@ const AdminLayout = () => {
   const navigate = useNavigate();
   const { logout, userData, userRole, permissions } = useAuth();
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
-  const { data: customEntitiesData } = useGetEntities();
+  const { data: customEntitiesData } = useGetEntities({
+    enabled: userRole === 'admin' || userRole === 'superadmin',
+  });
   const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
@@ -129,6 +132,25 @@ const AdminLayout = () => {
   };
   
   const isAdmin = userRole === 'admin' || userRole === 'superadmin';
+  const displayName = isAdmin ? 'Admin' : (userData?.name || 'Staff');
+  const initials = isAdmin
+    ? 'AD'
+    : (displayName.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || 'ST');
+
+  const roleLabel = isAdmin ? 'ADMIN' : (userData?.customRole?.name || 'Staff').toUpperCase();
+
+  const roleTitle = (() => {
+    const r = (userData?.customRole?.name || 'Staff').trim().toLowerCase();
+    return r.charAt(0).toUpperCase() + r.slice(1);
+  })();
+
+  const panelLabel = isAdmin ? 'ADMIN PANEL' : 'STAFF PORTAL';
+  const collegeLabel = userData?.collegeName || 'My College';
+  const canReviewStudentLeaves = ['admin', 'superadmin', 'teacher', 'hod', 'faculty'].includes(userRole);
+  const planAllows = (moduleKey) =>
+  !moduleKey ||
+  !Array.isArray(userData?.allowedModules) ||
+  userData.allowedModules.includes(moduleKey);
 
   const navLinks = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard, moduleKey: null },
@@ -146,8 +168,8 @@ const AdminLayout = () => {
     { name: 'Assignments', path: '/admin/assignments', icon: FileEdit, moduleKey: 'academic' },
     { name: 'Timetable', path: '/admin/timetable', icon: Calendar, moduleKey: 'timetable' },
     { name: 'Attendance', path: '/admin/attendance', icon: Clock, moduleKey: 'attendance' },
-    { name: 'Leave Requests', path: '/admin/leave-requests', icon: CalendarOff, moduleKey: isAdmin ? 'attendance' : null },
-    { name: 'MyLeaves', path: '/admin/my-leaves', icon: CalendarClock, moduleKey: null, staffOnly: true },
+    { name: 'Leave Requests', path: '/admin/leave-requests', icon: CalendarOff, moduleKey: isAdmin ? 'attendance' : null, leaveReviewerOnly: true },
+    { name: 'Apply for Leave', path: '/admin/my-leaves', icon: CalendarClock, moduleKey: null, staffOnly: true },
     { name: 'Exams', path: '/admin/exams', icon: ClipboardList, moduleKey: 'exams' },
     { name: 'Fees & Finance', path: '/admin/fees', icon: Calculator, moduleKey: 'fees' },
     { name: 'Library', path: '/admin/library', icon: LibraryIcon, moduleKey: 'library' },
@@ -162,6 +184,7 @@ const AdminLayout = () => {
     { name: 'Inventory', path: '/admin/inventory', icon: Package, moduleKey: 'inventory' },
     { name: 'Campus Store', path: '/admin/store', icon: StoreIcon, moduleKey: 'store' },
     { name: 'Payroll', path: '/admin/payroll', icon: IndianRupee, moduleKey: 'payroll' },
+    { name: 'Payslip', path: '/admin/my-payslip', icon: IndianRupee, moduleKey: null, staffOnly: true },
     { name: 'API Integrations', path: '/admin/api-integrations', icon: Zap, moduleKey: 'api_integration' },
     { name: 'Module Builder', path: '/admin/builder', icon: Settings2, moduleKey: 'custom' },
     ...(customEntitiesData?.map(ent => ({
@@ -179,9 +202,14 @@ const AdminLayout = () => {
       }
       return link;
     })
-    .filter(link => (link.children ? link.children.length > 0 : hasAccess(link.moduleKey)))
+    .filter(link =>
+      link.children
+        ? link.children.length > 0
+        : hasAccess(link.moduleKey) || (link.selfService && planAllows(link.moduleKey))
+    )
     .filter(link => !link.adminOnly || isAdmin)
-    .filter(link => !link.staffOnly || !isAdmin);
+    .filter(link => !link.staffOnly || !isAdmin)
+    .filter(link => !link.leaveReviewerOnly || canReviewStudentLeaves);
 
   useEffect(() => {
     const activeGroup = navLinks.find(link =>
@@ -260,12 +288,12 @@ const AdminLayout = () => {
             </div>
             <div className="flex-1 overflow-hidden">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate" title={userData?.collegeName || 'College Name'}>{userData?.collegeName || 'College Name'}</h3>
-              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">ADMIN PANEL</p>
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">{panelLabel}</p>
             </div>
           </div>
         </div>
 
-                <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
+        <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
           {navLinks.map((link) => {
             if (link.children) {
               const isGroupActive = link.children.some(
@@ -381,12 +409,11 @@ const AdminLayout = () => {
            <div className="flex items-center justify-between group cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 p-2 rounded-xl transition-colors" onClick={handleLogout}>
              <div className="flex items-center gap-3 overflow-hidden">
                <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-400 flex items-center justify-center font-bold text-sm shrink-0">
-                 {userData?.firstName?.charAt(0) || 'A'}
-                 {userData?.lastName?.charAt(0) || 'D'}
+                 {initials}
                </div>
                <div className="truncate">
-                 <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate">{userData?.firstName || 'Admin'} {userData?.lastName || ''}</p>
-                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">ADMIN</p>
+                 <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate">{displayName}</p>
+                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">{roleLabel}</p>
                </div>
              </div>
              <LogOut className="w-5 h-5 text-slate-400 group-hover:text-red-600 transition-colors shrink-0 ml-2" />
@@ -449,15 +476,15 @@ const AdminLayout = () => {
             <div className="h-8 w-px bg-slate-200 dark:bg-white/10 mx-1"></div>
 
             <button 
-              onClick={() => navigate('/admin/settings')}
+              onClick={() => navigate(isAdmin ? '/admin/settings' : '/admin')}
               className="flex items-center gap-3 pl-2 pr-1 py-1 rounded-full hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
             >
               <div className="hidden md:block text-right">
-                <p className="text-sm font-bold text-slate-900 dark:text-white leading-none">Admin</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">My College</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white leading-none">{displayName}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{isAdmin ? collegeLabel : roleTitle}</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-teal-600 flex items-center justify-center text-white font-bold shadow-md">
-                AD
+                {initials}
               </div>
             </button>
           </div>
@@ -479,7 +506,12 @@ const AdminLayout = () => {
               <Route path="/assignments/*" element={hasAccess('academic') ? <AssignmentsDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/timetable/*" element={hasAccess('timetable') ? <Timetable /> : <Navigate to="/404" replace />} />
               <Route path="/attendance/*" element={hasAccess('attendance') ? <Attendance /> : <Navigate to="/404" replace />} />
-              <Route path="/leave-requests/*" element={hasAccess(isAdmin ? 'attendance' : null) ? <LeaveRequestsDashboard /> : <Navigate to="/404" replace />} />
+              <Route
+                path="/leave-requests/*"
+                element={canReviewStudentLeaves && hasAccess(isAdmin ? 'attendance' : null)
+                  ? <LeaveRequestsDashboard />
+                  : <Navigate to="/404" replace />}
+              />
               <Route path="/my-leaves" element={!isAdmin ? <TeacherMyLeaves /> : <Navigate to="/admin/leave-requests" replace />} />
               <Route path="/exams/*" element={hasAccess('exams') ? <Exams /> : <Navigate to="/404" replace />} />
               <Route path="/fees/*" element={hasAccess('fees') ? <Fees /> : <Navigate to="/404" replace />} />
@@ -496,6 +528,10 @@ const AdminLayout = () => {
               <Route path="/store/*" element={hasAccess('store') ? <StoreDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/api-integrations/*" element={hasAccess('api_integration') ? <ApiIntegrations /> : <Navigate to="/404" replace />} />
               <Route path="/payroll/*" element={hasAccess('payroll') ? <PayrollDashboard /> : <Navigate to="/404" replace />} />
+              <Route
+                path="/my-payslip/*"
+                element={!isAdmin && planAllows('payroll') ? <MyPayslip /> : <Navigate to="/admin/payroll" replace />}
+              />
               <Route path="/builder/*" element={hasAccess('custom') ? <ModuleBuilder /> : <Navigate to="/404" replace />} />
               <Route path="/dynamic/:entitySlug/*" element={hasAccess('custom') ? <DynamicDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/custom/*" element={hasAccess('custom') ? <CustomDashboard /> : <Navigate to="/404" replace />} />
