@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import { prisma } from '../../lib/prisma.js';
+import { DEFAULT_TEMPLATES } from './templateSeeder.js';
 dotenv.config();
 
 // ---------------------------------------------------------------------------
@@ -363,9 +364,29 @@ export const sendDynamicMail = async ({
     const resolvedFromName = variables.collegeName || fromName || undefined;
 
     // --- Try loading template from database first ---
-    const template = await prisma.emailTemplate.findFirst({
+    let template = await prisma.emailTemplate.findFirst({
       where: { name: templateName }
     }).catch(() => null); // DB failure should not crash email sending
+
+    // If template is missing from DB, auto-persist the default template on-the-fly
+    if (!template) {
+      const defaultTpl = DEFAULT_TEMPLATES.find((t) => t.name === templateName);
+      if (defaultTpl) {
+        try {
+          template = await prisma.emailTemplate.create({
+            data: {
+              name: defaultTpl.name,
+              subject: defaultTpl.subject,
+              contentHtml: defaultTpl.contentHtml,
+              status: 'Active'
+            }
+          });
+          console.log(`[EmailService] 🚀 Auto-seeded missing template "${templateName}" into DB.`);
+        } catch (_) {
+          // If creation fails (e.g. race condition), fallback continues
+        }
+      }
+    }
 
     // Safety guard: refuse to send any DB template that contains a {{password}}
     // placeholder, regardless of template name. Fall through to built-in fallback.

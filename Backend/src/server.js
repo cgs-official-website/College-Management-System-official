@@ -233,6 +233,7 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 
 import { ensureCollegeCodeSequence } from './lib/collegeCodeGenerator.js';
+import { ensureEmailTemplates } from './services/email/templateSeeder.js';
 import { connectWithRetry } from './lib/prisma.js';
 
 const startServer = (retries = 5, delay = 600) => {
@@ -242,6 +243,9 @@ const startServer = (retries = 5, delay = 600) => {
     connectWithRetry(5, 3000).then(() => {
       ensureCollegeCodeSequence().catch(err => {
         logger.warn(`[warn] Failed to initialize college sequence: ${err.message}`);
+      });
+      ensureEmailTemplates().catch(err => {
+        logger.warn(`[warn] Failed to initialize default email templates: ${err.message}`);
       });
     });
   });
@@ -265,8 +269,8 @@ const startServer = (retries = 5, delay = 600) => {
   const shutdown = async (signal) => {
     logger.info(`[info] ${signal} received. Closing HTTP server...`);
     server.close(async () => {
-      try { await prisma.$disconnect(); } catch (_) {}
-      try { redis.disconnect(); } catch (_) {}
+      try { await prisma.$disconnect(); } catch (_) { }
+      try { redis.disconnect(); } catch (_) { }
       if (signal === 'SIGUSR2') {
         process.kill(process.pid, 'SIGUSR2');
       } else {
