@@ -411,12 +411,20 @@ const AdminLayout = () => {
         <div className="p-4 border-t border-slate-100 dark:border-white/5 mt-auto">
            <div className="flex items-center justify-between group cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 p-2 rounded-xl transition-colors" onClick={handleLogout}>
              <div className="flex items-center gap-3 overflow-hidden">
-               <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-400 flex items-center justify-center font-bold text-sm shrink-0">
-                 {initials}
+               <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-400 flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
+                 {userData?.collegeLogo ? (
+                   <img src={userData.collegeLogo} alt="Logo" className="w-full h-full object-contain p-1 rounded-full" />
+                 ) : (
+                   <span>{initials}</span>
+                 )}
                </div>
                <div className="truncate">
-                 <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate">{displayName}</p>
-                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">{roleLabel}</p>
+                 <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate" title={isAdmin ? (userData?.collegeName || userData?.college?.name || 'College Admin') : displayName}>
+                   {isAdmin ? (userData?.collegeName || userData?.college?.name || 'College Admin') : displayName}
+                 </p>
+                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">
+                   {isAdmin ? (userData?.name ? `${userData.name} • ADMIN` : 'ADMIN') : roleLabel}
+                 </p>
                </div>
              </div>
              <LogOut className="w-5 h-5 text-slate-400 group-hover:text-red-600 transition-colors shrink-0 ml-2" />
@@ -470,7 +478,7 @@ const AdminLayout = () => {
             <RaiseTicketModal 
               isOpen={showTicketModal}
               onClose={() => setShowTicketModal(false)}
-              collegeName={userData?.firstName ? `${userData.firstName} ${userData.lastName || ''}` : 'College Admin'}
+              collegeName={userData?.collegeName || userData?.college?.name || 'College Admin'}
               collegeEmail={userData?.email || ''}
             />
 
@@ -483,11 +491,19 @@ const AdminLayout = () => {
               className="flex items-center gap-3 pl-2 pr-1 py-1 rounded-full hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
             >
               <div className="hidden md:block text-right">
-                <p className="text-sm font-bold text-slate-900 dark:text-white leading-none">{displayName}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{isAdmin ? collegeLabel : roleTitle}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white leading-none truncate max-w-[180px]">
+                  {isAdmin ? (userData?.collegeName || userData?.college?.name || 'College Admin') : displayName}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  {isAdmin ? (userData?.name ? `${userData.name} (ADMIN)` : 'ADMIN') : roleTitle}
+                </p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-teal-600 flex items-center justify-center text-white font-bold shadow-md">
-                {initials}
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-teal-600 flex items-center justify-center text-white font-bold shadow-md overflow-hidden">
+                {userData?.collegeLogo ? (
+                  <img src={userData.collegeLogo} alt="Logo" className="w-full h-full object-contain p-1" />
+                ) : (
+                  <span>{initials}</span>
+                )}
               </div>
             </button>
           </div>

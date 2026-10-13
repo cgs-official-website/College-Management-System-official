@@ -654,6 +654,8 @@ export const sendStaffSetupMail = async (req, res) => {
     const emailPromise = sendDynamicMail({
       to: email,
       templateName: 'Teacher Account Setup',
+      headerTitle: teacher.college?.name || 'College Portal',
+      fromName: teacher.college?.name,
       variables: {
         name: teacher.user?.name || teacher.name || 'Staff Member',
         email,

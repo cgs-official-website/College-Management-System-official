@@ -42,7 +42,7 @@ function AuthRouteSync() {
   useEffect(() => {
     const path = location.pathname;
     let targetRole = null;
-    if (path.startsWith('/admin')) targetRole = 'admin';
+    if (path.startsWith('/admin') || path.startsWith('/pending-approval') || path.startsWith('/rejected')) targetRole = 'admin';
     else if (path.startsWith('/student')) targetRole = 'student';
     else if (path.startsWith('/teacher')) targetRole = 'teacher';
     else if (path.startsWith('/parent')) targetRole = 'parent';
@@ -64,74 +64,74 @@ function App() {
       <AuthProvider>
         <ConfirmProvider>
           <Router>
-          <AuthRouteSync />
-          <Routes>
-            {/* Landing Page */}
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/setup-demo" element={<DemoSeeder />} />
-            
-            {/* Auth Routes */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/admin/login" element={<Login requiredRole="admin" />} />
-            <Route path="/super/login" element={<Login requiredRole="superadmin" />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/register/:roleParam" element={<Register />} />
-            <Route path="/register/:roleParam/:collegeSlug" element={<Register />} />
-            
-            {/* Student Registration (Public with Token) */}
-            <Route path="/student/register" element={<StudentRegister />} />
-            <Route path="/student/register/college/:collegeSlug" element={<StudentRegister />} />
-            <Route path="/student/register/:tokenParam" element={<StudentRegister />} />
+            <AuthRouteSync />
+            <Routes>
+              {/* Landing Page */}
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/setup-demo" element={<DemoSeeder />} />
 
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            {/* Teacher Registration — Step 1: teacher enters own email, gets setup link emailed */}
-            <Route path="/teacher/register" element={<TeacherRegister />} />
-            {/* Teacher Setup — Step 2: teacher creates password via emailed setup link */}
-            <Route path="/teacher/setup" element={<StaffSetup />} />
-            <Route path="/pending-approval" element={<PendingApproval />} />
-            <Route path="/rejected" element={<RejectedApproval />} />
-            <Route path="/dashboard" element={<ProtectedRoute><DashboardRedirect /></ProtectedRoute>} />
-            
-            {/* Super Admin Routes */}
-            <Route path="/super/*" element={<ProtectedRoute allowedRoles={['superadmin']}><SuperAdminLayout /></ProtectedRoute>} />
+              {/* Auth Routes */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/admin/login" element={<Login requiredRole="admin" />} />
+              <Route path="/super/login" element={<Login requiredRole="superadmin" />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/register/:roleParam" element={<Register />} />
+              <Route path="/register/:roleParam/:collegeSlug" element={<Register />} />
 
-            {/* Admin/Staff Routes */}
-            <Route path="/admin/*" element={<ProtectedRoute allowedRoles={['admin', 'teacher', 'hod', 'faculty', 'staff', 'superadmin']}><AdminLayout /></ProtectedRoute>} />
+              {/* Student Registration (Public with Token) */}
+              <Route path="/student/register" element={<StudentRegister />} />
+              <Route path="/student/register/college/:collegeSlug" element={<StudentRegister />} />
+              <Route path="/student/register/:tokenParam" element={<StudentRegister />} />
 
-            {/* Student Portal Routes */}
-            <Route path="/student/*" element={<ProtectedRoute allowedRoles={['student', 'superadmin']}><StudentLayout /></ProtectedRoute>} />
-            
-            {/* Parent Portal Routes */}
-            <Route path="/parent/*" element={<ProtectedRoute allowedRoles={['parent', 'superadmin']}><ParentLayout /></ProtectedRoute>} />
-            
-            {/* Teacher Portal Routes */}
-            <Route path="/teacher/*" element={<ProtectedRoute allowedRoles={['teacher', 'hod', 'faculty', 'superadmin']}><TeacherLayout /></ProtectedRoute>} />
-            
-            {/* 404 Route */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-          <Toaster 
-            position="top-right" 
-            toastOptions={{
-              className: 'dark:bg-[#0A0F1C] dark:text-white border border-slate-200 dark:border-white/10 shadow-xl rounded-2xl font-sans',
-              style: {
-                padding: '16px',
-                color: '#0f172a',
-                fontWeight: '600',
-                borderRadius: '16px'
-              },
-              success: {
-                iconTheme: { primary: '#10b981', secondary: '#fff' },
-                style: { background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0' }
-              },
-              error: {
-                iconTheme: { primary: '#ef4444', secondary: '#fff' },
-                style: { background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }
-              }
-            }}
-          />
-        </Router>
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              {/* Teacher Registration — Step 1: teacher enters own email, gets setup link emailed */}
+              <Route path="/teacher/register" element={<TeacherRegister />} />
+              {/* Teacher Setup — Step 2: teacher creates password via emailed setup link */}
+              <Route path="/teacher/setup" element={<StaffSetup />} />
+              <Route path="/pending-approval" element={<PendingApproval />} />
+              <Route path="/rejected" element={<RejectedApproval />} />
+              <Route path="/dashboard" element={<ProtectedRoute><DashboardRedirect /></ProtectedRoute>} />
+
+              {/* Super Admin Routes */}
+              <Route path="/super/*" element={<ProtectedRoute allowedRoles={['superadmin']}><SuperAdminLayout /></ProtectedRoute>} />
+
+              {/* Admin/Staff Routes */}
+              <Route path="/admin/*" element={<ProtectedRoute allowedRoles={['admin', 'teacher', 'hod', 'faculty', 'staff', 'superadmin']}><AdminLayout /></ProtectedRoute>} />
+
+              {/* Student Portal Routes */}
+              <Route path="/student/*" element={<ProtectedRoute allowedRoles={['student', 'superadmin']}><StudentLayout /></ProtectedRoute>} />
+
+              {/* Parent Portal Routes */}
+              <Route path="/parent/*" element={<ProtectedRoute allowedRoles={['parent', 'superadmin']}><ParentLayout /></ProtectedRoute>} />
+
+              {/* Teacher Portal Routes */}
+              <Route path="/teacher/*" element={<ProtectedRoute allowedRoles={['teacher', 'hod', 'faculty', 'superadmin']}><TeacherLayout /></ProtectedRoute>} />
+
+              {/* 404 Route */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                className: 'dark:bg-[#0A0F1C] dark:text-white border border-slate-200 dark:border-white/10 shadow-xl rounded-2xl font-sans',
+                style: {
+                  padding: '16px',
+                  color: '#0f172a',
+                  fontWeight: '600',
+                  borderRadius: '16px'
+                },
+                success: {
+                  iconTheme: { primary: '#10b981', secondary: '#fff' },
+                  style: { background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0' }
+                },
+                error: {
+                  iconTheme: { primary: '#ef4444', secondary: '#fff' },
+                  style: { background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }
+                }
+              }}
+            />
+          </Router>
         </ConfirmProvider>
       </AuthProvider>
     </QueryClientProvider>

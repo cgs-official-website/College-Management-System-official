@@ -91,6 +91,37 @@ const CustomTrafficTooltip = ({ active, payload, label }) => {
   );
 };
 
+// Helper to transform raw paths into clean, human-readable operational actions
+const formatPipelineAction = (log) => {
+  if (log?.action) return log.action;
+
+  const path = (log?.path || '').toLowerCase();
+  if (path.includes('attendance/today') || path.includes('attendance/mark')) return 'Daily Attendance Sync';
+  if (path.includes('attendance')) return 'Attendance Verification';
+  if (path.includes('transport') || path.includes('bus') || path.includes('fleet') || path.includes('routes')) return 'Transport Route Dispatch';
+  if (path.includes('fees/invoices/verify')) return 'Fee Invoice Verification';
+  if (path.includes('fees')) return 'Fee Ledger Query';
+  if (path.includes('exams/schedule')) return 'Exam Schedule Query';
+  if (path.includes('exams')) return 'Examination Evaluation';
+  if (path.includes('courses/catalog') || path.includes('courses')) return 'Course Catalog Lookup';
+  if (path.includes('auth/session/heartbeat') || path.includes('heartbeat')) return 'Active Session Heartbeat';
+  if (path.includes('auth/login') || path.includes('login')) return 'User Authentication';
+  if (path.includes('library/borrowings') || path.includes('library')) return 'Library Book Circulation';
+  if (path.includes('students')) return 'Student Directory Query';
+  if (path.includes('timetable')) return 'Class Timetable Lookup';
+  if (path.includes('reports')) return 'Academic Performance Report';
+
+  if (path) {
+    const clean = path
+      .replace(/^\/api(\/v\d+)?\//i, '')
+      .replace(/[-_]/g, ' ')
+      .replace(/\//g, ' • ');
+    return clean.replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  return 'Live Telemetry Event';
+};
+
 export default function SuperTraffic() {
   const { colleges: registeredColleges = [] } = useColleges();
   const [activeTab, setActiveTab] = useState('traffic'); // 'traffic' | 'monitoring' | 'comparison'
@@ -109,7 +140,49 @@ export default function SuperTraffic() {
     latencyMs: 94,
     throughputKB: 840
   });
-  const [liveStreamLogs, setLiveStreamLogs] = useState([]);
+  const [liveStreamLogs, setLiveStreamLogs] = useState([
+    {
+      id: 'init-1',
+      timestamp: 'Just now',
+      method: 'POST',
+      action: 'Active Session Heartbeat',
+      module: 'Security',
+      collegeName: 'Campus Portal HQ',
+      status: 200,
+      latencyMs: 38
+    },
+    {
+      id: 'init-2',
+      timestamp: '3s ago',
+      method: 'GET',
+      action: 'Daily Attendance Sync',
+      module: 'Attendance',
+      collegeName: 'Campus Portal HQ',
+      status: 200,
+      latencyMs: 42
+    },
+    {
+      id: 'init-3',
+      timestamp: '6s ago',
+      method: 'POST',
+      action: 'Transport Route Dispatch',
+      module: 'Transport',
+      collegeName: 'Campus Portal HQ',
+      status: 200,
+      latencyMs: 35
+    },
+    {
+      id: 'init-4',
+      timestamp: '9s ago',
+      method: 'GET',
+      action: 'Fee Invoice Verification',
+      module: 'Fee Ledger',
+      collegeName: 'Campus Portal HQ',
+      status: 200,
+      latencyMs: 51
+    }
+  ]);
+  const [requestShareView, setRequestShareView] = useState('list'); // 'list' | 'chart'
 
   // Filters for Monitoring Table
   const [searchCollege, setSearchCollege] = useState('');
@@ -140,17 +213,16 @@ export default function SuperTraffic() {
         admins: c.users?.filter(u => u.role === 'admin')?.length || (c.users?.length ? 1 : 0)
       },
       activeModuleCount: 0,
-      totalModules: 9,
+      totalModules: 8,
       moduleAdoptionRate: 0,
       activityScore: 50,
       activityLevel: 'Moderate',
       moduleUsage: {
         attendance: { name: 'Attendance', count: 0, isActive: false, unit: 'Records' },
         fees: { name: 'Fee Ledger', count: 0, isActive: false, unit: 'Invoices' },
-        assignments: { name: 'Assignments', count: 0, isActive: false, unit: 'Tasks' },
+        transport: { name: 'Transport Fleet', count: 0, isActive: false, unit: 'Routes' },
         exams: { name: 'Examinations', count: 0, isActive: false, unit: 'Exams' },
         courses: { name: 'Courses & Depts', count: 0, isActive: false, unit: 'Programs' },
-        transport: { name: 'Transport', count: 0, isActive: false, unit: 'Routes' },
         hostel: { name: 'Hostel', count: 0, isActive: false, unit: 'Blocks' },
         library: { name: 'Library', count: 0, isActive: false, unit: 'Books' },
         store: { name: 'Campus Store', count: 0, isActive: false, unit: 'Sales' }
@@ -347,6 +419,19 @@ export default function SuperTraffic() {
     }
   }, [data?.timeline]);
 
+  // Sync initial live logs or real college names when data loads
+  useEffect(() => {
+    if (data?.collegeAnalysis?.length) {
+      const cols = data.collegeAnalysis;
+      setLiveStreamLogs((prev) =>
+        prev.map((l, idx) => ({
+          ...l,
+          collegeName: cols[idx % cols.length]?.name || l.collegeName
+        }))
+      );
+    }
+  }, [data?.collegeAnalysis]);
+
   // Real-time ticking stream engine (updates every 2.5s)
   useEffect(() => {
     if (!isLiveMode || activeTab !== 'traffic') return;
@@ -384,13 +469,15 @@ export default function SuperTraffic() {
       const cols = data?.collegeAnalysis?.length ? data.collegeAnalysis : [{ name: 'Campus Portal HQ', slug: 'hq' }];
       const randCol = cols[Math.floor(Math.random() * cols.length)];
       const sampleEndpoints = [
-        { method: 'GET', path: '/api/v1/attendance/today', module: 'Attendance' },
-        { method: 'POST', path: '/api/v1/lms/submissions', module: 'Assignments' },
-        { method: 'GET', path: '/api/v1/fees/invoices/verify', module: 'Fee Ledger' },
-        { method: 'GET', path: '/api/v1/exams/schedule', module: 'Examinations' },
-        { method: 'GET', path: '/api/v1/courses/catalog', module: 'Courses' },
-        { method: 'POST', path: '/api/v1/auth/session/heartbeat', module: 'Security' },
-        { method: 'GET', path: '/api/v1/library/borrowings', module: 'Library' }
+        { method: 'GET', action: 'Daily Attendance Sync', module: 'Attendance' },
+        { method: 'POST', action: 'Transport Route Dispatch', module: 'Transport' },
+        { method: 'GET', action: 'Fee Invoice Verification', module: 'Fee Ledger' },
+        { method: 'GET', action: 'Exam Schedule Query', module: 'Examinations' },
+        { method: 'GET', action: 'Course Catalog Lookup', module: 'Courses' },
+        { method: 'POST', action: 'Active Session Heartbeat', module: 'Security' },
+        { method: 'GET', action: 'Library Book Circulation', module: 'Library' },
+        { method: 'POST', action: 'Bus Fleet GPS Ping', module: 'Transport' },
+        { method: 'POST', action: 'Faculty Timetable Update', module: 'Scheduling' }
       ];
       const randEp = sampleEndpoints[Math.floor(Math.random() * sampleEndpoints.length)];
 
@@ -398,11 +485,11 @@ export default function SuperTraffic() {
         id: `${Date.now()}-${Math.random()}`,
         timestamp: timeStr,
         method: randEp.method,
-        path: randEp.path,
+        action: randEp.action,
         module: randEp.module,
         collegeName: randCol.name,
         status: 200,
-        latencyMs: Math.round(32 + Math.random() * 45)
+        latencyMs: Math.round(28 + Math.random() * 42)
       };
 
       setLiveStreamLogs((prev) => [newLog, ...prev.slice(0, 3)]);
@@ -464,19 +551,19 @@ export default function SuperTraffic() {
     if (!collegeA) return [];
     if (!collegeB || collegeB.id === collegeA.id) {
       return [
-        { module: 'Attendance', [collegeA.name]: collegeA.moduleUsage.attendance.count },
-        { module: 'Fees', [collegeA.name]: collegeA.moduleUsage.fees.count },
-        { module: 'Assignments', [collegeA.name]: collegeA.moduleUsage.assignments.count },
-        { module: 'Exams', [collegeA.name]: collegeA.moduleUsage.exams.count },
-        { module: 'Library', [collegeA.name]: Math.min(collegeA.moduleUsage.library.count, 2000) }
+        { module: 'Attendance', [collegeA.name]: collegeA.moduleUsage.attendance?.count || 0 },
+        { module: 'Fees', [collegeA.name]: collegeA.moduleUsage.fees?.count || 0 },
+        { module: 'Transport', [collegeA.name]: collegeA.moduleUsage.transport?.count || 0 },
+        { module: 'Exams', [collegeA.name]: collegeA.moduleUsage.exams?.count || 0 },
+        { module: 'Library', [collegeA.name]: Math.min(collegeA.moduleUsage.library?.count || 0, 2000) }
       ];
     }
     return [
-      { module: 'Attendance', [collegeA.name]: collegeA.moduleUsage.attendance.count, [collegeB.name]: collegeB.moduleUsage.attendance.count },
-      { module: 'Fees', [collegeA.name]: collegeA.moduleUsage.fees.count, [collegeB.name]: collegeB.moduleUsage.fees.count },
-      { module: 'Assignments', [collegeA.name]: collegeA.moduleUsage.assignments.count, [collegeB.name]: collegeB.moduleUsage.assignments.count },
-      { module: 'Exams', [collegeA.name]: collegeA.moduleUsage.exams.count, [collegeB.name]: collegeB.moduleUsage.exams.count },
-      { module: 'Library', [collegeA.name]: Math.min(collegeA.moduleUsage.library.count, 2000), [collegeB.name]: Math.min(collegeB.moduleUsage.library.count, 2000) }
+      { module: 'Attendance', [collegeA.name]: collegeA.moduleUsage.attendance?.count || 0, [collegeB.name]: collegeB.moduleUsage.attendance?.count || 0 },
+      { module: 'Fees', [collegeA.name]: collegeA.moduleUsage.fees?.count || 0, [collegeB.name]: collegeB.moduleUsage.fees?.count || 0 },
+      { module: 'Transport', [collegeA.name]: collegeA.moduleUsage.transport?.count || 0, [collegeB.name]: collegeB.moduleUsage.transport?.count || 0 },
+      { module: 'Exams', [collegeA.name]: collegeA.moduleUsage.exams?.count || 0, [collegeB.name]: collegeB.moduleUsage.exams?.count || 0 },
+      { module: 'Library', [collegeA.name]: Math.min(collegeA.moduleUsage.library?.count || 0, 2000), [collegeB.name]: Math.min(collegeB.moduleUsage.library?.count || 0, 2000) }
     ];
   }, [collegeA, collegeB]);
 
@@ -488,9 +575,9 @@ export default function SuperTraffic() {
       { subject: 'Engagement', A: collegeA.activityScore, ...(isSingle ? {} : { B: collegeB.activityScore }), fullMark: 100 },
       { subject: 'Module Adoption', A: collegeA.moduleAdoptionRate, ...(isSingle ? {} : { B: collegeB.moduleAdoptionRate }), fullMark: 100 },
       { subject: 'Users Scale', A: Math.min(100, Math.round((collegeA.users.total / 150) * 100)), ...(isSingle ? {} : { B: Math.min(100, Math.round((collegeB.users.total / 150) * 100)) }), fullMark: 100 },
-      { subject: 'Attendance', A: collegeA.moduleUsage.attendance.isActive ? 90 : 20, ...(isSingle ? {} : { B: collegeB.moduleUsage.attendance.isActive ? 90 : 20 }), fullMark: 100 },
-      { subject: 'Finance', A: collegeA.moduleUsage.fees.isActive ? 85 : 15, ...(isSingle ? {} : { B: collegeB.moduleUsage.fees.isActive ? 85 : 15 }), fullMark: 100 },
-      { subject: 'LMS Tasks', A: collegeA.moduleUsage.assignments.isActive ? 80 : 10, ...(isSingle ? {} : { B: collegeB.moduleUsage.assignments.isActive ? 80 : 10 }), fullMark: 100 }
+      { subject: 'Attendance', A: collegeA.moduleUsage.attendance?.isActive ? 90 : 20, ...(isSingle ? {} : { B: collegeB.moduleUsage.attendance?.isActive ? 90 : 20 }), fullMark: 100 },
+      { subject: 'Finance', A: collegeA.moduleUsage.fees?.isActive ? 85 : 15, ...(isSingle ? {} : { B: collegeB.moduleUsage.fees?.isActive ? 85 : 15 }), fullMark: 100 },
+      { subject: 'Transport', A: collegeA.moduleUsage.transport?.isActive ? 85 : 20, ...(isSingle ? {} : { B: collegeB.moduleUsage.transport?.isActive ? 85 : 20 }), fullMark: 100 }
     ];
   }, [collegeA, collegeB]);
 
@@ -551,11 +638,10 @@ export default function SuperTraffic() {
                   key={tab.id}
                   type="button"
                   onClick={() => setTimeRange(tab.id)}
-                  className={`px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
-                    timeRange === tab.id
+                  className={`px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${timeRange === tab.id
                       ? 'bg-white dark:bg-[#0A0F1C] text-primary-600 dark:text-primary-400 shadow-sm'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -595,33 +681,40 @@ export default function SuperTraffic() {
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          className="h-full flex flex-col justify-between bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group"
+          className="h-full flex flex-col justify-between bg-white dark:bg-[#0A0F1C] border border-slate-200/80 dark:border-white/10 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden group"
         >
           <div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
-                Colleges Monitored
-              </span>
-              <div className="w-9 h-9 rounded-xl bg-primary-500/10 text-primary-500 flex items-center justify-center shrink-0">
-                <Building2 className="w-4 h-4" />
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  Colleges Monitored
+                </p>
+                <h3 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1.5">
+                  {isLoading ? '...' : monitoring.colleges.total}
+                </h3>
+              </div>
+              <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-100/60 dark:border-blue-500/20 shadow-xs">
+                <Building2 className="w-5 h-5" />
               </div>
             </div>
-            <div className="mt-4 flex items-center justify-between gap-2">
-              <span className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                {isLoading ? '...' : monitoring.colleges.total}
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40 shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                {monitoring.colleges.active} Active
-              </span>
+
+            {/* Structured Details Box */}
+            <div className="mt-4 bg-slate-50/80 dark:bg-white/[0.03] rounded-xl p-3 border border-slate-100 dark:border-white/5 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Active Status</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-500/20">
+                  {monitoring.colleges.active} Active ({monitoring.colleges.activeRatePct}%)
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-200/50 dark:border-white/5">
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Trial & Setup</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                  {monitoring.colleges.trial} Colleges
+                </span>
+              </div>
             </div>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span className="truncate">{monitoring.colleges.trial} on Trial / Setup</span>
-            <span className="font-semibold text-primary-600 dark:text-primary-400 shrink-0 ml-2">
-              {monitoring.colleges.activeRatePct}% Active
-            </span>
-          </div>
+          <div className="absolute -bottom-8 -right-8 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />
         </motion.div>
 
         {/* Total & Active Users */}
@@ -629,33 +722,40 @@ export default function SuperTraffic() {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="h-full flex flex-col justify-between bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group"
+          className="h-full flex flex-col justify-between bg-white dark:bg-[#0A0F1C] border border-slate-200/80 dark:border-white/10 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden group"
         >
           <div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
-                Total Global Users
-              </span>
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                <Users className="w-4 h-4" />
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  Total Global Users
+                </p>
+                <h3 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1.5">
+                  {isLoading ? '...' : monitoring.users.total.toLocaleString()}
+                </h3>
+              </div>
+              <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-100/60 dark:border-emerald-500/20 shadow-xs">
+                <Users className="w-5 h-5" />
               </div>
             </div>
-            <div className="mt-4 flex items-center justify-between gap-2">
-              <span className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                {isLoading ? '...' : monitoring.users.total.toLocaleString()}
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40 shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                {monitoring.users.active.toLocaleString()} Active
-              </span>
+
+            {/* Structured Details Box */}
+            <div className="mt-4 bg-slate-50/80 dark:bg-white/[0.03] rounded-xl p-3 border border-slate-100 dark:border-white/5 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Students & Faculty</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                  {monitoring.users.students} Students {monitoring.users.teachers} Faculty
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-200/50 dark:border-white/5">
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Average Density</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-500/20">
+                  ~{monitoring.colleges.total > 0 ? Math.round(monitoring.users.total / monitoring.colleges.total) : 0} users / col
+                </span>
+              </div>
             </div>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span className="truncate">{monitoring.users.students} Students • {monitoring.users.teachers} Faculty</span>
-            <span className="font-semibold text-emerald-600 dark:text-emerald-400 shrink-0 ml-2">
-              ~{monitoring.colleges.total > 0 ? Math.round(monitoring.users.total / monitoring.colleges.total) : 0}/col
-            </span>
-          </div>
+          <div className="absolute -bottom-8 -right-8 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />
         </motion.div>
 
         {/* Total & Active College Admins */}
@@ -663,33 +763,40 @@ export default function SuperTraffic() {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="h-full flex flex-col justify-between bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group"
+          className="h-full flex flex-col justify-between bg-white dark:bg-[#0A0F1C] border border-slate-200/80 dark:border-white/10 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden group"
         >
           <div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
-                College Admins
-              </span>
-              <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center shrink-0">
-                <ShieldCheck className="w-4 h-4" />
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  College Admins
+                </p>
+                <h3 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1.5">
+                  {isLoading ? '...' : monitoring.admins.total}
+                </h3>
+              </div>
+              <div className="w-11 h-11 rounded-xl bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-100/60 dark:border-purple-500/20 shadow-xs">
+                <ShieldCheck className="w-5 h-5" />
               </div>
             </div>
-            <div className="mt-4 flex items-center justify-between gap-2">
-              <span className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                {isLoading ? '...' : monitoring.admins.total}
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400 border border-purple-200/60 dark:border-purple-800/40 shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                {monitoring.admins.active} Active
-              </span>
+
+            {/* Structured Details Box */}
+            <div className="mt-4 bg-slate-50/80 dark:bg-white/[0.03] rounded-xl p-3 border border-slate-100 dark:border-white/5 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Role Category</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                  Tenant Administrators
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-200/50 dark:border-white/5">
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Assigned Coverage</span>
+                <span className="font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-200/60 dark:border-purple-500/20">
+                  {monitoring.colleges.active} Institutions Assigned
+                </span>
+              </div>
             </div>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span className="truncate">Tenant Administrators</span>
-            <span className="font-semibold text-purple-600 dark:text-purple-400 shrink-0 ml-2">
-              {monitoring.colleges.active} Assigned
-            </span>
-          </div>
+          <div className="absolute -bottom-8 -right-8 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />
         </motion.div>
 
         {/* Network Traffic & Live Inflow */}
@@ -697,36 +804,43 @@ export default function SuperTraffic() {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
-          className="h-full flex flex-col justify-between bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group"
+          className="h-full flex flex-col justify-between bg-white dark:bg-[#0A0F1C] border border-slate-200/80 dark:border-white/10 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden group"
         >
           <div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
-                Network Telemetry
-              </span>
-              <div className="w-9 h-9 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0">
-                <Radio className="w-4 h-4 animate-pulse" />
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  Network Telemetry
+                </p>
+                <div className="flex items-baseline gap-1.5 mt-1.5">
+                  <h3 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                    {isLoading ? '...' : summary.avgLatencyMs}
+                  </h3>
+                  <span className="text-xs font-semibold text-slate-400">ms avg latency</span>
+                </div>
+              </div>
+              <div className="w-11 h-11 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-100/60 dark:border-rose-500/20 shadow-xs">
+                <Radio className="w-5 h-5" />
               </div>
             </div>
-            <div className="mt-4 flex items-center justify-between gap-2">
-              <div className="flex items-baseline gap-1">
-                <span className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                  {isLoading ? '...' : summary.avgLatencyMs}
+
+            {/* Structured Details Box */}
+            <div className="mt-4 bg-slate-50/80 dark:bg-white/[0.03] rounded-xl p-3 border border-slate-100 dark:border-white/5 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Bandwidth Consumed</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                  {summary.totalBandwidthGB} GB Bandwidth
                 </span>
-                <span className="text-xs text-slate-400 font-semibold">ms avg</span>
               </div>
-              <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200/60 dark:border-rose-800/40 shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                {summary.liveActiveSessions} Live
-              </span>
+              <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-200/50 dark:border-white/5">
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Health Status</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-500/20">
+                  Optimal Health
+                </span>
+              </div>
             </div>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span className="truncate">{summary.totalBandwidthGB} GB Bandwidth</span>
-            <span className="font-semibold text-rose-600 dark:text-rose-400 shrink-0 ml-2">
-              Optimal
-            </span>
-          </div>
+          <div className="absolute -bottom-8 -right-8 w-24 h-24 bg-rose-500/10 rounded-full blur-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />
         </motion.div>
       </div>
 
@@ -744,11 +858,10 @@ export default function SuperTraffic() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-all cursor-pointer ${
-                isActive
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-all cursor-pointer ${isActive
                   ? 'border-primary-600 text-primary-600 dark:text-primary-400'
                   : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
+                }`}
             >
               <Icon className="w-4 h-4" />
               <span>{tab.label}</span>
@@ -868,47 +981,78 @@ export default function SuperTraffic() {
 
             {/* Real-Time Request Pipeline */}
             <div className="mt-5 pt-4 border-t border-slate-100 dark:border-white/5">
-              <div className="flex items-center justify-between mb-2.5">
+              <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
-                  <Radio className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
+                  <div className="relative flex items-center justify-center">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping absolute opacity-75"></span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  </div>
                   <span>Real-Time Request Pipeline</span>
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    Live Stream
+                  </span>
                 </div>
-                <span className="text-[11px] text-slate-400">
-                  Live events across registered institutions
+                <span className="text-[11px] text-slate-400 font-medium">
+                  Live operational events across registered institutions
                 </span>
               </div>
 
-              <div className="space-y-1.5 font-mono text-xs">
+              <div className="space-y-2">
                 {liveStreamLogs.length > 0 ? (
                   liveStreamLogs.map((log) => (
                     <div
                       key={log.id}
-                      className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 transition-all"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-xl bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/10 transition-all shadow-xs"
                     >
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex flex-wrap items-center gap-2.5 min-w-0">
+                        {/* HTTP Method Badge */}
                         <span
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold tracking-wide uppercase font-mono border ${
                             log.method === 'POST'
-                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                              : 'bg-primary-500/10 text-primary-600 dark:text-primary-400'
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                              : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
                           }`}
                         >
                           {log.method}
                         </span>
-                        <span className="text-slate-800 dark:text-slate-200 font-semibold">{log.path}</span>
-                        <span className="text-[11px] font-sans px-2 py-0.5 rounded-md bg-slate-200/60 dark:bg-white/10 text-slate-700 dark:text-slate-300">
-                          {log.collegeName}
+
+                        {/* Human-Readable Action Name */}
+                        <span className="text-xs font-semibold text-slate-900 dark:text-white tracking-tight">
+                          {formatPipelineAction(log)}
+                        </span>
+
+                        {/* Module Pill */}
+                        {log.module && (
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
+                            {log.module}
+                          </span>
+                        )}
+
+                        {/* College Name Badge */}
+                        <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-md bg-white dark:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-white/10 flex items-center gap-1.5 shadow-2xs">
+                          <Building2 className="w-3 h-3 text-indigo-500 shrink-0" />
+                          <span className="truncate max-w-[220px]" title={log.collegeName}>
+                            {log.collegeName}
+                          </span>
                         </span>
                       </div>
-                      <div className="flex items-center gap-3 text-slate-400 font-sans text-[11px]">
-                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">200 OK</span>
-                        <span>{log.latencyMs}ms</span>
-                        <span className="text-slate-400">{log.timestamp}</span>
+
+                      {/* Right Telemetry Details */}
+                      <div className="flex items-center gap-2.5 text-[11px] text-slate-500 dark:text-slate-400 shrink-0 self-end sm:self-auto">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          200 OK
+                        </span>
+                        <span className="font-mono text-slate-600 dark:text-slate-300 font-medium">
+                          {log.latencyMs}ms
+                        </span>
+                        <span className="text-slate-400 font-mono text-[10px]">
+                          {log.timestamp}
+                        </span>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="text-xs text-slate-400 py-2 text-center font-sans">
+                  <div className="text-xs text-slate-400 py-3 text-center font-sans">
                     Streaming live request telemetry...
                   </div>
                 )}
@@ -919,7 +1063,7 @@ export default function SuperTraffic() {
           {/* Split: Leaderboard & Device Share */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
                 <div>
                   <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <Server className="w-5 h-5 text-indigo-500" />
@@ -929,42 +1073,137 @@ export default function SuperTraffic() {
                     Live proportional requests driven by registered institutions
                   </p>
                 </div>
+
+                <div className="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200/60 dark:border-white/10 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setRequestShareView('list')}
+                    className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                      requestShareView === 'list'
+                        ? 'bg-white dark:bg-[#0A0F1C] text-primary-600 dark:text-primary-400 shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    Leaderboard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRequestShareView('chart')}
+                    className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                      requestShareView === 'chart'
+                        ? 'bg-white dark:bg-[#0A0F1C] text-primary-600 dark:text-primary-400 shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    Bar Chart
+                  </button>
+                </div>
               </div>
 
-              <div className="h-64 w-full">
-                {(data?.collegeTrafficLeaderboard || []).length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={data?.collegeTrafficLeaderboard || []}
-                      layout="vertical"
-                      margin={{ top: 5, right: 30, left: 35, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="4 4" horizontal={false} stroke="currentColor" className="text-slate-200/80 dark:text-white/[0.06]" />
-                      <XAxis type="number" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)} />
-                      <YAxis
-                        type="category"
-                        dataKey="name"
-                        stroke="#94a3b8"
-                        fontSize={11}
-                        tickLine={false}
-                        axisLine={false}
-                        width={130}
-                        tickFormatter={(val) => (val.length > 16 ? val.substring(0, 16) + '...' : val)}
-                      />
-                      <RechartsTooltip
-                        formatter={(val) => [Number(val).toLocaleString(), 'Requests']}
-                        contentStyle={{ backgroundColor: '#0f172a', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#fff', fontSize: '12px' }}
-                      />
-                      <Bar dataKey="requests" name="Requests" fill="#6366f1" radius={[0, 6, 6, 0]} barSize={18} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400 text-xs">
-                    <Building2 className="w-8 h-8 text-slate-300 dark:text-slate-600 mb-2" />
-                    <p>No registered colleges in this project yet.</p>
-                  </div>
-                )}
-              </div>
+              {requestShareView === 'list' ? (
+                <div className="space-y-3.5 max-h-72 overflow-y-auto pr-1">
+                  {(data?.collegeTrafficLeaderboard || []).length > 0 ? (
+                    data.collegeTrafficLeaderboard.map((col, idx) => (
+                      <div
+                        key={col.id || idx}
+                        className="p-3 rounded-xl bg-slate-50/80 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 hover:border-slate-200 dark:hover:border-white/10 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-3 text-xs mb-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="w-5 h-5 rounded-md bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold text-[11px] flex items-center justify-center shrink-0">
+                              #{idx + 1}
+                            </span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200 text-sm truncate" title={col.name}>
+                              {col.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2.5 shrink-0">
+                            <span className="font-semibold text-slate-600 dark:text-slate-300">
+                              {Number(col.requests).toLocaleString()} req
+                            </span>
+                            <span className="font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200/50 dark:border-indigo-500/20 px-2 py-0.5 rounded-md text-[11px]">
+                              {col.percentage}% share
+                            </span>
+                          </div>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-slate-200/70 dark:bg-white/10 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-primary-500 to-blue-500 transition-all duration-500"
+                            style={{ width: `${Math.max(col.percentage, 5)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="h-48 flex flex-col items-center justify-center text-slate-400 text-xs">
+                      <Building2 className="w-8 h-8 text-slate-300 dark:text-slate-600 mb-2" />
+                      <p>No registered colleges in this project yet.</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="h-72 w-full">
+                  {(data?.collegeTrafficLeaderboard || []).length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={data?.collegeTrafficLeaderboard || []}
+                        layout="vertical"
+                        margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="4 4" horizontal={false} stroke="currentColor" className="text-slate-200/80 dark:text-white/[0.06]" />
+                        <XAxis
+                          type="number"
+                          stroke="#94a3b8"
+                          fontSize={11}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          stroke="#94a3b8"
+                          fontSize={12}
+                          fontWeight={600}
+                          tickLine={false}
+                          axisLine={false}
+                          width={220}
+                          interval={0}
+                          tick={({ x, y, payload }) => (
+                            <text
+                              x={x}
+                              y={y}
+                              dy={4}
+                              textAnchor="end"
+                              fill="currentColor"
+                              className="text-xs font-bold fill-slate-700 dark:fill-slate-300"
+                            >
+                              {payload.value.length > 26 ? payload.value.substring(0, 26) + '...' : payload.value}
+                            </text>
+                          )}
+                        />
+                        <RechartsTooltip
+                          formatter={(val) => [Number(val).toLocaleString(), 'Requests']}
+                          contentStyle={{
+                            backgroundColor: '#0f172a',
+                            borderRadius: '12px',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            color: '#fff',
+                            fontSize: '12px',
+                            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)'
+                          }}
+                        />
+                        <Bar dataKey="requests" name="Requests" fill="#6366f1" radius={[0, 6, 6, 0]} barSize={20} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 text-xs">
+                      <Building2 className="w-8 h-8 text-slate-300 dark:text-slate-600 mb-2" />
+                      <p>No registered colleges in this project yet.</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Devices & Browsers */}
@@ -1021,7 +1260,7 @@ export default function SuperTraffic() {
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search registered college name or slug..."
+                placeholder="Search registered college name..."
                 value={searchCollege}
                 onChange={(e) => setSearchCollege(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 text-sm rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -1070,10 +1309,10 @@ export default function SuperTraffic() {
                         col.activityScore >= 80
                           ? 'text-emerald-500 bg-emerald-500/10'
                           : col.activityScore >= 50
-                          ? 'text-primary-500 bg-primary-500/10'
-                          : col.activityScore >= 25
-                          ? 'text-amber-500 bg-amber-500/10'
-                          : 'text-rose-500 bg-rose-500/10';
+                            ? 'text-primary-500 bg-primary-500/10'
+                            : col.activityScore >= 25
+                              ? 'text-amber-500 bg-amber-500/10'
+                              : 'text-rose-500 bg-rose-500/10';
 
                       return (
                         <tr key={col.id} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors">
@@ -1086,39 +1325,42 @@ export default function SuperTraffic() {
                                 <h4 className="font-bold text-slate-900 dark:text-white leading-tight">
                                   {col.name}
                                 </h4>
-                                <span className="text-xs text-slate-400 font-mono">
-                                  slug: {col.slug}
-                                </span>
                               </div>
                             </div>
                           </td>
 
                           <td className="px-4 py-4 text-center">
                             <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                                col.status === 'active'
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${col.status === 'active'
                                   ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                                   : 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
-                              }`}
+                                }`}
                             >
                               {col.status}
                             </span>
                           </td>
 
-                          <td className="px-4 py-4">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2 text-xs">
-                                <span className="font-bold text-slate-900 dark:text-white">
-                                  {col.users.total} Total
+                          <td className="px-5 py-4 whitespace-nowrap">
+                            <div className="flex flex-col gap-1.5">
+                              <div className="flex items-baseline gap-2">
+                                <span className="font-extrabold text-slate-900 dark:text-white text-sm">
+                                  {col.users.total.toLocaleString()}
                                 </span>
-                                <span className="text-slate-400">•</span>
-                                <span className="text-purple-600 dark:text-purple-400 font-semibold">
-                                  {col.users.admins} Admins
+                                <span className="text-[11px] font-semibold text-slate-400">
+                                  Total Users
                                 </span>
                               </div>
-                              <p className="text-[11px] text-slate-400">
-                                {col.users.students} Students • {col.users.teachers} Faculty
-                              </p>
+                              <div className="flex items-center gap-1.5 text-[11px]">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 font-semibold border border-blue-200/60 dark:border-blue-500/20">
+                                  {col.users.students} Students
+                                </span>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold border border-emerald-200/60 dark:border-emerald-500/20">
+                                  {col.users.teachers} Faculty
+                                </span>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 font-semibold border border-purple-200/60 dark:border-purple-500/20">
+                                  {col.users.admins} {col.users.admins === 1 ? 'Admin' : 'Admins'}
+                                </span>
+                              </div>
                             </div>
                           </td>
 
@@ -1138,11 +1380,10 @@ export default function SuperTraffic() {
                               {Object.entries(col.moduleUsage).map(([k, m]) => (
                                 <span
                                   key={k}
-                                  className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all ${
-                                    m.isActive
+                                  className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all ${m.isActive
                                       ? 'bg-slate-100 dark:bg-white/10 text-slate-800 dark:text-slate-200'
                                       : 'bg-slate-50 dark:bg-white/[0.03] text-slate-400 line-through opacity-50'
-                                  }`}
+                                    }`}
                                   title={`${m.name}: ${m.count} ${m.unit}`}
                                 >
                                   {m.name}
@@ -1205,7 +1446,7 @@ export default function SuperTraffic() {
                 >
                   {collegeAnalysis.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name} ({c.slug})
+                      {c.name}
                     </option>
                   ))}
                 </select>
@@ -1222,7 +1463,7 @@ export default function SuperTraffic() {
                 >
                   {collegeAnalysis.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name} ({c.slug})
+                      {c.name}
                     </option>
                   ))}
                 </select>
@@ -1241,21 +1482,52 @@ export default function SuperTraffic() {
                     Multi-Dimensional Performance Radar
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Comparative score across engagement, adoption, LMS, finance, and attendance
+                    Comparative score across engagement, adoption, transport fleet, finance, and attendance
                   </p>
+
+                  {/* Prominent High-Visibility College Name Badges */}
+                  <div className="flex flex-wrap items-center gap-2.5 mt-3 pt-2.5 border-t border-slate-100 dark:border-white/5">
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200/80 dark:border-blue-500/30 shadow-xs">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-600 dark:bg-blue-400 shrink-0 shadow-sm" />
+                      <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
+                        {collegeA?.name}
+                      </span>
+                    </div>
+                    {collegeB && collegeB.id !== collegeA.id && (
+                      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-500/10 border border-purple-200/80 dark:border-purple-500/30 shadow-xs">
+                        <span className="w-2.5 h-2.5 rounded-full bg-purple-600 dark:bg-purple-400 shrink-0 shadow-sm" />
+                        <span className="text-xs font-bold text-purple-700 dark:text-purple-300">
+                          {collegeB?.name}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="h-72 w-full my-4">
+                <div className="h-72 w-full mt-2">
                   <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart data={comparisonRadarData}>
-                      <PolarGrid stroke="currentColor" className="text-slate-200 dark:text-white/10" />
-                      <PolarAngleAxis dataKey="subject" stroke="#94a3b8" fontSize={11} />
-                      <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#94a3b8" fontSize={10} />
-                      <Radar name={collegeA?.name} dataKey="A" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.45} />
+                    <RadarChart data={comparisonRadarData} cx="50%" cy="50%" outerRadius="62%">
+                      <PolarGrid stroke="currentColor" className="text-slate-200 dark:text-white/10" strokeDasharray="3 3" />
+                      <PolarAngleAxis
+                        dataKey="subject"
+                        stroke="#94a3b8"
+                        tick={{ fill: '#64748b', fontSize: 11, fontWeight: 600 }}
+                      />
+                      <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+                      <RechartsTooltip
+                        contentStyle={{
+                          backgroundColor: '#0f172a',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: '12px',
+                          color: '#fff',
+                          fontSize: '12px',
+                          boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)'
+                        }}
+                      />
+                      <Radar name={collegeA?.name} dataKey="A" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.4} strokeWidth={2} />
                       {collegeB && collegeB.id !== collegeA.id && (
-                        <Radar name={collegeB?.name} dataKey="B" stroke="#a855f7" fill="#a855f7" fillOpacity={0.4} />
+                        <Radar name={collegeB?.name} dataKey="B" stroke="#a855f7" fill="#a855f7" fillOpacity={0.35} strokeWidth={2} />
                       )}
-                      <Legend />
                     </RadarChart>
                   </ResponsiveContainer>
                 </div>
@@ -1271,16 +1543,33 @@ export default function SuperTraffic() {
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     User volume across students, faculty, and administrators
                   </p>
+
+                  {/* Prominent High-Visibility College Name Badges */}
+                  <div className="flex flex-wrap items-center gap-2.5 mt-3 pt-2.5 border-t border-slate-100 dark:border-white/5">
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200/80 dark:border-blue-500/30 shadow-xs">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-600 dark:bg-blue-400 shrink-0 shadow-sm" />
+                      <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
+                        {collegeA?.name}
+                      </span>
+                    </div>
+                    {collegeB && collegeB.id !== collegeA.id && (
+                      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-500/10 border border-purple-200/80 dark:border-purple-500/30 shadow-xs">
+                        <span className="w-2.5 h-2.5 rounded-full bg-purple-600 dark:bg-purple-400 shrink-0 shadow-sm" />
+                        <span className="text-xs font-bold text-purple-700 dark:text-purple-300">
+                          {collegeB?.name}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="h-72 w-full my-4">
+                <div className="h-72 w-full mt-2">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={comparisonUsersData} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="currentColor" className="text-slate-200/80 dark:text-white/[0.06]" />
                       <XAxis dataKey="category" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                       <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                       <RechartsTooltip contentStyle={{ backgroundColor: '#0f172a', borderRadius: '10px', color: '#fff' }} />
-                      <Legend />
                       <Bar dataKey={collegeA?.name} fill="#3b82f6" radius={[6, 6, 0, 0]} />
                       {collegeB && collegeB.id !== collegeA.id && (
                         <Bar dataKey={collegeB?.name} fill="#a855f7" radius={[6, 6, 0, 0]} />
@@ -1293,13 +1582,35 @@ export default function SuperTraffic() {
               {/* Module-by-Module Real Activity Comparison Chart */}
               <div className="lg:col-span-2 bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm">
                 <div className="mb-4">
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-primary-500" />
-                    Real Application Module Records Comparison
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Live operational volume across Attendance, Fees, LMS Tasks, Exams, and Library records
-                  </p>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 text-primary-500" />
+                        Real Application Module Records Comparison
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Live operational volume across Attendance, Fees, Transport, Exams, and Library records
+                      </p>
+                    </div>
+
+                    {/* Prominent High-Visibility College Name Badges */}
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200/80 dark:border-blue-500/30 shadow-xs">
+                        <span className="w-2.5 h-2.5 rounded-full bg-blue-600 dark:bg-blue-400 shrink-0 shadow-sm" />
+                        <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
+                          {collegeA?.name}
+                        </span>
+                      </div>
+                      {collegeB && collegeB.id !== collegeA.id && (
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-500/10 border border-purple-200/80 dark:border-purple-500/30 shadow-xs">
+                          <span className="w-2.5 h-2.5 rounded-full bg-purple-600 dark:bg-purple-400 shrink-0 shadow-sm" />
+                          <span className="text-xs font-bold text-purple-700 dark:text-purple-300">
+                            {collegeB?.name}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="h-72 w-full my-2">
@@ -1309,7 +1620,6 @@ export default function SuperTraffic() {
                       <XAxis dataKey="module" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                       <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                       <RechartsTooltip contentStyle={{ backgroundColor: '#0f172a', borderRadius: '10px', color: '#fff' }} />
-                      <Legend />
                       <Bar dataKey={collegeA?.name} fill="#3b82f6" radius={[6, 6, 0, 0]} />
                       {collegeB && collegeB.id !== collegeA.id && (
                         <Bar dataKey={collegeB?.name} fill="#a855f7" radius={[6, 6, 0, 0]} />
@@ -1350,10 +1660,10 @@ export default function SuperTraffic() {
                         { name: 'Faculty & Teachers', valA: collegeA?.users.teachers || 0, valB: collegeB?.users.teachers || 0, unit: 'faculty' },
                         { name: 'Module Adoption Rate', valA: collegeA?.moduleAdoptionRate || 0, valB: collegeB?.moduleAdoptionRate || 0, unit: '%' },
                         { name: 'Active Modules Deployed', valA: `${collegeA?.activeModuleCount || 0} / ${collegeA?.totalModules || 9}`, valB: `${collegeB?.activeModuleCount || 0} / ${collegeB?.totalModules || 9}`, rawA: collegeA?.activeModuleCount || 0, rawB: collegeB?.activeModuleCount || 0 },
-                        { name: 'Attendance Records', valA: collegeA?.moduleUsage.attendance.count || 0, valB: collegeB?.moduleUsage.attendance.count || 0, unit: 'records' },
-                        { name: 'Fee Ledger Invoices', valA: collegeA?.moduleUsage.fees.count || 0, valB: collegeB?.moduleUsage.fees.count || 0, unit: 'invoices' },
-                        { name: 'LMS Tasks & Assignments', valA: collegeA?.moduleUsage.assignments.count || 0, valB: collegeB?.moduleUsage.assignments.count || 0, unit: 'tasks' },
-                        { name: 'Examinations Created', valA: collegeA?.moduleUsage.exams.count || 0, valB: collegeB?.moduleUsage.exams.count || 0, unit: 'exams' },
+                        { name: 'Attendance Records', valA: collegeA?.moduleUsage.attendance?.count || 0, valB: collegeB?.moduleUsage.attendance?.count || 0, unit: 'records' },
+                        { name: 'Fee Ledger Invoices', valA: collegeA?.moduleUsage.fees?.count || 0, valB: collegeB?.moduleUsage.fees?.count || 0, unit: 'invoices' },
+                        { name: 'Campus Transport Routes', valA: collegeA?.moduleUsage.transport?.count || 0, valB: collegeB?.moduleUsage.transport?.count || 0, unit: 'routes' },
+                        { name: 'Examinations Created', valA: collegeA?.moduleUsage.exams?.count || 0, valB: collegeB?.moduleUsage.exams?.count || 0, unit: 'exams' },
                         { name: 'Overall Activity Score', valA: `${collegeA?.activityScore || 0} / 100`, valB: `${collegeB?.activityScore || 0} / 100`, rawA: collegeA?.activityScore || 0, rawB: collegeB?.activityScore || 0 }
                       ].map((row, idx) => {
                         const numA = row.rawA !== undefined ? row.rawA : Number(row.valA);
@@ -1372,13 +1682,12 @@ export default function SuperTraffic() {
                               </td>
                             )}
                             <td className="px-5 py-3 text-right">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
-                                leader === collegeA?.name
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${leader === collegeA?.name
                                   ? 'bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400'
                                   : leader === collegeB?.name
-                                  ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400'
-                                  : 'bg-slate-100 dark:bg-white/10 text-slate-500'
-                              }`}>
+                                    ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400'
+                                    : 'bg-slate-100 dark:bg-white/10 text-slate-500'
+                                }`}>
                                 {leader}
                               </span>
                             </td>

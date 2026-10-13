@@ -87,8 +87,9 @@ const escapeHtml = (value = '') => String(value)
 
 // ---------------------------------------------------------------------------
 // Base HTML layout (wraps both DB templates and built-in fallbacks)
-// ---------------------------------------------------------------------------
-const baseTemplate = (content, title = 'Zuna ERP') => `
+const baseTemplate = (content, title = '') => {
+  const displayTitle = (title && title !== 'Zuna ERP') ? title : 'College Management System';
+  return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -118,7 +119,7 @@ const baseTemplate = (content, title = 'Zuna ERP') => `
     .header h1 {
       color: #ffffff;
       margin: 0;
-      font-size: 24px;
+      font-size: 22px;
       font-weight: 700;
       letter-spacing: -0.025em;
     }
@@ -161,18 +162,19 @@ const baseTemplate = (content, title = 'Zuna ERP') => `
 <body>
   <div class="container">
     <div class="header">
-      <h1>${escapeHtml(title)}</h1>
+      <h1>${escapeHtml(displayTitle)}</h1>
     </div>
     <div class="content">
       ${content}
     </div>
     <div class="footer">
-      <p>This is an automated message from Zuna ERP College Management System.</p>
+      <p>This is an automated message from ${escapeHtml(displayTitle)}.</p>
     </div>
   </div>
 </body>
 </html>
 `;
+};
 
 // ---------------------------------------------------------------------------
 // Built-in fallback templates
@@ -181,13 +183,14 @@ const baseTemplate = (content, title = 'Zuna ERP') => `
 // ---------------------------------------------------------------------------
 const FALLBACK_TEMPLATES = {
   'Teacher Account Setup': {
-    subject: 'Set up your Zuna ERP teacher account',
+    subject: (vars) => vars?.collegeName ? `Set up your teacher account - ${vars.collegeName}` : 'Set up your teacher account',
     buildHtml: (vars) => `
       <h2 style="color: #0f172a; margin-top: 0;">Welcome, ${escapeHtml(vars.name || 'Teacher')}!</h2>
-      <p>Your teacher account has been created for ${escapeHtml(vars.collegeName || 'your college')}.</p>
+      <p>Your teacher account has been created for <strong>${escapeHtml(vars.collegeName || 'your college')}</strong>.</p>
 
       <div class="highlight" style="text-align: left; font-family: sans-serif; font-size: 14px; letter-spacing: normal;">
         <div style="margin-bottom: 8px;"><strong>Teacher ID:</strong> ${escapeHtml(vars.teacherId)}</div>
+        ${vars.collegeName ? `<div style="margin-bottom: 8px;"><strong>College:</strong> ${escapeHtml(vars.collegeName)}</div>` : ''}
         <div><strong>Email:</strong> ${escapeHtml(vars.email)}</div>
       </div>
 
@@ -201,23 +204,26 @@ const FALLBACK_TEMPLATES = {
         If the button doesn't work, copy this setup link into your browser:<br>
         <a href="${escapeHtml(vars.setupUrl)}">${escapeHtml(vars.setupUrl)}</a>
       </p>
+      <p style="font-size: 13px; color: #64748b; margin-top: 12px;">
+        Sent on behalf of ${escapeHtml(vars.collegeName || 'your institution')}.
+      </p>
     `
   },
   'Student Welcome': {
-    subject: 'Welcome to Zuna ERP',
+    subject: (vars) => vars?.collegeName ? `Welcome to ${vars.collegeName}` : 'Welcome to College Management System',
     buildHtml: (vars) => `
-      <h2 style="color: #0f172a; margin-top: 0;">Welcome to Zuna ERP, ${vars.name || 'Student'}!</h2>
-      <p>Your account has been successfully created. You can now log in to the system using the following credentials:</p>
+      <h2 style="color: #0f172a; margin-top: 0;">Welcome, ${escapeHtml(vars.name || 'Student')}!</h2>
+      <p>Your student account has been successfully created${vars.collegeName ? ` for <strong>${escapeHtml(vars.collegeName)}</strong>` : ''}. You can now log in using the credentials below:</p>
 
       <div class="highlight" style="text-align: left; font-family: sans-serif; font-size: 14px; letter-spacing: normal;">
-        <div style="margin-bottom: 8px;"><strong>Email:</strong> ${vars.email}</div>
-        <div><strong>Your Password:</strong> ${vars.password}</div>
+        <div style="margin-bottom: 8px;"><strong>Email:</strong> ${escapeHtml(vars.email)}</div>
+        <div><strong>Your Password:</strong> ${escapeHtml(vars.password)}</div>
       </div>
 
       <p>We strongly recommend changing your password after your first login.</p>
 
       <div style="text-align: center;">
-        <a href="${vars.loginUrl || '#'}" class="button">Log In to Your Account</a>
+        <a href="${escapeHtml(vars.loginUrl || '#')}" class="button">Log In to Your Account</a>
       </div>
     `
   },
@@ -225,11 +231,11 @@ const FALLBACK_TEMPLATES = {
     subject: 'Password Reset Request',
     buildHtml: (vars) => `
       <h2 style="color: #0f172a; margin-top: 0;">Reset Your Password</h2>
-      <p>Hello ${vars.name || ''},</p>
+      <p>Hello ${escapeHtml(vars.name || '')},</p>
       <p>We received a request to reset your password. Click the button below to choose a new password.</p>
 
       <div style="text-align: center;">
-        <a href="${vars.resetUrl || vars.resetLink || '#'}" class="button">Reset Password</a>
+        <a href="${escapeHtml(vars.resetUrl || vars.resetLink || '#')}" class="button">Reset Password</a>
       </div>
 
       <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
@@ -239,10 +245,10 @@ const FALLBACK_TEMPLATES = {
     `
   },
   'Admin Welcome': {
-    subject: 'Welcome to Zuna ERP - College Admin',
+    subject: (vars) => vars?.collegeName ? `Welcome to ${vars.collegeName} - College Admin` : 'Welcome - College Admin',
     buildHtml: (vars) => `
-      <h2 style="color: #0f172a; margin-top: 0;">Welcome to Zuna ERP, ${escapeHtml(vars.name || 'Admin')}!</h2>
-      <p>Your college admin account has been successfully created. You can now log in using the credentials below:</p>
+      <h2 style="color: #0f172a; margin-top: 0;">Welcome, ${escapeHtml(vars.name || 'Admin')}!</h2>
+      <p>Your college admin account has been successfully created${vars.collegeName ? ` for <strong>${escapeHtml(vars.collegeName)}</strong>` : ''}. You can now log in using the credentials below:</p>
 
       <div class="highlight" style="text-align: left; font-family: sans-serif; font-size: 14px; letter-spacing: normal;">
         <div style="margin-bottom: 8px;"><strong>Email:</strong> ${escapeHtml(vars.email)}</div>
@@ -255,13 +261,13 @@ const FALLBACK_TEMPLATES = {
     `
   },
   'Salary Processed': {
-    subject: 'Salary Processed Notification',
+    subject: (vars) => vars?.collegeName ? `Salary Processed Notification - ${vars.collegeName} (${vars.month || ''} ${vars.year || ''})` : 'Salary Processed Notification',
     buildHtml: (vars) => `
       <h2 style="color: #0f172a; margin-top: 0;">Hello ${escapeHtml(vars.staffName || 'Staff')},</h2>
-      <p>Your salary for <strong>${escapeHtml(vars.month || '')} ${escapeHtml(vars.year || '')}</strong> has been processed on ${escapeHtml(vars.paymentDate || '')}.</p>
+      <p>Your salary from <strong>${escapeHtml(vars.collegeName || 'the college')}</strong> for <strong>${escapeHtml(vars.month || '')} ${escapeHtml(vars.year || '')}</strong> has been processed on ${escapeHtml(vars.paymentDate || '')}.</p>
       <p>Net Pay: <strong>${escapeHtml(vars.netPay || '')}</strong></p>
       <p>Your payslip details have been updated in your staff portal.</p>
-      <p>Regards,<br/>${escapeHtml(vars.collegeName || 'Zuna ERP')}</p>
+      <p>Regards,<br/><strong>${escapeHtml(vars.collegeName || 'College Administration')}</strong></p>
     `
   },
   'Low Stock Alert': {
@@ -282,12 +288,14 @@ const FALLBACK_TEMPLATES = {
 // ---------------------------------------------------------------------------
 // Core sendMail — wraps nodemailer.sendMail with proper logging
 // ---------------------------------------------------------------------------
-export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo, attachments }) => {
+export const sendMail = async ({ to, subject, html, text, fromName, cc, bcc, replyTo, attachments }) => {
   try {
     const textContent = text || (html ? html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '');
 
     // For Gmail SMTP, 'from' should align with the authenticated SMTP_USER to avoid DMARC/SPF rejection
-    const defaultSender = process.env.FROM_EMAIL || (process.env.SMTP_USER ? `"Zuna ERP" <${process.env.SMTP_USER}>` : '"Zuna ERP" <noreply@zuna.edu>');
+    const senderEmail = process.env.SMTP_USER || (process.env.FROM_EMAIL ? (process.env.FROM_EMAIL.match(/<([^>]+)>/)?.[1] || process.env.FROM_EMAIL) : 'noreply@zuna.edu');
+    const senderDisplayName = fromName || (process.env.FROM_EMAIL ? process.env.FROM_EMAIL.replace(/<.*>/, '').replace(/"/g, '').trim() : 'College Management System');
+    const defaultSender = `"${senderDisplayName}" <${senderEmail}>`;
 
     const mailOptions = {
       from: defaultSender,
@@ -311,7 +319,7 @@ export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo, atta
       freshTransporter.close();
     }
 
-    console.log(`[EmailService] ✅ Email sent successfully to: ${to} | Subject: "${subject}" | MessageId: ${info.messageId}`);
+    console.log(`[EmailService] ✅ Email sent successfully to: ${to} | Subject: "${subject}" | Sender: "${senderDisplayName}" | MessageId: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
     // Log the Nodemailer error code/message for debugging — never log credentials
@@ -341,6 +349,7 @@ export const sendDynamicMail = async ({
   templateName,
   variables = {},
   headerTitle,
+  fromName,
   cc,
   bcc,
   replyTo,
@@ -349,6 +358,9 @@ export const sendDynamicMail = async ({
   try {
     let subject;
     let htmlContent;
+    // Always prioritize the sending college's name for the banner header
+    const resolvedTitle = variables.collegeName || headerTitle || 'College Management System';
+    const resolvedFromName = variables.collegeName || fromName || undefined;
 
     // --- Try loading template from database first ---
     const template = await prisma.emailTemplate.findFirst({
@@ -385,10 +397,10 @@ export const sendDynamicMail = async ({
           htmlContent = htmlContent.replace(regex, String(value ?? ''));
         }
 
-        const fullHtml = baseTemplate(htmlContent, headerTitle || 'Zuna ERP');
+        const fullHtml = baseTemplate(htmlContent, resolvedTitle);
         console.log(`[EmailService] Using DB template: "${templateName}"`);
 
-        return await sendMail({ to, subject, html: fullHtml, cc, bcc, replyTo, attachments });
+        return await sendMail({ to, subject, html: fullHtml, fromName: resolvedFromName, cc, bcc, replyTo, attachments });
       }
     }
 
@@ -410,10 +422,15 @@ export const sendDynamicMail = async ({
       );
     }
 
-    subject = fallback.subject;
-    htmlContent = baseTemplate(fallback.buildHtml(variables), headerTitle || 'Zuna ERP');
+    subject = typeof fallback.subject === 'function' ? fallback.subject(variables) : fallback.subject;
+    for (const [key, value] of Object.entries(variables)) {
+      const regex = new RegExp(`{{${key}}}`, 'g');
+      subject = subject.replace(regex, String(value ?? ''));
+    }
 
-    return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo, attachments });
+    htmlContent = baseTemplate(fallback.buildHtml(variables), resolvedTitle);
+
+    return await sendMail({ to, subject, html: htmlContent, fromName: resolvedFromName, cc, bcc, replyTo, attachments });
 
   } catch (error) {
     console.error(

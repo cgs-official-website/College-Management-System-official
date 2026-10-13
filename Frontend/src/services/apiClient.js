@@ -31,6 +31,8 @@ const routeRoles = () => {
   if (pathname === '/parent' || pathname.startsWith('/parent/')) return ['parent', 'superadmin'];
   if (pathname === '/super' || pathname.startsWith('/super/')) return ['superadmin'];
   if (pathname === '/dashboard') return ['admin', 'student', 'teacher', 'hod', 'faculty', 'staff', 'parent', 'superadmin'];
+  if (pathname === '/pending-approval' || pathname.startsWith('/pending-approval')) return ['admin', 'staff', 'teacher', 'hod', 'faculty', 'superadmin'];
+  if (pathname === '/rejected' || pathname.startsWith('/rejected')) return ['admin', 'staff', 'teacher', 'hod', 'faculty', 'superadmin'];
   if (pathname === '/login' && new URLSearchParams(search).has('college')) return ['student'];
   return [];
 };
@@ -77,12 +79,22 @@ export const getAuthSessionForCurrentRoute = (preferredRole) => {
   const legacyToken = localStorage.getItem('zuna_token');
   const legacyRefreshToken = localStorage.getItem('zuna_refresh');
   const legacyRole = localStorage.getItem('zuna_session_role') || roleFromToken(legacyToken || '');
-  if (legacyRole && allowedRoles.includes(legacyRole) && (legacyToken || legacyRefreshToken)) {
+  if (legacyRole && (allowedRoles.length === 0 || allowedRoles.includes(legacyRole)) && (legacyToken || legacyRefreshToken)) {
     storeAuthSession(legacyRole, legacyToken, legacyRefreshToken);
     localStorage.removeItem('zuna_token');
     localStorage.removeItem('zuna_refresh');
     localStorage.removeItem('zuna_session_role');
     return { role: legacyRole, token: legacyToken, refreshToken: legacyRefreshToken };
+  }
+
+  // Fallback: If route has no specific role restrictions, check all known roles for an active session
+  if (!preferredRole && allowedRoles.length === 0) {
+    const fallbackRoles = ['admin', 'superadmin', 'staff', 'teacher', 'hod', 'faculty', 'student', 'parent'];
+    for (const role of fallbackRoles) {
+      const token = localStorage.getItem(tokenKey(role));
+      const refreshToken = localStorage.getItem(refreshKey(role));
+      if (token || refreshToken) return { role, token, refreshToken };
+    }
   }
 
   return null;

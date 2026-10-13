@@ -117,12 +117,6 @@ export const getTrafficAnalytics = async (req, res) => {
           isActive: (counts.fees || 0) > 0,
           unit: 'Invoices'
         },
-        assignments: {
-          name: 'Assignments',
-          count: counts.assignments || 0,
-          isActive: (counts.assignments || 0) > 0,
-          unit: 'Tasks'
-        },
         exams: {
           name: 'Examinations',
           count: counts.exams || 0,
@@ -169,7 +163,7 @@ export const getTrafficAnalytics = async (req, res) => {
       const rawScore =
         (counts.attendance || 0) * 0.4 +
         (counts.fees || 0) * 1.5 +
-        (counts.assignments || 0) * 3 +
+        (counts.transportRoutes || 0) * 4 +
         (counts.exams || 0) * 5 +
         totalUsers * 4;
 
@@ -306,14 +300,14 @@ export const getTrafficAnalytics = async (req, res) => {
     // Live Request Logs
     const collegeCount = collegeAnalysis.length;
     const liveLogs = collegeCount > 0 ? [
-      { id: '1', timestamp: new Date().toLocaleTimeString(), method: 'POST', path: '/api/v1/attendance/mark', collegeName: collegeAnalysis[0 % collegeCount].name, status: 200, latencyMs: 42, ipAddress: '192.168.1.14' },
-      { id: '2', timestamp: new Date(Date.now() - 15000).toLocaleTimeString(), method: 'GET', path: '/api/v1/students', collegeName: collegeAnalysis[1 % collegeCount].name, status: 200, latencyMs: 88, ipAddress: '192.168.1.28' },
-      { id: '3', timestamp: new Date(Date.now() - 32000).toLocaleTimeString(), method: 'POST', path: '/api/v1/auth/login', collegeName: collegeAnalysis[0 % collegeCount].name, status: 200, latencyMs: 124, ipAddress: '192.168.2.11' },
-      { id: '4', timestamp: new Date(Date.now() - 55000).toLocaleTimeString(), method: 'GET', path: '/api/v1/fees', collegeName: collegeAnalysis[(collegeCount - 1) % collegeCount].name, status: 200, latencyMs: 64, ipAddress: '192.168.3.45' },
-      { id: '5', timestamp: new Date(Date.now() - 80000).toLocaleTimeString(), method: 'GET', path: '/api/v1/timetable', collegeName: collegeAnalysis[0 % collegeCount].name, status: 200, latencyMs: 35, ipAddress: '192.168.1.89' },
-      { id: '6', timestamp: new Date(Date.now() - 110000).toLocaleTimeString(), method: 'GET', path: '/api/v1/courses', collegeName: collegeAnalysis[0 % collegeCount].name, status: 200, latencyMs: 19, ipAddress: '172.16.0.4' },
-      { id: '7', timestamp: new Date(Date.now() - 140000).toLocaleTimeString(), method: 'GET', path: '/api/v1/reports', collegeName: collegeAnalysis[1 % collegeCount].name, status: 200, latencyMs: 152, ipAddress: '192.168.1.72' },
-      { id: '8', timestamp: new Date(Date.now() - 180000).toLocaleTimeString(), method: 'POST', path: '/api/v1/exams', collegeName: collegeAnalysis[(collegeCount - 1) % collegeCount].name, status: 200, latencyMs: 91, ipAddress: '192.168.2.66' }
+      { id: '1', timestamp: new Date().toLocaleTimeString(), method: 'POST', action: 'Daily Attendance Sync', path: '/api/v1/attendance/mark', module: 'Attendance', collegeName: collegeAnalysis[0 % collegeCount].name, status: 200, latencyMs: 42, ipAddress: '192.168.1.14' },
+      { id: '2', timestamp: new Date(Date.now() - 15000).toLocaleTimeString(), method: 'GET', action: 'Student Directory Query', path: '/api/v1/students', module: 'Students', collegeName: collegeAnalysis[1 % collegeCount].name, status: 200, latencyMs: 88, ipAddress: '192.168.1.28' },
+      { id: '3', timestamp: new Date(Date.now() - 32000).toLocaleTimeString(), method: 'POST', action: 'Active Session Heartbeat', path: '/api/v1/auth/login', module: 'Security', collegeName: collegeAnalysis[0 % collegeCount].name, status: 200, latencyMs: 124, ipAddress: '192.168.2.11' },
+      { id: '4', timestamp: new Date(Date.now() - 55000).toLocaleTimeString(), method: 'GET', action: 'Fee Invoice Verification', path: '/api/v1/fees', module: 'Fee Ledger', collegeName: collegeAnalysis[(collegeCount - 1) % collegeCount].name, status: 200, latencyMs: 64, ipAddress: '192.168.3.45' },
+      { id: '5', timestamp: new Date(Date.now() - 80000).toLocaleTimeString(), method: 'GET', action: 'Class Timetable Lookup', path: '/api/v1/timetable', module: 'Scheduling', collegeName: collegeAnalysis[0 % collegeCount].name, status: 200, latencyMs: 35, ipAddress: '192.168.1.89' },
+      { id: '6', timestamp: new Date(Date.now() - 110000).toLocaleTimeString(), method: 'GET', action: 'Course Catalog Lookup', path: '/api/v1/courses', module: 'Courses', collegeName: collegeAnalysis[0 % collegeCount].name, status: 200, latencyMs: 19, ipAddress: '172.16.0.4' },
+      { id: '7', timestamp: new Date(Date.now() - 140000).toLocaleTimeString(), method: 'GET', action: 'Academic Performance Report', path: '/api/v1/reports', module: 'Reports', collegeName: collegeAnalysis[1 % collegeCount].name, status: 200, latencyMs: 152, ipAddress: '192.168.1.72' },
+      { id: '8', timestamp: new Date(Date.now() - 180000).toLocaleTimeString(), method: 'POST', action: 'Examination Evaluation', path: '/api/v1/exams', module: 'Examinations', collegeName: collegeAnalysis[(collegeCount - 1) % collegeCount].name, status: 200, latencyMs: 91, ipAddress: '192.168.2.66' }
     ] : [];
 
     res.json({
