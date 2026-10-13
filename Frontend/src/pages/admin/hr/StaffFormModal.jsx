@@ -1,26 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import { Loader2 } from 'lucide-react';
 import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { useDepartments } from '../../../hooks/useDepartments';
+import { useRoles } from '../../../hooks/useRoles';
 import { CustomFieldsSection } from '../../../modules/builder/CustomFieldsSection';
-import { api } from '../../../services/apiClient';
 
 export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading }) {
   const { departments } = useDepartments();
-  const [roles, setRoles] = useState([]);
-  
-  useEffect(() => {
-    if (isOpen) {
-      api.get('/roles').then(res => {
-        if (res.data) {
-          setRoles(res.data);
-        }
-      }).catch(err => console.error("Failed to fetch roles", err));
-    }
-  }, [isOpen]);
+  const { roles, isLoading: isLoadingRoles, refetch: refetchRoles } = useRoles();
 
   const { register, handleSubmit, reset, watch, setValue, getValues, formState: { errors } } = useForm({
     defaultValues: initialData || {
@@ -32,7 +23,7 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
       role: 'staff',
       customRoleId: '',
       staffType: 'teaching',
-      department: '',
+      departmentId: '',
       joinDate: new Date().toISOString().split('T')[0],
       status: 'active',
       customFields: {}
@@ -58,12 +49,14 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
 
   useEffect(() => {
     if (isOpen) {
+      refetchRoles();
+      const isNonTeaching = initialData?.staffType === 'non-teaching' || initialData?.role === 'staff';
       reset(initialData ? {
         ...initialData,
         teacherId: initialData.teacherId || '',
         customRoleId: initialData.customRoleId || '',
-        // Detect teaching staff: has a departmentId, or existing staffType field
-        staffType: initialData.staffType || (initialData.departmentId ? 'teaching' : 'non-teaching'),
+        staffType: isNonTeaching ? 'non-teaching' : 'teaching',
+        departmentId: initialData.departmentId || '',
         customFields: initialData.customFields || {},
       } : {
         firstName: '',
@@ -74,31 +67,33 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
         role: 'staff',
         customRoleId: '',
         staffType: 'teaching',
-        department: '',
+        departmentId: '',
         joinDate: new Date().toISOString().split('T')[0],
         status: 'active',
         customFields: {}
       });
     }
-  }, [isOpen, initialData, reset]);
+  }, [isOpen, initialData, reset, refetchRoles]);
 
   const onFormSubmit = (data) => {
+    const isNonTeaching = data.staffType === 'non-teaching';
     const selectedRole = roles.find(r => r.id === data.customRoleId);
-    const designation = selectedRole ? selectedRole.name : 'Staff';
+    const designation = selectedRole ? selectedRole.name : (isNonTeaching ? 'Staff' : 'Teacher');
 
     const TEACHING_ROLES = ['teacher', 'hod', 'faculty'];
     const keepExisting = initialData && TEACHING_ROLES.includes(initialData.role);
 
     const payload = {
       ...data,
-      role: data.staffType === 'non-teaching' ? 'staff' : (keepExisting ? initialData.role : 'teacher'),
-      name: `${data.firstName} ${data.lastName}`.trim(),
+      staffType: isNonTeaching ? 'non-teaching' : 'teaching',
+      role: isNonTeaching ? 'staff' : (keepExisting ? initialData.role : (data.role && data.role !== 'staff' ? data.role : 'teacher')),
+      name: `${data.firstName || ''} ${data.lastName || ''}`.trim(),
       designation: designation,
       customRoleId: data.customRoleId || null,
-      teacherId: data.teacherId.trim(),
+      teacherId: (data.teacherId || '').trim(),
     };
     
-    if (data.staffType === 'non-teaching') {
+    if (isNonTeaching) {
       delete payload.departmentId;
     }
 
@@ -176,16 +171,16 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
             />
             <div className="space-y-1.5">
               <label htmlFor="teacherId" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Teacher ID <span className="text-red-500">*</span>
+                {staffType === 'non-teaching' ? 'Staff ID' : 'Teacher ID'} <span className="text-red-500">*</span>
               </label>
               <input
                 id="teacherId"
                 type="text"
-                placeholder="e.g. TCH001"
+                placeholder={staffType === 'non-teaching' ? 'e.g. STF001' : 'e.g. TCH001'}
                 {...register('teacherId', {
-                  required: 'Teacher ID is required.',
+                  required: staffType === 'non-teaching' ? 'Staff ID is required.' : 'Teacher ID is required.',
                   validate: (val) =>
-                    val.trim().length > 0 || 'Teacher ID is required.'
+                    val.trim().length > 0 || (staffType === 'non-teaching' ? 'Staff ID is required.' : 'Teacher ID is required.')
                 })}
                 className={`w-full px-4 py-2.5 bg-white dark:bg-[#0A0F1C] border rounded-xl text-sm transition-all duration-200 focus:outline-none focus:ring-2 font-mono text-slate-900 dark:text-white placeholder-slate-400 ${
                   errors.teacherId
@@ -212,39 +207,82 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
                 { value: 'non-teaching', label: 'Non-Teaching Staff' }
               ]}
             />
-            <div className="space-y-1">
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Role / Designation</label>
-              <select
-                {...register('customRoleId')}
-                className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white"
-              >
-                <option value="">Standard Staff (No special permissions)</option>
-                {filteredRoles.map(r => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
-                ))}
-              </select>
-              {filteredRoles.length === 0 && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  No {staffType === 'teaching' ? 'teaching' : 'non-teaching'} roles yet. Create one under Roles & Permissions.
-                </p>
-              )}
-            </div>
-            
-            {staffType === 'teaching' && (
+            {staffType === 'non-teaching' ? (
               <div className="space-y-1">
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Department</label>
-                <select 
-                  {...register('departmentId', { required: "Department is required for teaching staff" })}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white"
-                >
-                  <option value="">Select a Department</option>
-                  {departments?.map(d => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                </select>
-                {errors.departmentId && <p className="text-red-500 text-sm mt-1">{errors.departmentId.message}</p>}
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  Role <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <select 
+                    {...register('customRoleId', { 
+                      required: 'Role is required for non-teaching staff.' 
+                    })}
+                    disabled={isLoadingRoles}
+                    className={`w-full px-4 py-3 bg-white dark:bg-[#020813] border rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white ${
+                      errors.customRoleId ? 'border-red-500' : 'border-slate-200 dark:border-white/10'
+                    }`}
+                  >
+                    <option value="">
+                      {isLoadingRoles ? 'Loading roles...' : 'Select a Role'}
+                    </option>
+                    {filteredRoles.map(r => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                  {isLoadingRoles && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                    </div>
+                  )}
+                </div>
+                {errors.customRoleId && (
+                  <p className="text-red-500 text-sm mt-1">{errors.customRoleId.message}</p>
+                )}
+                {!isLoadingRoles && filteredRoles.length === 0 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    No roles yet. Create one in Roles & Permissions.
+                  </p>
+                )}
               </div>
+            ) : (
+              <>
+                <div className="space-y-1">
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Role / Designation</label>
+                  <select 
+                    {...register('customRoleId')}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white"
+                  >
+                    <option value="">Teacher (Standard)</option>
+                    {filteredRoles.map(r => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                  {filteredRoles.length === 0 && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      No teaching roles yet. Create one under Roles &amp; Permissions.
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
+                    Department <span className="text-red-500">*</span>
+                  </label>
+                  <select 
+                    {...register('departmentId', { required: "Department is required for teaching staff" })}
+                    className={`w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white ${
+                      errors.departmentId ? 'border-red-500' : 'border-slate-200 dark:border-white/10'
+                    }`}
+                  >
+                    <option value="">Select a Department</option>
+                    {departments?.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                  {errors.departmentId && <p className="text-red-500 text-sm mt-1">{errors.departmentId.message}</p>}
+                </div>
+              </>
             )}
+
             <Input 
               label="Join Date" 
               type="date"

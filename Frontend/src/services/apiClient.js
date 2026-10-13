@@ -32,7 +32,6 @@ const routeRoles = () => {
   if (pathname === '/super' || pathname.startsWith('/super/')) return ['superadmin'];
   if (pathname === '/dashboard') return ['admin', 'student', 'teacher', 'hod', 'faculty', 'staff', 'parent', 'superadmin'];
   if (pathname === '/login' && new URLSearchParams(search).has('college')) return ['student'];
-
   return [];
 };
 

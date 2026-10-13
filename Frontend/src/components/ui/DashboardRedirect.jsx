@@ -2,9 +2,10 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { FaSpinner } from 'react-icons/fa';
+import { toast } from 'react-hot-toast';
 
 const DashboardRedirect = () => {
-  const { userRole, userData, loading } = useAuth();
+  const { userRole, userData, loading, logout } = useAuth();
   const role = typeof userRole === 'string' ? userRole.trim().toLowerCase() : '';
 
   if (loading) {
@@ -40,6 +41,8 @@ const DashboardRedirect = () => {
   if (role === 'parent') return <Navigate to="/parent" replace />;
   if (role === 'teacher' || role === 'hod' || role === 'faculty') return <Navigate to="/teacher" replace />;
 
+  toast.error('Your account role is not supported. Contact your administrator.');
+  logout();
   return <Navigate to="/login" replace />;
 };
 

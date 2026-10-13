@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
   Zap, 
@@ -27,7 +28,8 @@ const getRoleDestination = (role) => {
     case 'teacher':
     case 'hod':
     case 'faculty': return '/teacher';
-    default: return '/login';
+    case 'staff': return '/admin';
+    default: return null;
   }
 };
 
@@ -36,7 +38,7 @@ const Login = ({ requiredRole }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const { login, currentUser, userRole } = useAuth();
+  const { login, logout, currentUser, userRole } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const successMessage = location.state?.successMessage;
@@ -46,9 +48,16 @@ const Login = ({ requiredRole }) => {
 
   useEffect(() => {
     if (currentUser && userRole && (!requiredRole || userRole === requiredRole)) {
-      navigate(getRoleDestination(userRole), { replace: true });
+      const destination = getRoleDestination(userRole);
+      if (destination) {
+        navigate(destination, { replace: true });
+      } else {
+        setIsLoading(false);
+        toast.error('Your account role is not supported. Contact your administrator.');
+        logout();
+      }
     }
-  }, [currentUser, userRole, navigate, requiredRole]);
+  }, [currentUser, userRole, navigate, requiredRole, logout]);
 
   const onSubmit = async (data) => {
     setIsLoading(true);
@@ -56,7 +65,15 @@ const Login = ({ requiredRole }) => {
     
     try {
       const email = data.email.toLowerCase().trim();
-      await login(email, data.password, collegeSlug);
+      const user = await login(email, data.password, collegeSlug);
+      const role = typeof user?.role === 'string' ? user.role.trim().toLowerCase() : '';
+      const destination = getRoleDestination(role);
+      if (!destination) {
+        setIsLoading(false);
+        toast.error('Your account role is not supported. Contact your administrator.');
+        logout();
+        return;
+      }
       // Redirection is handled by useEffect when AuthContext resolves user role
     } catch (err) {
       console.error("Login Error:", err);

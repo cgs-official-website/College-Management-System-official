@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Briefcase, Building, Mail, ShieldCheck, Lock, User, CheckCircle2 } from 'lucide-react';
+import { Briefcase, Building, Mail, ShieldCheck, Lock, User } from 'lucide-react';
 import apiClient from '../../services/apiClient';
 import toast from 'react-hot-toast';
 import { Button } from '../../components/ui/Button';
@@ -14,17 +14,18 @@ export default function StaffSetup() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isValidToken, setIsValidToken] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [staffInfo, setStaffInfo] = useState(null);
 
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
     password: '',
     confirmPassword: ''
   });
 
   useEffect(() => {
     if (!token) {
+      setErrorMessage("No setup token found in link. Please use the full setup link provided by your administrator.");
+      setIsValidToken(false);
       setIsLoading(false);
       return;
     }
@@ -33,22 +34,14 @@ export default function StaffSetup() {
       try {
         const query = new URLSearchParams({ token });
         const res = await apiClient.get(`/auth/staff-setup/verify?${query}`);
-        setStaffInfo(res.data);
-        
-        // Pre-fill name if it exists
-        if (res.data.name) {
-          const parts = res.data.name.split(' ');
-          setFormData(prev => ({
-            ...prev,
-            firstName: parts[0] || '',
-            lastName: parts.slice(1).join(' ') || ''
-          }));
-        }
-
+        const data = res?.data ?? res;
+        setStaffInfo(data);
         setIsValidToken(true);
       } catch (error) {
         console.error('Teacher setup verification failed:', error.response?.status || 'request error');
-        toast.error("Invalid or expired setup link.");
+        const message = error.response?.data?.error?.message || error.data?.error?.message || error.message || "Invalid or expired setup link.";
+        setErrorMessage(message);
+        toast.error(message);
         setIsValidToken(false);
       } finally {
         setIsLoading(false);
@@ -61,9 +54,6 @@ export default function StaffSetup() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.firstName.trim() || !formData.lastName.trim()) {
-      return toast.error("Please provide your full name.");
-    }
     if (formData.password.length < 6) {
       return toast.error("Password must be at least 6 characters.");
     }
@@ -75,19 +65,19 @@ export default function StaffSetup() {
     try {
       await apiClient.post('/auth/staff-setup', {
         token,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
         password: formData.password,
         confirmPassword: formData.confirmPassword,
       });
 
       toast.success("Account setup successful! Redirecting to login...");
       setTimeout(() => {
-        navigate(`/login?college=${encodeURIComponent(staffInfo.collegeSlug)}`);
+        const collegeParam = staffInfo?.collegeSlug ? `?college=${encodeURIComponent(staffInfo.collegeSlug)}` : '';
+        navigate(`/login${collegeParam}`);
       }, 2000);
     } catch (error) {
       console.error('Teacher setup failed:', error.response?.status || 'request error');
-      toast.error(error.response?.data?.error?.message || "Failed to setup account.");
+      const message = error.response?.data?.error?.message || error.data?.error?.message || error.message || "Failed to setup account.";
+      toast.error(message);
       setIsSubmitting(false);
     }
   };
@@ -107,9 +97,9 @@ export default function StaffSetup() {
           <div className="w-16 h-16 bg-red-100 dark:bg-red-500/20 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
             <ShieldCheck className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Invalid Link</h2>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Invalid or Expired Link</h2>
           <p className="text-slate-600 dark:text-slate-400 mb-6">
-            The setup link you clicked is either invalid, expired, or your account has already been set up.
+            {errorMessage || 'The setup link you clicked is either invalid, expired, or your account has already been set up.'}
           </p>
           <Button onClick={() => navigate('/login')} className="w-full">
             Go to Login
@@ -126,59 +116,50 @@ export default function StaffSetup() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-100 dark:bg-primary-500/20 text-primary-600 dark:text-primary-400 rounded-2xl mb-4">
             <Briefcase className="w-8 h-8" />
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Staff Setup</h1>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Staff Account Setup</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-2">
-            Complete your profile to access your staff dashboard.
+            Create your password to activate your account and access your staff dashboard.
           </p>
         </div>
 
-        <div className="bg-slate-50 dark:bg-white/5 rounded-2xl p-4 mb-8 border border-slate-200 dark:border-white/10 flex flex-col gap-3">
+        {/* Read-Only Profile Information */}
+        <div className="bg-slate-50 dark:bg-white/5 rounded-2xl p-5 mb-8 border border-slate-200 dark:border-white/10 flex flex-col gap-3">
           <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
-            <Mail className="w-4 h-4 text-slate-400" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 w-20 shrink-0">Email</span>
-            <span className="font-medium text-sm">{staffInfo.email}</span>
+            <User className="w-4 h-4 text-indigo-500 shrink-0" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 w-24 shrink-0">Name</span>
+            <span className="font-semibold text-sm text-slate-900 dark:text-white">{staffInfo?.name || 'Staff Member'}</span>
           </div>
           <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
-            <Building className="w-4 h-4 text-emerald-500 shrink-0" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 w-20 shrink-0">College</span>
-            <span className="font-medium text-sm">{staffInfo.collegeName}</span>
+            <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 w-24 shrink-0">Email</span>
+            <span className="font-medium text-sm">{staffInfo?.email}</span>
           </div>
           <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
             <Briefcase className="w-4 h-4 text-primary-500 shrink-0" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 w-20 shrink-0">Teacher ID</span>
-            <span className="font-medium text-sm">{staffInfo.teacherId}</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 w-24 shrink-0">Teacher ID</span>
+            <span className="font-mono font-medium text-sm">{staffInfo?.teacherId}</span>
           </div>
           <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
             <Building className="w-4 h-4 text-emerald-500 shrink-0" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 w-20 shrink-0">Department</span>
-            <span className="font-medium text-sm">{staffInfo.department || 'Assigned Department'}</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 w-24 shrink-0">Department</span>
+            <span className="font-medium text-sm">{staffInfo?.department || 'Assigned Department'}</span>
           </div>
           <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
-            <User className="w-4 h-4 text-primary-500 shrink-0" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 w-20 shrink-0">Role</span>
-            <span className="font-medium text-sm capitalize">{staffInfo.role}</span>
+            <Building className="w-4 h-4 text-amber-500 shrink-0" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 w-24 shrink-0">College</span>
+            <span className="font-medium text-sm">{staffInfo?.collegeName}</span>
           </div>
+          {staffInfo?.role && (
+            <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
+              <ShieldCheck className="w-4 h-4 text-primary-500 shrink-0" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 w-24 shrink-0">Role</span>
+              <span className="font-medium text-sm capitalize">{staffInfo?.role}</span>
+            </div>
+          )}
         </div>
 
-
+        {/* Password Setup Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <Input 
-              label="First Name" 
-              placeholder="e.g. John"
-              value={formData.firstName}
-              onChange={(e) => setFormData(p => ({ ...p, firstName: e.target.value }))}
-              required
-            />
-            <Input 
-              label="Last Name" 
-              placeholder="e.g. Doe"
-              value={formData.lastName}
-              onChange={(e) => setFormData(p => ({ ...p, lastName: e.target.value }))}
-              required
-            />
-          </div>
-
           <div className="space-y-5">
             <Input 
               label="Set Password" 
@@ -210,3 +191,4 @@ export default function StaffSetup() {
     </div>
   );
 }
+

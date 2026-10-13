@@ -3,6 +3,7 @@ import { createStaffSchema, updateStaffSchema } from './staff.schema.js';
 import { redis } from '../../lib/cache.js';
 import { sendDynamicMail } from '../../services/email/email.service.js';
 import { deleteTeacherProfile } from '../users/deleteUserRecords.js';
+import { createStaffSetupToken } from '../auth/staffSetupToken.js';
 
 /**
  * Invalidates the Redis staff list cache for a given college.
@@ -12,6 +13,35 @@ async function invalidateStaffCache(collegeId) {
   if (redis && redis.status === 'ready') {
     await redis.del(`staff:list:${collegeId}`).catch(() => {});
   }
+}
+
+/**
+ * Resolves or creates the dedicated "Administration" department for non-teaching staff.
+ * Reuses an existing department if named 'Administration' (case-insensitive) or with code 'ADMIN' (case-insensitive).
+ * If none exists, creates one with { name: 'Administration', code: 'ADMIN', collegeId }.
+ */
+async function getOrCreateAdministrationDepartment(collegeId) {
+  let dept = await prisma.department.findFirst({
+    where: {
+      collegeId,
+      OR: [
+        { name: { equals: 'Administration', mode: 'insensitive' } },
+        { code: { equals: 'ADMIN', mode: 'insensitive' } }
+      ]
+    }
+  });
+
+  if (!dept) {
+    dept = await prisma.department.create({
+      data: {
+        name: 'Administration',
+        code: 'ADMIN',
+        collegeId
+      }
+    });
+  }
+
+  return dept;
 }
 
 export const getStaff = async (req, res) => {
@@ -64,6 +94,7 @@ export const getStaff = async (req, res) => {
       customRole: t.user?.customRole?.name || null,
       customRoleId: t.user?.customRoleId || null,
       status: t.user?.accountStatus || 'active',
+      accountStatus: t.user?.accountStatus || 'active',
       staffType: ['teacher', 'hod', 'faculty'].includes(t.user?.role) ? 'teaching' : 'non-teaching',
       createdAt: t.createdAt,
       customFields: (typeof t.customFields === 'object' && t.customFields !== null && !Array.isArray(t.customFields)) ? t.customFields : {},
@@ -122,7 +153,11 @@ export const createStaff = async (req, res) => {
 
   // Ensure department exists
   let deptId = payload.departmentId;
-  if (!deptId) {
+  if (payload.staffType === 'non-teaching') {
+    // Non-teaching staff must always be placed in the dedicated Administration department
+    const adminDept = await getOrCreateAdministrationDepartment(collegeId);
+    deptId = adminDept.id;
+  } else if (!deptId) {
     let dept = await prisma.department.findFirst({
       where: { collegeId }
     });
@@ -312,16 +347,23 @@ export const updateStaff = async (req, res) => {
     }
   }
 
+  const isNonTeaching = payload.staffType === 'non-teaching' || teacher.user?.role === 'staff';
+  let targetDepartmentId = payload.departmentId;
+  if (isNonTeaching) {
+    const adminDept = await getOrCreateAdministrationDepartment(collegeId);
+    targetDepartmentId = adminDept.id;
+  }
+
   let updated;
   try {
     updated = await prisma.$transaction(async (tx) => {
-      if ((payload.name !== undefined || payload.role || payload.customRoleId !== undefined || payload.status || normalizedEmail) && teacher.userId) {
+      if ((payload.name !== undefined || payload.role || payload.customRoleId !== undefined || payload.status || normalizedEmail || isNonTeaching) && teacher.userId) {
         await tx.user.update({
           where: { id: teacher.userId },
           data: {
             ...(payload.name !== undefined ? { name: payload.name } : {}),
             ...(normalizedEmail ? { email: normalizedEmail } : {}),
-            ...(payload.role ? { role: payload.role } : {}),
+            ...(payload.role ? { role: payload.role } : (isNonTeaching ? { role: 'staff' } : {})),
             ...(payload.customRoleId !== undefined ? { customRoleId: payload.customRoleId } : {}),
             ...(payload.status ? { accountStatus: payload.status } : {})
           }
@@ -336,7 +378,7 @@ export const updateStaff = async (req, res) => {
           ...(payload.designation ? { designation: payload.designation } : {}),
           ...(payload.salaryGrade ? { salaryGrade: payload.salaryGrade } : {}),
           ...(payload.joiningDate ? { joiningDate: new Date(payload.joiningDate) } : {}),
-          ...(payload.departmentId ? { departmentId: payload.departmentId } : {}),
+          ...(targetDepartmentId ? { departmentId: targetDepartmentId } : {}),
           ...(payload.phone !== undefined ? { mobileNumber: payload.phone || null } : {}),
           ...(normalizedEmail ? { emailId: normalizedEmail } : {}),
           ...(normalizedTeacherId !== undefined ? { teacherId: normalizedTeacherId } : {}),
@@ -534,4 +576,120 @@ export const bulkImportStaff = async (req, res) => {
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} actor=${actorId} Bulk imported staff: ${results.successful} success, ${results.failed} failed`);
   res.json({ success: true, data: results });
+};
+
+const maskEmail = (email) => {
+  if (!email || !email.includes('@')) return email || '';
+  const [user, domain] = email.split('@');
+  if (!user) return `***@${domain}`;
+  const firstChar = user.charAt(0);
+  return `${firstChar}***@${domain}`;
+};
+
+const getTeacherSetupDetails = async (id, collegeId) => {
+  const teacher = await prisma.teacher.findFirst({
+    where: { id, collegeId, deletedAt: null },
+    include: {
+      user: true,
+      college: { select: { id: true, name: true, slug: true } }
+    }
+  });
+
+  if (!teacher || !teacher.user) {
+    const error = new Error('Staff member not found');
+    error.statusCode = 404;
+    error.code = 'NOT_FOUND';
+    throw error;
+  }
+
+  if (teacher.user.accountStatus !== 'pending_setup' || teacher.user.passwordHash !== null) {
+    const error = new Error('Account already activated');
+    error.statusCode = 409;
+    error.code = 'ACCOUNT_ALREADY_ACTIVATED';
+    throw error;
+  }
+
+  const email = teacher.emailId || teacher.user.email;
+  if (!email || email.includes('@pending.local')) {
+    const error = new Error('No email registered for this teacher');
+    error.statusCode = 400;
+    error.code = 'EMAIL_REQUIRED';
+    throw error;
+  }
+
+  const token = createStaffSetupToken({
+    teacherRecordId: teacher.id,
+    teacherId: teacher.teacherId,
+    userId: teacher.userId,
+    collegeId: teacher.collegeId,
+    email,
+  });
+
+  const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  const setupUrl = `${frontendUrl}/teacher/setup?token=${encodeURIComponent(token)}`;
+
+  return { teacher, email, token, setupUrl, frontendUrl };
+};
+
+export const generateStaffSetupLink = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const { id } = req.params;
+
+  const { setupUrl } = await getTeacherSetupDetails(id, collegeId);
+
+  res.json({
+    success: true,
+    data: { setupUrl }
+  });
+};
+
+export const sendStaffSetupMail = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const { id } = req.params;
+
+  const { teacher, email, setupUrl, frontendUrl } = await getTeacherSetupDetails(id, collegeId);
+
+  let emailResult;
+  try {
+    const emailPromise = sendDynamicMail({
+      to: email,
+      templateName: 'Teacher Account Setup',
+      variables: {
+        name: teacher.user?.name || teacher.name || 'Staff Member',
+        email,
+        teacherId: teacher.teacherId,
+        collegeName: teacher.college?.name || '',
+        setupUrl,
+        loginUrl: `${frontendUrl}/login`,
+      },
+    });
+
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error('Email send timed out after 15 seconds'));
+      }, 15000);
+    });
+
+    emailResult = await Promise.race([emailPromise, timeoutPromise]);
+  } catch (err) {
+    logger.warn(`[STAFF-SETUP] Exception/timeout sending setup email to ${email} for teacher ${teacher.id}: ${err.message}`);
+    return res.status(502).json({
+      success: false,
+      error: { message: 'Could not send the email. Please try again or use Generate Link.' }
+    });
+  }
+
+  if (!emailResult || !emailResult.success) {
+    const reason = emailResult?.error || 'sendDynamicMail returned unsuccessful';
+    logger.warn(`[STAFF-SETUP] Failed sending setup email to ${email} for teacher ${teacher.id}: ${reason}`);
+    return res.status(502).json({
+      success: false,
+      error: { message: 'Could not send the email. Please try again or use Generate Link.' }
+    });
+  }
+
+  res.json({
+    success: true,
+    data: { maskedEmail: maskEmail(email) }
+  });
 };

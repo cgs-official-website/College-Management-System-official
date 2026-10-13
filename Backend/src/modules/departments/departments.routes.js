@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticate } from '../../middleware/authenticate.js';
+import { authorize } from '../../middleware/authorize.js';
 import { resolveTenant } from '../../middleware/resolveTenant.js';
 import { prisma } from '../../server.js';
 import { z } from 'zod';
@@ -16,6 +17,9 @@ const departmentSchema = z.object({
 // All routes require authentication and standard tenant resolution
 router.use(authenticate);
 router.use(resolveTenant);
+
+// Only admins can create / update / delete departments (GET stays open to any logged-in user)
+const adminOnly = authorize('admin', 'superadmin');
 
 // Helper function to extract user-friendly error message
 const formatErrorMessage = (error, fallback = 'An unexpected error occurred') => {
@@ -39,7 +43,7 @@ router.get('/', async (req, res) => {
 });
 
 // Create a new department
-router.post('/', async (req, res) => {
+router.post('/', adminOnly, async (req, res) => {
   try {
     const data = departmentSchema.parse(req.body);
     const code = data.code.trim().toUpperCase();
@@ -88,7 +92,7 @@ router.post('/', async (req, res) => {
 });
 
 // Bulk import departments
-router.post('/bulk', async (req, res) => {
+router.post('/bulk', adminOnly, async (req, res) => {
   try {
     const { data } = req.body;
     if (!Array.isArray(data)) {
@@ -141,7 +145,7 @@ router.post('/bulk', async (req, res) => {
 });
 
 // Update a department
-router.put('/:id', async (req, res) => {
+router.put('/:id', adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
     const data = departmentSchema.parse(req.body);
@@ -204,7 +208,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete a department
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
     const collegeId = req.tenant.collegeId;

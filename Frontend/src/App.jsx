@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ConfirmProvider } from './contexts/ConfirmContext';
@@ -23,16 +23,37 @@ import TeacherLayout from './pages/teacher/TeacherLayout';
 import NotFound from './pages/error/NotFound';
 import { Toaster } from 'react-hot-toast';
 
-// Create a client for React Query
-const queryClient = new QueryClient();
+// Create an optimized client for React Query
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60 * 1000, // Keep data fresh for 1 minute
+      refetchOnWindowFocus: false, // Avoid refetch storms on window/tab refocus
+      retry: 1,
+    },
+  },
+});
 
 function AuthRouteSync() {
   const location = useLocation();
-  const { restoreSession } = useAuth();
+  const { restoreSession, userRole } = useAuth();
+  const lastTargetRole = useRef(null);
 
   useEffect(() => {
-    restoreSession();
-  }, [location.pathname, location.search]);
+    const path = location.pathname;
+    let targetRole = null;
+    if (path.startsWith('/admin')) targetRole = 'admin';
+    else if (path.startsWith('/student')) targetRole = 'student';
+    else if (path.startsWith('/teacher')) targetRole = 'teacher';
+    else if (path.startsWith('/parent')) targetRole = 'parent';
+    else if (path.startsWith('/super')) targetRole = 'superadmin';
+
+    // Only restore session when explicitly switching to a different portal role
+    if (targetRole && userRole && targetRole !== userRole && lastTargetRole.current !== targetRole) {
+      lastTargetRole.current = targetRole;
+      restoreSession(targetRole);
+    }
+  }, [location.pathname, userRole, restoreSession]);
 
   return null;
 }

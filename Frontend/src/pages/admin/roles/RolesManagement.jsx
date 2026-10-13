@@ -17,6 +17,7 @@ import {
   Square
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../services/apiClient';
 import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
@@ -24,6 +25,7 @@ import { Input } from '../../../components/ui/Input';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 
 export default function RolesManagement() {
+  const queryClient = useQueryClient();
   const confirm = useConfirm();
   const selectAllId = useId();
   const [roles, setRoles] = useState([]);
@@ -195,6 +197,7 @@ export default function RolesManagement() {
       setNewRoleName('');
       setNewRoleCategory('teaching');
       
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
       await fetchInitialData();
       if (res.data?.id) {
         loadRolePermissions(res.data.id);
@@ -217,6 +220,7 @@ export default function RolesManagement() {
       toast.success(`Role renamed to '${renameValue.trim()}'!`);
       setIsRenameOpen(false);
       
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
       await fetchInitialData();
       loadRolePermissions(selectedRole.id);
     } catch (err) {
@@ -245,6 +249,7 @@ export default function RolesManagement() {
     try {
       await api.delete(`/roles/${role.id}`);
       toast.success(`Role '${role.name}' deleted.`);
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
       fetchInitialData();
     } catch (err) {
       if (err.status === 409) {

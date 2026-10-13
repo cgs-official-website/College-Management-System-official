@@ -1,4 +1,19 @@
 import { prisma } from '../server.js';
+import { redis } from '../lib/cache.js';
+
+// Fast in-memory TTL cache for custom role permissions across requests (5 minutes)
+const PERM_CACHE_TTL_MS = 5 * 60 * 1000;
+const rolePermissionsCache = new Map();
+
+export const invalidateRolePermissionsCache = (roleId) => {
+  if (roleId) {
+    for (const key of rolePermissionsCache.keys()) {
+      if (key.endsWith(`:${roleId}`)) rolePermissionsCache.delete(key);
+    }
+  } else {
+    rolePermissionsCache.clear();
+  }
+};
 
 /**
  * Dynamic Permission Middleware
@@ -39,8 +54,15 @@ export const requirePermission = (moduleKey, action) => async (req, res, next) =
       });
     }
 
-    // 3. Cache lookup per request on `req` to avoid redundant DB queries
-    if (!req._permissionsCache) {
+    // 3. Fast TTL Cache lookup to avoid redundant DB queries per request
+    const cacheKey = `${collegeId || 'global'}:${customRoleId}`;
+    const now = Date.now();
+    const cachedEntry = rolePermissionsCache.get(cacheKey);
+
+    let permsMap;
+    if (cachedEntry && cachedEntry.expiresAt > now) {
+      permsMap = cachedEntry.data;
+    } else {
       const permissions = await prisma.rolePermission.findMany({
         where: {
           roleId: customRoleId,
@@ -54,10 +76,10 @@ export const requirePermission = (moduleKey, action) => async (req, res, next) =
       });
 
       // Map permissions into an object { [moduleKey]: { canCreate, canRead, canUpdate, canDelete } }
-      req._permissionsCache = {};
+      permsMap = {};
       for (const p of permissions) {
         if (p.module?.key) {
-          req._permissionsCache[p.module.key] = {
+          permsMap[p.module.key] = {
             canCreate: p.canCreate,
             canRead: p.canRead,
             canUpdate: p.canUpdate,
@@ -65,7 +87,10 @@ export const requirePermission = (moduleKey, action) => async (req, res, next) =
           };
         }
       }
+      rolePermissionsCache.set(cacheKey, { data: permsMap, expiresAt: now + PERM_CACHE_TTL_MS });
     }
+
+    req._permissionsCache = permsMap;
 
     const modulePerm = req._permissionsCache[moduleKey];
     if (!modulePerm) {

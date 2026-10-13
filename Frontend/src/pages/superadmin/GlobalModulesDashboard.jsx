@@ -4,9 +4,23 @@ import { Package, ToggleLeft, ToggleRight, Building, CheckCircle2 } from 'lucide
 import { toast } from 'react-hot-toast';
 import { useDashboardStats } from '../../hooks/useDashboardStats';
 
+const defaultGlobalModules = [
+  { id: 'traffic', name: 'Traffic & College Telemetry', type: 'Core', enabled: true, usage: 100 },
+  { id: 'students', name: 'Student Management & Admissions', type: 'Core', enabled: true, usage: 95 },
+  { id: 'attendance', name: 'Attendance & Biometrics', type: 'Core', enabled: true, usage: 88 },
+  { id: 'fees', name: 'Fee Ledger & Billing', type: 'Core', enabled: true, usage: 90 },
+  { id: 'courses', name: 'Courses & Departments', type: 'Core', enabled: true, usage: 92 },
+  { id: 'exams', name: 'Examinations & Grading', type: 'Pro', enabled: true, usage: 75 },
+  { id: 'timetable', name: 'Timetable Scheduling', type: 'Pro', enabled: true, usage: 70 },
+  { id: 'transport', name: 'Transport & Fleet Routes', type: 'Pro', enabled: true, usage: 60 },
+  { id: 'hostel', name: 'Hostel & Accommodations', type: 'Pro', enabled: true, usage: 55 },
+  { id: 'library', name: 'Digital & Physical Library', type: 'Pro', enabled: true, usage: 65 },
+  { id: 'reports', name: 'Advanced Reports & Export', type: 'Pro', enabled: true, usage: 85 }
+];
+
 const GlobalModulesDashboard = () => {
   const stats = useDashboardStats(null, true);
-  const [modules, setModules] = useState([]); // Firebase-ready state
+  const [modules, setModules] = useState(defaultGlobalModules);
 
   const toggleModule = (id) => {
     setModules(modules.map(m => {
@@ -19,6 +33,9 @@ const GlobalModulesDashboard = () => {
     }));
   };
 
+  const totalModules = modules.length;
+  const activeProModules = modules.filter(m => m.type === 'Pro' && m.enabled).length;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -30,8 +47,8 @@ const GlobalModulesDashboard = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
         {[
-          { title: 'Total Modules', value: '0', icon: Package, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10' },
-          { title: 'Active Pro Modules', value: '0', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
+          { title: 'Total Modules', value: totalModules, icon: Package, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10' },
+          { title: 'Active Pro Modules', value: activeProModules, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
           { title: 'Registered Colleges', value: stats.isLoading ? '...' : stats.totalColleges, icon: Building, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
         ].map((stat, idx) => (
           <motion.div 

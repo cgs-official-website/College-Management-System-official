@@ -2,10 +2,11 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { FaSpinner } from 'react-icons/fa';
+import { toast } from 'react-hot-toast';
 
 // Returns the home dashboard path for a given role
 const getRoleDashboard = (role) => {
-  switch (role) {
+  switch (typeof role === 'string' ? role.trim().toLowerCase() : '') {
     case 'student':  return '/student/dashboard';
     case 'admin':    return '/admin/dashboard';
     case 'superadmin': return '/super';
@@ -14,12 +15,12 @@ const getRoleDashboard = (role) => {
     case 'hod':
     case 'faculty':  return '/teacher';
     case 'staff':    return '/admin';
-    default:         return '/login';
+    default:         return null;
   }
 };
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { currentUser, userRole, userData, loading } = useAuth();
+  const { currentUser, userRole, userData, loading, logout } = useAuth();
   const location = useLocation();
   const role = typeof userRole === 'string' ? userRole.trim().toLowerCase() : '';
 
@@ -66,7 +67,13 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   // redirect to their OWN dashboard (not /login) so they don't get
   // bounced back to a wrong dashboard via the Login page auto-redirect.
   if (allowedRoles && (!role || !allowedRoles.includes(role))) {
-    return <Navigate to={getRoleDashboard(role)} replace />;
+    const targetDashboard = getRoleDashboard(role);
+    if (!targetDashboard) {
+      toast.error('Your account role is not supported. Contact your administrator.');
+      logout();
+      return <Navigate to="/login" replace />;
+    }
+    return <Navigate to={targetDashboard} replace />;
   }
 
   return children;

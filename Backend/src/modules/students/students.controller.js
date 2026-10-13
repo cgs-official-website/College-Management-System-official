@@ -19,7 +19,10 @@ export const getStudents = async (req, res) => {
     ...(sectionId ? { sectionId } : {})
   };
 
-  const students = await prisma.student.findMany({
+  const page = req.query.page ? Math.max(1, parseInt(req.query.page)) : null;
+  const limit = req.query.limit ? Math.max(1, Math.min(200, parseInt(req.query.limit))) : null;
+
+  const queryOptions = {
     where,
     include: {
       user: {
@@ -39,7 +42,17 @@ export const getStudents = async (req, res) => {
       hostelBlock: true,
     },
     orderBy: { createdAt: 'desc' }
-  });
+  };
+
+  if (page && limit) {
+    queryOptions.skip = (page - 1) * limit;
+    queryOptions.take = limit;
+  }
+
+  const [totalCount, students] = await Promise.all([
+    (page && limit) ? prisma.student.count({ where }) : Promise.resolve(null),
+    prisma.student.findMany(queryOptions)
+  ]);
 
   const formatted = students.map(s => {
     const custom = (typeof s.customFields === 'object' && s.customFields !== null && !Array.isArray(s.customFields)) ? s.customFields : {};
@@ -106,6 +119,19 @@ export const getStudents = async (req, res) => {
       customFields: custom,
     };
   });
+
+  if (page && limit && totalCount !== null) {
+    return res.json({
+      success: true,
+      data: formatted,
+      meta: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit)
+      }
+    });
+  }
 
   res.json({ success: true, data: formatted });
 };
