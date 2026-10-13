@@ -64,11 +64,15 @@ export const getStudentDashboard = async (req, res) => {
       }
     }
 
-    const attendanceRecords = await prisma.attendance.findMany({
-      where: { studentId }
-    });
-    const totalDays = attendanceRecords.length;
-    const presentDays = attendanceRecords.filter(a => a.status === 'present' || a.status === 'late').length;
+    const [totalDays, presentDays] = await Promise.all([
+      prisma.attendance.count({ where: { studentId } }),
+      prisma.attendance.count({
+        where: {
+          studentId,
+          status: { in: ['present', 'late'] }
+        }
+      })
+    ]);
     const attendancePercentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 100;
 
     const coursesCount = await prisma.course.count({
@@ -80,7 +84,10 @@ export const getStudentDashboard = async (req, res) => {
     });
 
     const assignments = await prisma.assignment.findMany({
-      where: { collegeId },
+      where: {
+        collegeId,
+        ...(student.courseId ? { courseId: student.courseId } : {})
+      },
       include: {
         submissions: {
           where: { studentId }
