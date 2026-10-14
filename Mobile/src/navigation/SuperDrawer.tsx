@@ -15,6 +15,7 @@ import {
   Package,
   Search,
   Settings,
+  SlidersHorizontal,
   Users,
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
@@ -37,6 +38,8 @@ import SuperEmailTemplatesScreen from '../screens/superadmin/SuperEmailTemplates
 import LandingPageSettingsScreen from '../screens/superadmin/LandingPageSettingsScreen';
 import SuperSubscriptionsScreen from '../screens/superadmin/SuperSubscriptionsScreen';
 import SuperSettingsScreen from '../screens/superadmin/SuperSettingsScreen';
+import AppSettingsScreen from '../screens/shared/AppSettingsScreen';
+import { UnreadBadge } from '../components/ui/UnreadBadge';
 import SuperTrafficScreen from '../screens/superadmin/SuperTrafficScreen';
 
 type Tone = 'primary' | 'info' | 'success' | 'warning' | 'danger';
@@ -52,7 +55,8 @@ const LINKS: SuperLink[] = [
   { key: 'email-templates', name: 'Email Templates', icon: Mail, tone: 'danger' },
   { key: 'landing-page', name: 'Landing Page', icon: LayoutTemplate, tone: 'primary' },
   { key: 'subscriptions', name: 'Subscriptions', icon: CreditCard, tone: 'success' },
-  { key: 'settings', name: 'Settings', icon: Settings, tone: 'info' },
+  { key: 'settings', name: 'Platform Settings', icon: Settings, tone: 'info' },
+  { key: 'app-settings', name: 'Settings', icon: SlidersHorizontal, tone: 'primary' },
 ];
 
 /** Screens are untouched; only the shell around them changed. */
@@ -66,6 +70,7 @@ const SCREENS: Record<string, React.ComponentType> = {
   'landing-page': LandingPageSettingsScreen,
   subscriptions: SuperSubscriptionsScreen,
   settings: SuperSettingsScreen,
+  'app-settings': AppSettingsScreen,
 };
 
 /** `all` = the All Modules grid (the real "modules" key above is the Global Modules screen). */
@@ -159,7 +164,10 @@ function SuperModulesScreen({ onOpen }: { onOpen: (key: string) => void }) {
                   <View style={[mod.iconTile, { backgroundColor: t.bg }]}>
                     <Icon size={22} color={t.fg} />
                   </View>
-                  <ChevronRight size={18} color={colors.textSubtle} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {m.key === 'app-settings' ? <UnreadBadge /> : null}
+                    <ChevronRight size={18} color={colors.textSubtle} />
+                  </View>
                 </View>
                 <Text style={[mod.cardName, { color: colors.text }]} numberOfLines={2}>{m.name}</Text>
               </Pressable>

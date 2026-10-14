@@ -31,6 +31,7 @@ import {
   Package,
   Search,
   Settings as SettingsIcon,
+  SlidersHorizontal,
   ShieldCheck,
   ShoppingCart,
   UserPlus,
@@ -77,6 +78,8 @@ import PlacementsScreen from '../screens/admin/PlacementsScreen';
 import ReportsScreen from '../screens/admin/ReportsScreen';
 import ApiIntegrationsScreen from '../screens/admin/ApiIntegrationsScreen';
 import SettingsScreen from '../screens/admin/SettingsScreen';
+import AppSettingsScreen from '../screens/shared/AppSettingsScreen';
+import { UnreadBadge } from '../components/ui/UnreadBadge';
 import RolesManagementScreen from '../screens/admin/RolesManagementScreen';
 
 /** Modules whose real screen is not built yet -> same PlaceholderModule the web uses. */
@@ -91,6 +94,7 @@ type AdminLink = { key: string; name: string; icon: LucideIcon; tone: Tone; modu
 const buildLinks = (isAdmin: boolean): AdminLink[] => [
   { key: 'canteen', name: 'Canteen Requests', icon: Utensils, tone: 'info', moduleKey: null },
   { key: 'settings', name: 'Environment Setup', icon: SettingsIcon, tone: 'success', moduleKey: 'settings' },
+  { key: 'app-settings', name: 'Settings', icon: SlidersHorizontal, tone: 'primary', moduleKey: null },
   { key: 'academic-structure', name: 'Classes & Sections', icon: GraduationCap, tone: 'info', moduleKey: 'academic' },
   { key: 'hr', name: 'HR & Payroll', icon: Users, tone: 'primary', moduleKey: 'staff' },
   { key: 'chat-monitor', name: 'Chat Monitor', icon: MessageCircle, tone: 'success', moduleKey: null },
@@ -148,6 +152,7 @@ const SCREENS: Record<string, React.ComponentType> = {
   payroll: PayrollScreen,
   'api-integrations': ApiIntegrationsScreen,
   settings: SettingsScreen,
+  'app-settings': AppSettingsScreen,
   roles: RolesManagementScreen,
   // not built yet (shown in All Modules like the web)
   canteen: pending('Canteen Requests', Utensils),
@@ -246,7 +251,10 @@ function AdminModulesScreen({ links, onOpen }: { links: AdminLink[]; onOpen: (ke
                   <View style={[mod.iconTile, { backgroundColor: t.bg }]}>
                     <Icon size={22} color={t.fg} />
                   </View>
-                  <ChevronRight size={18} color={colors.textSubtle} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {m.key === 'app-settings' ? <UnreadBadge /> : null}
+                    <ChevronRight size={18} color={colors.textSubtle} />
+                  </View>
                 </View>
                 <Text style={[mod.cardName, { color: colors.text }]} numberOfLines={2}>{m.name}</Text>
               </Pressable>

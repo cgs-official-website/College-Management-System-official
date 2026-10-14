@@ -14,6 +14,7 @@ import {
   MessageSquareWarning,
   Search,
   Settings as SettingsIcon,
+  SlidersHorizontal,
   Users,
   Video,
 } from 'lucide-react-native';
@@ -25,6 +26,7 @@ import { useDrawerNav } from '../../components/layout/DrawerContent';
 import { Screen } from '../../components/ui/Screen';
 import { BannerGlow, bannerDark } from '../../components/ui/BannerGlow';
 import { fontSize, fontWeight } from '../../theme/typography';
+import { UnreadBadge } from '../../components/ui/UnreadBadge';
 
 type Tone = 'primary' | 'info' | 'success' | 'warning' | 'danger';
 export type TeacherModule = { key: string; name: string; icon: LucideIcon; tone: Tone };
@@ -68,6 +70,7 @@ export const buildTeacherModules = (isHod: boolean, facilities: boolean): Teache
   if (isHod) list.push({ key: 'timetable', name: 'Manage Timetable', icon: CalendarClock, tone: 'info' });
   if (facilities) list.push({ key: 'facility', name: 'Facility Requests', icon: Building, tone: 'warning' });
   list.push({ key: 'settings', name: 'Account Settings', icon: SettingsIcon, tone: 'success' });
+  list.push({ key: 'app-settings', name: 'Settings', icon: SlidersHorizontal, tone: 'primary' });
   return list;
 };
 
@@ -143,7 +146,10 @@ export default function TeacherModulesScreen() {
                   <View style={[styles.iconTile, { backgroundColor: t.bg }]}>
                     <Icon size={22} color={t.fg} />
                   </View>
-                  <ChevronRight size={18} color={colors.textSubtle} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {m.key === 'app-settings' ? <UnreadBadge /> : null}
+                    <ChevronRight size={18} color={colors.textSubtle} />
+                  </View>
                 </View>
                 <Text style={[styles.cardName, { color: colors.text }]} numberOfLines={2}>{m.name}</Text>
               </Pressable>

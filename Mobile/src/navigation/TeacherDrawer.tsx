@@ -25,6 +25,7 @@ import TeacherDashboardScreen from '../screens/teacher/TeacherDashboardScreen';
 import TeacherClassesScreen from '../screens/teacher/TeacherClassesScreen';
 import TeacherScheduleScreen from '../screens/teacher/TeacherScheduleScreen';
 import TeacherSettingsScreen from '../screens/teacher/TeacherSettingsScreen';
+import AppSettingsScreen from '../screens/shared/AppSettingsScreen';
 import TeacherAttendanceScreen from '../screens/teacher/TeacherAttendanceScreen';
 import TeacherAssignmentsScreen from '../screens/teacher/TeacherAssignmentsScreen';
 import TeacherGradesScreen from '../screens/teacher/TeacherGradesScreen';
@@ -51,6 +52,7 @@ const TAB_KEYS = TABS.map((t) => t.key);
 /** Screen titles for the back row shown on modules opened from All Modules. */
 const TITLES: Record<string, string> = {
   settings: 'Account Settings',
+  'app-settings': 'Settings',
   assignments: 'Assignments',
   grades: 'Marks & Grading',
   complaints: 'Complaints',
@@ -73,6 +75,7 @@ const SCREENS: Record<string, React.ComponentType> = {
   classes: TeacherClassesScreen,
   schedule: TeacherScheduleScreen,
   settings: TeacherSettingsScreen,
+  'app-settings': AppSettingsScreen,
   studentleaves: LeaveRequestsScreen, // web reuses admin LeaveRequestsDashboard for teachers
   timetable: TimetableScreen, // HOD only (web reuses admin Timetable)
   // ---- batch 2

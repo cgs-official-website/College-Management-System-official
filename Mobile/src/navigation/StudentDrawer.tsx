@@ -22,6 +22,7 @@ import {
   MessageSquareWarning,
   Search,
   Settings as SettingsIcon,
+  SlidersHorizontal,
   Video,
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
@@ -53,6 +54,8 @@ import StudentPtmScreen from '../screens/student/StudentPtmScreen';
 import StudentComplaintsScreen from '../screens/student/StudentComplaintsScreen';
 import StudentDocumentsScreen from '../screens/student/StudentDocumentsScreen';
 import StudentSettingsScreen from '../screens/student/StudentSettingsScreen';
+import AppSettingsScreen from '../screens/shared/AppSettingsScreen';
+import { UnreadBadge } from '../components/ui/UnreadBadge';
 
 type Tone = 'primary' | 'info' | 'success' | 'warning' | 'danger';
 type StudentLink = { key: string; name: string; icon: LucideIcon; tone: Tone; show?: boolean };
@@ -76,7 +79,8 @@ const buildLinks = (isHosteller: boolean): StudentLink[] =>
       { key: 'placement', name: 'Placements', icon: Briefcase, tone: 'primary' },
       { key: 'complaints', name: 'Complaints', icon: MessageSquareWarning, tone: 'danger' },
       { key: 'documents', name: 'Documents', icon: Files, tone: 'info' },
-      { key: 'settings', name: 'Settings', icon: SettingsIcon, tone: 'success' },
+      { key: 'settings', name: 'Profile', icon: SettingsIcon, tone: 'success' },
+      { key: 'app-settings', name: 'Settings', icon: SlidersHorizontal, tone: 'primary' },
     ] as StudentLink[]
   ).filter((l) => l.show === undefined || l.show === true);
 
@@ -98,6 +102,7 @@ const SCREENS: Record<string, React.ComponentType> = {
   complaints: StudentComplaintsScreen,
   documents: StudentDocumentsScreen,
   settings: StudentSettingsScreen,
+  'app-settings': AppSettingsScreen,
 };
 
 /** Bottom bar: 4 quick tabs + "All Modules" (every other module opens from All Modules). */
@@ -190,7 +195,10 @@ function StudentModulesScreen({ links, onOpen }: { links: StudentLink[]; onOpen:
                   <View style={[mod.iconTile, { backgroundColor: t.bg }]}>
                     <Icon size={22} color={t.fg} />
                   </View>
-                  <ChevronRight size={18} color={colors.textSubtle} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {m.key === 'app-settings' ? <UnreadBadge /> : null}
+                    <ChevronRight size={18} color={colors.textSubtle} />
+                  </View>
                 </View>
                 <Text style={[mod.cardName, { color: colors.text }]} numberOfLines={2}>{m.name}</Text>
               </Pressable>
