@@ -121,30 +121,30 @@ const baseTemplate = (content, title = '') => {
 const FALLBACK_TEMPLATES = {
   'Teacher Account Setup': {
     subject: (vars) => vars?.collegeName ? `Set up your teacher account - ${vars.collegeName}` : 'Set up your teacher account',
-    buildHtml: (vars) => `
+    buildHtml: (vars) => {
+      const url = escapeHtml(vars.setupUrl);
+      return `
       <h2 style="color: #0f172a; margin-top: 0;">Welcome, ${escapeHtml(vars.name || 'Teacher')}!</h2>
-      <p>Your teacher account has been created for <strong>${escapeHtml(vars.collegeName || 'your college')}</strong>.</p>
+      <p><strong>${escapeHtml(vars.collegeName || 'Your college')}</strong> has created a teacher account for you. Use the button below to create your password and activate it.</p>
 
       <div class="highlight" style="text-align: left; font-family: sans-serif; font-size: 14px; letter-spacing: normal;">
         <div style="margin-bottom: 8px;"><strong>Teacher ID:</strong> ${escapeHtml(vars.teacherId)}</div>
-        ${vars.collegeName ? `<div style="margin-bottom: 8px;"><strong>College:</strong> ${escapeHtml(vars.collegeName)}</div>` : ''}
-        <div><strong>Email:</strong> ${escapeHtml(vars.email)}</div>
+        <div><strong>Login email:</strong> ${escapeHtml(vars.email)}</div>
       </div>
-
-      <p>Open the secure setup link to review your account details and create your password.</p>
 
       <div style="text-align: center;">
-        <a href="${escapeHtml(vars.setupUrl)}" class="button">Set Up Your Account</a>
+        <a href="${url}" class="button">Set Up Your Account</a>
       </div>
 
-      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
-        If the button doesn't work, copy this setup link into your browser:<br>
-        <a href="${escapeHtml(vars.setupUrl)}">${escapeHtml(vars.setupUrl)}</a>
+      <p style="font-size: 13px; color: #64748b;">
+        This link expires in 15 minutes and can only be used once. Please don't share it.
       </p>
-      <p style="font-size: 13px; color: #64748b; margin-top: 12px;">
-        Sent on behalf of ${escapeHtml(vars.collegeName || 'your institution')}.
+      <p style="font-size: 12px; color: #94a3b8; word-break: break-all;">
+        Button not working? Copy and paste this link into your browser:<br>
+        <a href="${url}" style="color: #94a3b8;">${url}</a>
       </p>
-    `
+    `;
+    }
   },
   'Student Welcome': {
     subject: (vars) => vars?.collegeName ? `Welcome to ${vars.collegeName}` : 'Welcome to College Management System',

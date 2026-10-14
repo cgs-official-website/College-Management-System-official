@@ -102,30 +102,27 @@ export const DEFAULT_TEMPLATES = [
     status: 'Active',
     contentHtml: `
     <h2 style="color: #0f172a; margin-top: 0;">Welcome, {{name}}!</h2>
-    <p>Your teacher account has been created for <strong>{{collegeName}}</strong>.</p>
-    
-    <div class="highlight" style="text-align: left;">
+    <p><strong>{{collegeName}}</strong> has created a teacher account for you. Use the button below to create your password and activate it.</p>
+
+    <div class="highlight" style="text-align: left; font-family: sans-serif; font-size: 14px; letter-spacing: normal;">
       <div style="margin-bottom: 8px;"><strong>Teacher ID:</strong> {{teacherId}}</div>
-      <div style="margin-bottom: 8px;"><strong>College:</strong> {{collegeName}}</div>
-      <div><strong>Email:</strong> {{email}}</div>
+      <div><strong>Login email:</strong> {{email}}</div>
     </div>
-    
-    <p>Open the secure setup link below to create your password and set up your account:</p>
-    
+
     <div style="text-align: center;">
       <a href="{{setupUrl}}" class="button">Set Up Your Account</a>
     </div>
-    
-    <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
-      If the button doesn't work, copy this setup link into your browser:<br>
-      <a href="{{setupUrl}}">{{setupUrl}}</a>
+
+    <p style="font-size: 13px; color: #64748b;">
+      This link expires in 15 minutes and can only be used once. Please don't share it.
     </p>
-    <p style="font-size: 13px; color: #64748b; margin-top: 12px;">
-      Sent on behalf of {{collegeName}}.
+    <p style="font-size: 12px; color: #94a3b8; word-break: break-all;">
+      Button not working? Copy and paste this link into your browser:<br>
+      <a href="{{setupUrl}}" style="color: #94a3b8;">{{setupUrl}}</a>
     </p>
     `
   },
-    {
+  {
     name: 'Teacher Welcome',
     subject: 'Welcome to {{collegeName}} - your account is ready',
     status: 'Active',
