@@ -2,6 +2,7 @@ import { prisma } from '../../server.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { onboardCollegeSchema, updateCollegeStatusSchema, updateCollegeSchema, updateSubscriptionSchema } from './colleges.schema.js';
+import { sendDynamicMail } from '../../services/email/email.service.js';
 
 export const getCollegeBySlug = async (req, res) => {
   try {
@@ -101,6 +102,8 @@ export const getAllColleges = async (req, res) => {
     // Map billingSubscription fields to college object for frontend compatibility
     const mappedColleges = colleges.map(college => ({
       ...college,
+      email: college.contactEmail || college.users?.[0]?.email || null,
+      phone: college.contactPhone || null,
       subscriptionPlan: college.billingSubscription?.planTier || null,
       subscriptionStatus: college.billingSubscription?.status || null,
       subscriptionEndDate: college.billingSubscription?.currentPeriodEnd || college.billingSubscription?.trialExpiresAt || null
@@ -248,8 +251,25 @@ export const getMyCollegeStatus = async (req, res) => {
 export const updateCollegeStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = updateCollegeStatusSchema.parse(req.body);
+    const { status, reason } = updateCollegeStatusSchema.parse(req.body);
     
+    // Find existing college and its admin users
+    const existingCollege = await prisma.college.findUnique({
+      where: { id },
+      include: {
+        users: {
+          where: { role: 'admin' },
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    if (!existingCollege) {
+      return res.status(404).json({ success: false, error: { message: 'College not found' } });
+    }
+
+    const previousStatus = existingCollege.status;
+
     const college = await prisma.college.update({
       where: { id },
       data: { status }
@@ -257,6 +277,140 @@ export const updateCollegeStatus = async (req, res) => {
     
     // Invalidate Redis cache for live status
     await invalidateCollegeStatusCache(id);
+
+    // If status is updated to active from a non-active state (or explicitly activated), send activation notification email
+    if (status === 'active' && previousStatus !== 'active') {
+      const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
+      const loginUrl = `${frontendUrl}/login`;
+      const collegeCode = college.registrationNo || college.slug || 'N/A';
+
+      // Gather recipient targets: admin users + official contact email
+      const targets = [];
+      const seenEmails = new Set();
+
+      for (const admin of (existingCollege.users || [])) {
+        if (admin.email && !seenEmails.has(admin.email.trim().toLowerCase())) {
+          seenEmails.add(admin.email.trim().toLowerCase());
+          targets.push({
+            email: admin.email.trim(),
+            name: admin.name || 'College Administrator'
+          });
+        }
+      }
+
+      if (existingCollege.contactEmail && !seenEmails.has(existingCollege.contactEmail.trim().toLowerCase())) {
+        seenEmails.add(existingCollege.contactEmail.trim().toLowerCase());
+        targets.push({
+          email: existingCollege.contactEmail.trim(),
+          name: `${college.name} Administration`
+        });
+      }
+
+      // Asynchronously send emails (fire-and-forget so HTTP response remains snappy)
+      if (targets.length > 0) {
+        Promise.allSettled(
+          targets.map(target =>
+            sendDynamicMail({
+              to: target.email,
+              templateName: 'College Activated',
+              headerTitle: college.name || 'College Management System',
+              fromName: 'Super Admin - Campus Portal',
+              variables: {
+                name: target.name,
+                email: target.email,
+                collegeName: college.name,
+                collegeCode: collegeCode,
+                loginUrl,
+                frontendUrl
+              }
+            })
+          )
+        ).then(results => {
+          results.forEach((r, idx) => {
+            const target = targets[idx];
+            if (r.status === 'fulfilled' && r.value?.success) {
+              console.log(`[CollegeActivation] ✅ Activation email sent to ${target.email} for college "${college.name}"`);
+            } else {
+              console.error(`[CollegeActivation] ❌ Failed sending activation email to ${target?.email}:`, r.reason || r.value?.error);
+            }
+          });
+        }).catch(err => {
+          console.error('[CollegeActivation] Error in activation email process:', err);
+        });
+      }
+    }
+
+    // If status is updated to suspended, send professional suspension notification email
+    if (status === 'suspended' && previousStatus !== 'suspended') {
+      const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
+      const collegeCode = college.registrationNo || college.slug || 'N/A';
+      const effectiveDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      const suspensionReason = reason || 'Administrative review & platform compliance verification';
+      const supportEmail = process.env.SUPPORT_EMAIL || process.env.SMTP_USER || 'support@teamzuna.in';
+      const supportPhone = process.env.SUPPORT_PHONE || '+1 (800) 555-0199';
+
+      // Gather recipient targets: admin users + official contact email
+      const targets = [];
+      const seenEmails = new Set();
+
+      for (const admin of (existingCollege.users || [])) {
+        if (admin.email && !seenEmails.has(admin.email.trim().toLowerCase())) {
+          seenEmails.add(admin.email.trim().toLowerCase());
+          targets.push({
+            email: admin.email.trim(),
+            name: admin.name || 'College Administrator'
+          });
+        }
+      }
+
+      if (existingCollege.contactEmail && !seenEmails.has(existingCollege.contactEmail.trim().toLowerCase())) {
+        seenEmails.add(existingCollege.contactEmail.trim().toLowerCase());
+        targets.push({
+          email: existingCollege.contactEmail.trim(),
+          name: `${college.name} Administration`
+        });
+      }
+
+      // Asynchronously send emails (fire-and-forget so HTTP response remains snappy)
+      if (targets.length > 0) {
+        Promise.allSettled(
+          targets.map(target =>
+            sendDynamicMail({
+              to: target.email,
+              templateName: 'College Suspended',
+              headerTitle: college.name || 'College Management System',
+              fromName: 'Super Admin - Campus Portal',
+              variables: {
+                name: target.name,
+                email: target.email,
+                collegeName: college.name,
+                collegeCode: collegeCode,
+                effectiveDate,
+                suspensionReason,
+                supportEmail,
+                supportPhone,
+                portalUrl: frontendUrl
+              }
+            })
+          )
+        ).then(results => {
+          results.forEach((r, idx) => {
+            const target = targets[idx];
+            if (r.status === 'fulfilled' && r.value?.success) {
+              console.log(`[CollegeSuspension] ✅ Suspension email sent to ${target.email} for college "${college.name}"`);
+            } else {
+              console.error(`[CollegeSuspension] ❌ Failed sending suspension email to ${target?.email}:`, r.reason || r.value?.error);
+            }
+          });
+        }).catch(err => {
+          console.error('[CollegeSuspension] Error in suspension email process:', err);
+        });
+      }
+    }
 
     res.json({ success: true, data: college });
   } catch (error) {

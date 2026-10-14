@@ -9,7 +9,8 @@ import {
   Loader2, 
   Check 
 } from 'lucide-react';
-import { exportToExcel, exportToCSV, exportToPDF, openPrintReport } from './reportExporter';
+import { exportToExcel, exportToCSV, exportToPDF, openPrintReport, hasValidExportData } from './reportExporter';
+import toast from 'react-hot-toast';
 
 export default function ReportExportMenu({
   data = [],
@@ -63,7 +64,9 @@ export default function ReportExportMenu({
 
   const handleExport = async (format) => {
     const currentData = resolveData();
-    if (!currentData || currentData.length === 0) {
+    if (!hasValidExportData(currentData)) {
+      toast.error('Data not found');
+      setIsOpen(false);
       return;
     }
 

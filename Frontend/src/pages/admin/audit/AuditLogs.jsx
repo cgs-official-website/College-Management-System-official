@@ -786,8 +786,11 @@ export default function AuditLogs() {
   // ── EXPORT AS REAL EXCEL SPREADSHEET (.xlsx) ──
   const handleExportExcel = () => {
     const recordsToExport = displayedLogs.length > 0 ? displayedLogs : logs;
-    if (!recordsToExport.length) {
-      toast.error('No audit records available to export.');
+    const hasData = Array.isArray(recordsToExport) && recordsToExport.length > 0 && recordsToExport.some(row =>
+      row && typeof row === 'object' && Object.keys(row).length > 0
+    );
+    if (!hasData) {
+      toast.error('Data not found');
       return;
     }
 

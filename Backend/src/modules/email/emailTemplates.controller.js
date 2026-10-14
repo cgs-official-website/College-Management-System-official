@@ -8,6 +8,13 @@ const templateSchema = z.object({
   contentHtml: z.string().optional(),
 });
 
+const updateTemplateSchema = z.object({
+  name: z.string().min(1, 'Name cannot be empty').optional(),
+  subject: z.string().min(1, 'Subject cannot be empty').optional(),
+  status: z.string().optional(),
+  contentHtml: z.string().optional(),
+});
+
 export const getTemplates = async (req, res) => {
   try {
     const templates = await prisma.emailTemplate.findMany({
@@ -43,15 +50,17 @@ export const createTemplate = async (req, res) => {
 export const updateTemplate = async (req, res) => {
   try {
     const { id } = req.params;
-    const payload = templateSchema.parse(req.body);
+    const payload = updateTemplateSchema.parse(req.body);
+
+    const updateData = {};
+    if (payload.name !== undefined) updateData.name = payload.name;
+    if (payload.subject !== undefined) updateData.subject = payload.subject;
+    if (payload.status !== undefined) updateData.status = payload.status;
+    if (payload.contentHtml !== undefined) updateData.contentHtml = payload.contentHtml;
+
     const updatedTemplate = await prisma.emailTemplate.update({
       where: { id },
-      data: {
-        name: payload.name,
-        subject: payload.subject,
-        status: payload.status,
-        contentHtml: payload.contentHtml
-      }
+      data: updateData
     });
     res.json({ success: true, data: updatedTemplate });
   } catch (error) {

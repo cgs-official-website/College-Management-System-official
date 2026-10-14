@@ -46,16 +46,24 @@ const SuperColleges = () => {
   const handleApproveCollege = async (collegeId, adminUid) => {
     try {
       await updateCollegeStatus.mutateAsync({ id: collegeId, status: 'active' });
+      toast.success('College approved and activation email sent!');
     } catch (error) {
       console.error("Error approving college:", error);
+      toast.error('Failed to approve college');
     }
   };
 
   const handleUpdateStatus = async (collegeId, newStatus) => {
     try {
       await updateCollegeStatus.mutateAsync({ id: collegeId, status: newStatus });
+      if (newStatus === 'active') {
+        toast.success('College activated and notification email sent!');
+      } else {
+        toast.success(`College status updated to ${newStatus}`);
+      }
     } catch (error) {
       console.error("Error updating status:", error);
+      toast.error('Failed to update college status');
     }
   };
 
@@ -267,6 +275,14 @@ const SuperColleges = () => {
             onManageSubscription={(col) => {
               setSelectedCollege(null);
               setSubscriptionCollege(col);
+            }}
+            onApprove={(collegeId, adminUid) => {
+              handleApproveCollege(collegeId, adminUid);
+              setSelectedCollege(prev => prev ? ({ ...prev, status: 'active' }) : null);
+            }}
+            onUpdateStatus={(collegeId, status) => {
+              handleUpdateStatus(collegeId, status);
+              setSelectedCollege(prev => prev ? ({ ...prev, status }) : null);
             }}
           />
         )}
@@ -681,7 +697,7 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
 };
 
 
-const CollegeDetailsModal = ({ college, onClose, onManageSubscription }) => {
+const CollegeDetailsModal = ({ college, onClose, onManageSubscription, onApprove, onUpdateStatus }) => {
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <motion.div
@@ -722,7 +738,7 @@ const CollegeDetailsModal = ({ college, onClose, onManageSubscription }) => {
               <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{college.name} {college.shortName && `(${college.shortName})`}</h3>
               <p className="text-slate-500 dark:text-slate-400 font-mono mt-1">{college.id}</p>
 
-              <div className="flex flex-wrap gap-2 mt-3">
+              <div className="flex flex-wrap items-center gap-2 mt-3">
                 <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${college.status === 'active'
                     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
                     : college.status === 'pending'
@@ -731,6 +747,33 @@ const CollegeDetailsModal = ({ college, onClose, onManageSubscription }) => {
                   }`}>
                   {college.status?.toUpperCase() || 'UNKNOWN'}
                 </span>
+
+                {college.status === 'pending' && onApprove && (
+                  <button
+                    onClick={() => onApprove(college.id, college.adminUid)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Approve College
+                  </button>
+                )}
+                {college.status === 'suspended' && onUpdateStatus && (
+                  <button
+                    onClick={() => onUpdateStatus(college.id, 'active')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Activate College
+                  </button>
+                )}
+                {college.status === 'active' && onUpdateStatus && (
+                  <button
+                    onClick={() => onUpdateStatus(college.id, 'suspended')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition-all"
+                  >
+                    Suspend College
+                  </button>
+                )}
                 {college.category && (
                   <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
                     {college.category}

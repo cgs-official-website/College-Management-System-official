@@ -35,7 +35,8 @@ export const onboardCollegeSchema = z.object({
 });
 
 export const updateCollegeStatusSchema = z.object({
-  status: z.enum(['active', 'pending', 'suspended'])
+  status: z.enum(['active', 'pending', 'suspended']),
+  reason: z.string().optional()
 });
 
 export const updateCollegeSchema = z.object({

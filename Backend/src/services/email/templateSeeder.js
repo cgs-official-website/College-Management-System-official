@@ -147,6 +147,82 @@ export const DEFAULT_TEMPLATES = [
       Forgot your password? Use "Forgot password" on the login page. If you didn't create this account, please contact your college administrator.
     </p>
     `
+  },
+  {
+    name: 'College Activated',
+    subject: ' Your College Has Been Activated - {{collegeName}}',
+    status: 'Active',
+    contentHtml: `
+    <h2 style="color: #0f172a; margin-top: 0;">Congratulations, {{name}}!</h2>
+    <p>We are pleased to inform you that your institution, <strong>{{collegeName}}</strong>, has been officially reviewed, approved, and activated by the Super Administration.</p>
+    
+    <div class="highlight" style="text-align: left; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-left: 4px solid #16a34a; border-radius: 8px; padding: 16px; margin: 20px 0;">
+      <div style="margin-bottom: 8px; color: #15803d; font-weight: 700;">Status: Active &amp; Approved</div>
+      <div style="margin-bottom: 8px; font-size: 14px; color: #1e293b;"><strong>College Name:</strong> {{collegeName}}</div>
+      <div style="margin-bottom: 8px; font-size: 14px; color: #1e293b;"><strong>College Code:</strong> {{collegeCode}}</div>
+      <div style="font-size: 14px; color: #1e293b;"><strong>Admin Account:</strong> {{email}}</div>
+    </div>
+    
+    <p>Your institutional management portal is now completely unlocked. You can now log in to:</p>
+    <ul style="color: #475569; padding-left: 20px; line-height: 1.8;">
+      <li>Set up academic departments, courses, and sections</li>
+      <li>Onboard faculty, teachers, and staff members</li>
+      <li>Manage student admissions and class enrollments</li>
+      <li>Configure fee structures and collect payments</li>
+      <li>Publish timetables, notices, exams, and attendance records</li>
+    </ul>
+    
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="{{loginUrl}}" class="button" style="background-color: #16a34a; font-size: 15px; padding: 14px 28px; border-radius: 8px; text-decoration: none; color: #ffffff; display: inline-block; font-weight: 600;">Log In to Admin Dashboard</a>
+    </div>
+
+    <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
+      Direct login URL: <a href="{{loginUrl}}" style="color: #2563eb;">{{loginUrl}}</a>
+    </p>
+    `
+  },
+  {
+    name: 'College Suspended',
+    subject: ' Notice of Account Suspension - {{collegeName}}',
+    status: 'Active',
+    contentHtml: `
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <div style="font-family: 'Poppins', Arial, sans-serif; color: #1e293b;">
+      <h2 style="font-family: 'Poppins', Arial, sans-serif; color: #b91c1c; margin-top: 0; font-size: 20px; font-weight: 700;">Account Suspension Notice</h2>
+      <p style="font-family: 'Poppins', Arial, sans-serif; font-size: 15px; color: #334155; line-height: 1.6;">
+        Dear <strong>{{name}}</strong>,
+      </p>
+      <p style="font-family: 'Poppins', Arial, sans-serif; font-size: 14px; color: #475569; line-height: 1.6;">
+        This email is an official notification that institutional access for <strong>{{collegeName}}</strong> has been temporarily suspended by the Super Administration.
+      </p>
+
+      <div style="font-family: 'Poppins', Arial, sans-serif; text-align: left; background-color: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid #ef4444; border-radius: 8px; padding: 18px; margin: 20px 0;">
+        <div style="margin-bottom: 10px; color: #b91c1c; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Account Status: Suspended</div>
+        <div style="margin-bottom: 8px; font-size: 14px; color: #1e293b;"><strong>College Name:</strong> {{collegeName}}</div>
+        <div style="margin-bottom: 8px; font-size: 14px; color: #1e293b;"><strong>College Code:</strong> {{collegeCode}}</div>
+        <div style="margin-bottom: 8px; font-size: 14px; color: #1e293b;"><strong>Effective Date:</strong> {{effectiveDate}}</div>
+        <div style="font-size: 14px; color: #1e293b;"><strong>Reason for Suspension:</strong> {{suspensionReason}}</div>
+      </div>
+
+      <p style="font-family: 'Poppins', Arial, sans-serif; font-size: 14px; color: #475569; line-height: 1.6;">
+        During the suspension period, administrative access, faculty portals, and student service features associated with your institution will remain inaccessible.
+      </p>
+
+      <div style="font-family: 'Poppins', Arial, sans-serif; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; margin: 20px 0;">
+        <h4 style="font-family: 'Poppins', Arial, sans-serif; margin: 0 0 10px 0; color: #0f172a; font-size: 14px; font-weight: 600;">Support &amp; Next Steps</h4>
+        <p style="font-family: 'Poppins', Arial, sans-serif; font-size: 13px; color: #475569; margin: 0 0 10px 0; line-height: 1.5;">
+          If you believe this action was taken in error or if you wish to appeal and reactivate your institution's account, please contact our support desk immediately:
+        </p>
+        <div style="font-size: 13px; color: #334155; margin-bottom: 4px;"><strong>Support Email:</strong> <a href="mailto:{{supportEmail}}" style="color: #2563eb; text-decoration: none;">{{supportEmail}}</a></div>
+        <div style="font-size: 13px; color: #334155; margin-bottom: 4px;"><strong>Support Helpline:</strong> {{supportPhone}}</div>
+        <div style="font-size: 13px; color: #334155;"><strong>Management Portal:</strong> <a href="{{portalUrl}}" style="color: #2563eb; text-decoration: none;">{{portalUrl}}</a></div>
+      </div>
+
+      <p style="font-family: 'Poppins', Arial, sans-serif; font-size: 12px; color: #94a3b8; margin-top: 24px; line-height: 1.5;">
+        This is an automated system notification. Please reach out to the support details provided above for any queries.
+      </p>
+    </div>
+    `
   }
 ];
 

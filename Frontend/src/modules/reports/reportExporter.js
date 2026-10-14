@@ -32,6 +32,22 @@ const sanitizePdfText = (text) => {
 };
 
 /**
+ * Validate that data is a non-empty array with actual row content
+ */
+export const hasValidExportData = (data) => {
+  return (
+    Array.isArray(data) &&
+    data.length > 0 &&
+    data.some((row) =>
+      row &&
+      typeof row === 'object' &&
+      Object.keys(row).length > 0 &&
+      Object.values(row).some((v) => v !== null && v !== undefined && String(v).trim() !== '')
+    )
+  );
+};
+
+/**
  * 1. EXCEL EXPORT (.xlsx)
  */
 export const exportToExcel = ({
@@ -42,8 +58,8 @@ export const exportToExcel = ({
   metadata = {}
 }) => {
   try {
-    if (!data || data.length === 0) {
-      toast.error('No data available to export.');
+    if (!hasValidExportData(data)) {
+      toast.error('Data not found');
       return false;
     }
 
@@ -95,8 +111,8 @@ export const exportToCSV = ({
   sheetName = 'Report_Data'
 }) => {
   try {
-    if (!data || data.length === 0) {
-      toast.error('No data available to export.');
+    if (!hasValidExportData(data)) {
+      toast.error('Data not found');
       return false;
     }
 
@@ -160,8 +176,8 @@ export const exportToPDF = ({
   customColumns = null
 }) => {
   try {
-    if (!data || data.length === 0) {
-      toast.error('No data available to export.');
+    if (!hasValidExportData(data)) {
+      toast.error('Data not found');
       return false;
     }
 
@@ -457,8 +473,8 @@ export const openPrintReport = ({
   customColumns = null
 }) => {
   try {
-    if (!data || data.length === 0) {
-      toast.error('No data available to print.');
+    if (!hasValidExportData(data)) {
+      toast.error('Data not found');
       return false;
     }
 

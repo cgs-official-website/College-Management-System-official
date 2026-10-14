@@ -24,8 +24,8 @@ export const useEmailTemplates = () => {
 
   const updateTemplate = useMutation({
     mutationFn: async ({ id, ...templateData }) => {
-      const { data } = await api.put(`/email-templates/${id}`, templateData);
-      return data;
+      const res = await api.put(`/email-templates/${id}`, templateData);
+      return res?.data ?? res;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['emailTemplates'] });

@@ -267,8 +267,11 @@ export default function InventoryDashboard() {
   // HANDLER: EXPORT AUDIT LOGS
   // -------------------------------------------------------------
   const handleExportAuditLogs = () => {
-    if (!auditLogs || auditLogs.length === 0) {
-      toast.error('No audit log records available to export.');
+    const hasData = Array.isArray(auditLogs) && auditLogs.length > 0 && auditLogs.some(row =>
+      row && typeof row === 'object' && Object.keys(row).length > 0
+    );
+    if (!hasData) {
+      toast.error('Data not found');
       return;
     }
 
