@@ -1,80 +1,16 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import dotenv from 'dotenv';
 import { prisma } from '../../lib/prisma.js';
 import { DEFAULT_TEMPLATES } from './templateSeeder.js';
 dotenv.config();
 
-// ---------------------------------------------------------------------------
-// Transporter
-// Port 587 + STARTTLS is used because cloud hosts (Railway, Render, etc.)
-// typically block outbound port 465 (SMTPS / implicit TLS).
-// Port 587 with `secure:false` + STARTTLS is the correct production setup.
-// ---------------------------------------------------------------------------
-const createTransporter = () => {
-  const port = parseInt(process.env.SMTP_PORT || '587', 10);
-  const useImplicitTls = port === 465;
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port,
-    secure: useImplicitTls,
-    requireTLS: !useImplicitTls,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 30000,
-  });
-};
-
-// Used only for the startup verification check
-const transporter = createTransporter();
-
-// Verify SMTP connection at startup (non-blocking, NO credentials ever logged)
-transporter.verify((err) => {
-  if (err) {
-    console.error('[EmailService] ⚠️  SMTP transporter verification FAILED — emails will not be delivered.');
-    if (process.env.NODE_ENV !== 'production') {
-      const missingAuth = !process.env.SMTP_USER || !process.env.SMTP_PASS;
-      const isAuthFailure = err.code === 'EAUTH' || err.responseCode === 535;
-      const isTlsFailure = /tls|ssl|certificate/i.test(err.message || '');
-      const category = missingAuth
-        ? 'SMTP_CONFIG_MISSING'
-        : isAuthFailure
-          ? 'SMTP_AUTH_FAILED'
-          : isTlsFailure
-            ? 'SMTP_TLS_ERROR'
-            : err.code || 'SMTP_UNKNOWN';
-      const redactCredentials = (value) => {
-        let message = String(value || '');
-        for (const secret of [process.env.SMTP_USER, process.env.SMTP_PASS]) {
-          if (secret) message = message.split(secret).join('[redacted]');
-        }
-        return message;
-      };
-
-      console.error('[EmailService] SMTP failure category:', category);
-      console.error('[EmailService] SMTP host:', process.env.SMTP_HOST || 'smtp.gmail.com');
-      console.error('[EmailService] SMTP port:', process.env.SMTP_PORT || '587');
-      console.error('[EmailService] SMTP user configured:', Boolean(process.env.SMTP_USER));
-      console.error('[EmailService] SMTP password configured:', Boolean(process.env.SMTP_PASS));
-      console.error('[EmailService] SMTP error code:', err.code || 'NONE');
-      console.error('[EmailService] SMTP error command:', err.command || 'NONE');
-      console.error('[EmailService] SMTP error message:', redactCredentials(err.message));
-    } else {
-      // In production: always log SMTP errors (without credentials)
-      console.error('[EmailService] SMTP error code:', err.code || 'NONE');
-      console.error('[EmailService] SMTP error message:', err.message?.replace(process.env.SMTP_PASS || '', '[redacted]') || 'unknown');
-    }
-  } else {
-    console.log('[EmailService] ✅ SMTP transporter is ready to send emails.');
-    console.log('[EmailService]   SMTP host :', process.env.SMTP_HOST || 'smtp.gmail.com');
-    console.log('[EmailService]   SMTP port :', process.env.SMTP_PORT || '587');
-    console.log('[EmailService]   SMTP user configured:', Boolean(process.env.SMTP_USER));
-  }
-});
+if (resend) {
+  console.log('[EmailService] ✅ Resend client configured.');
+} else {
+  console.error('[EmailService] ⚠️ RESEND_API_KEY is not set — emails will not be delivered.');
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -287,49 +223,56 @@ const FALLBACK_TEMPLATES = {
 };
 
 // ---------------------------------------------------------------------------
-// Core sendMail — wraps nodemailer.sendMail with proper logging
+// Core sendMail — wraps resend.emails.send with proper logging
 // ---------------------------------------------------------------------------
+const htmlToText = (html = '') => html
+  .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+  .replace(/<[^>]+>/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
 export const sendMail = async ({ to, subject, html, text, fromName, cc, bcc, replyTo, attachments }) => {
   try {
-    const textContent = text || (html ? html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '');
-
-    // For Gmail SMTP, 'from' should align with the authenticated SMTP_USER to avoid DMARC/SPF rejection
-    const senderEmail = process.env.SMTP_USER || (process.env.FROM_EMAIL ? (process.env.FROM_EMAIL.match(/<([^>]+)>/)?.[1] || process.env.FROM_EMAIL) : 'noreply@zuna.edu');
-    const senderDisplayName = fromName || (process.env.FROM_EMAIL ? process.env.FROM_EMAIL.replace(/<.*>/, '').replace(/"/g, '').trim() : 'College Management System');
-    const defaultSender = `"${senderDisplayName}" <${senderEmail}>`;
-
-    const mailOptions = {
-      from: defaultSender,
-      to,
-      subject,
-      html,
-      text: textContent,
-    };
-    if (cc) mailOptions.cc = cc;
-    if (bcc) mailOptions.bcc = bcc;
-    if (replyTo) mailOptions.replyTo = replyTo;
-    if (attachments) mailOptions.attachments = attachments;
-
-    // Always use a fresh transporter per send — avoids stale/closed connections
-    // on cloud hosts (Railway) which have aggressive TCP idle timeouts.
-    const freshTransporter = createTransporter();
-    let info;
-    try {
-      info = await freshTransporter.sendMail(mailOptions);
-    } finally {
-      freshTransporter.close();
+    if (!resend) {
+      return { success: false, error: 'Email service is not configured (RESEND_API_KEY missing)' };
     }
 
-    console.log(`[EmailService] ✅ Email sent successfully to: ${to} | Subject: "${subject}" | Sender: "${senderDisplayName}" | MessageId: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
+    // Placeholder accounts can never receive mail; sending would only cause bounces
+    const recipients = [].concat(to).map(String);
+    if (recipients.some((addr) => addr.toLowerCase().endsWith('@pending.local'))) {
+      return { success: false, error: 'Recipient has no real email address registered' };
+    }
+
+    const fromEnv = process.env.FROM_EMAIL || '';
+    const senderEmail = fromEnv.match(/<([^>]+)>/)?.[1] || fromEnv || 'noreply@teamzuna.in';
+    const envName = fromEnv.includes('<') ? fromEnv.replace(/<.*>/, '').replace(/"/g, '').trim() : '';
+    const displayName = (fromName || envName || 'College Management System')
+      .replace(/["<>\r\n]/g, '').trim();
+    const from = `"${displayName}" <${senderEmail}>`;
+
+    const payload = { from, to, subject, html, text: text || htmlToText(html) };
+    if (cc) payload.cc = cc;
+    if (bcc) payload.bcc = bcc;
+    if (replyTo) payload.replyTo = replyTo;
+    if (attachments?.length) {
+      payload.attachments = attachments.map((a) => ({ filename: a.filename, content: a.content }));
+    }
+
+    const { data, error } = await resend.emails.send(payload);
+
+    if (error) {
+      console.error(
+        `[EmailService] ❌ Failed to send email to: ${to}\n` +
+        `  Subject: "${subject}"\n` +
+        `  Error: ${error.name || 'UNKNOWN'} - ${error.message}`
+      );
+      return { success: false, error: error.message };
+    }
+
+    console.log(`[EmailService] ✅ Email sent to: ${to} | Subject: "${subject}" | Id: ${data?.id}`);
+    return { success: true, messageId: data?.id };
   } catch (error) {
-    // Log the Nodemailer error code/message for debugging — never log credentials
-    console.error(
-      `[EmailService] ❌ Failed to send email to: ${to}\n` +
-      `  Subject: "${subject}"\n` +
-      `  Error Code: ${error.code || 'UNKNOWN'}\n` +
-      `  Error: ${error.message}`
-    );
+    console.error(`[EmailService] ❌ Failed to send email to: ${to} | Error: ${error.message}`);
     return { success: false, error: error.message };
   }
 };
