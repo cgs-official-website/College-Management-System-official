@@ -38,8 +38,152 @@ function formatRelativeTime(dateString) {
   return date.toLocaleDateString();
 }
 
+export function resolveNotificationTargetRoute(notification, rawRole) {
+  const role = (rawRole || '').toLowerCase().trim();
+  const isAdmin = role === 'admin' || role === 'superadmin';
+  const isTeacher = ['teacher', 'hod', 'faculty'].includes(role);
+  const isStudent = role === 'student';
+  const isParent = role === 'parent';
+  const isOtherStaff = !isAdmin && !isTeacher && !isStudent && !isParent && !!role;
+
+  const rawLink = typeof notification?.link === 'string' ? notification.link.trim() : '';
+  const type = (notification?.type || '').toLowerCase();
+
+  // 1. External URL -> open externally
+  if (rawLink.startsWith('http://') || rawLink.startsWith('https://')) {
+    return { isExternal: true, path: rawLink };
+  }
+
+  // 2. ADMIN / SUPERADMIN PANEL
+  if (isAdmin) {
+    // Leave requests
+    if (type === 'leave_request' || type === 'leave_status' || rawLink.includes('leave')) {
+      return { isExternal: false, path: '/admin/leave-requests' };
+    }
+    // Complaints
+    if (type === 'complaint_new' || rawLink.includes('complaint')) {
+      return { isExternal: false, path: '/admin/complaints' };
+    }
+    // Admissions
+    if (type === 'admission_application' || rawLink.includes('admission')) {
+      return { isExternal: false, path: '/admin/admission' };
+    }
+    // Account activation / staff setup
+    if (type === 'account_activated' || rawLink === '/admin/hr') {
+      return { isExternal: false, path: '/admin/hr' };
+    }
+    // Notices
+    if (type === 'notice_new' || rawLink.includes('notice')) {
+      return { isExternal: false, path: '/admin/notices' };
+    }
+    // If link is already valid admin path
+    if (rawLink.startsWith('/admin')) {
+      if (rawLink === '/admin/admissions') return { isExternal: false, path: '/admin/admission' };
+      return { isExternal: false, path: rawLink };
+    }
+    // Cross-panel link arriving at admin panel -> safe fallback
+    if (rawLink.startsWith('/teacher') || rawLink.startsWith('/student')) {
+      return { isExternal: false, path: '/admin' };
+    }
+    return { isExternal: false, path: rawLink || '/admin' };
+  }
+
+  // 3. TEACHER / FACULTY / HOD PANEL
+  if (isTeacher) {
+    // Student leave review
+    if (type === 'leave_request' || rawLink.includes('student-leaves')) {
+      return { isExternal: false, path: '/teacher/student-leaves' };
+    }
+    // Teacher's own leave application / status
+    if (type === 'leave_status' || rawLink.includes('my-leaves') || rawLink.includes('leave')) {
+      return { isExternal: false, path: '/teacher/my-leaves' };
+    }
+    // Timetable / schedule
+    if (type === 'timetable_change' || rawLink.includes('timetable') || rawLink.includes('schedule')) {
+      return { isExternal: false, path: '/teacher/schedule' };
+    }
+    // PTM
+    if (type.startsWith('ptm_') || rawLink.includes('ptm')) {
+      return { isExternal: false, path: '/teacher/ptm' };
+    }
+    // Assignments
+    if (type === 'assignment_new' || rawLink.includes('assignment')) {
+      return { isExternal: false, path: '/teacher/assignments' };
+    }
+    // Notices
+    if (type === 'notice_new' || rawLink.includes('notices')) {
+      return { isExternal: false, path: '/teacher/notices' };
+    }
+    // Complaints
+    if (type === 'complaint_new' || rawLink.includes('complaint')) {
+      return { isExternal: false, path: '/teacher/complaints' };
+    }
+    // If already teacher path
+    if (rawLink.startsWith('/teacher')) {
+      return { isExternal: false, path: rawLink };
+    }
+    // Cross-panel link arriving at teacher panel -> safe fallback
+    return { isExternal: false, path: '/teacher' };
+  }
+
+  // 4. STUDENT PANEL
+  if (isStudent) {
+    if (
+      type === 'leave_request' ||
+      type === 'leave_status' ||
+      type === 'attendance_absent' ||
+      type === 'attendance_late' ||
+      rawLink.includes('attendance') ||
+      rawLink.includes('leave')
+    ) {
+      return { isExternal: false, path: '/student/attendance' };
+    }
+    if (type === 'exam_scheduled' || type === 'exam_marks' || rawLink.includes('exam')) {
+      return { isExternal: false, path: '/student/exams' };
+    }
+    if (type === 'assignment_new' || rawLink.includes('assignment')) {
+      return { isExternal: false, path: '/student/assignments' };
+    }
+    if (type === 'timetable_change' || rawLink.includes('timetable')) {
+      return { isExternal: false, path: '/student/timetable' };
+    }
+    if (type.startsWith('ptm_') || rawLink.includes('ptm')) {
+      return { isExternal: false, path: '/student/ptm' };
+    }
+    if (type === 'notice_new' || rawLink.includes('notice')) {
+      return { isExternal: false, path: '/student/notices' };
+    }
+    if (rawLink.startsWith('/student')) {
+      return { isExternal: false, path: rawLink };
+    }
+    return { isExternal: false, path: '/student' };
+  }
+
+  // 5. OTHER STAFF (e.g. librarian, accountant using /admin/*)
+  if (isOtherStaff) {
+    if (type === 'leave_status' || rawLink.includes('my-leaves') || rawLink.includes('leave')) {
+      return { isExternal: false, path: '/admin/my-leaves' };
+    }
+    if (rawLink.startsWith('/admin')) {
+      return { isExternal: false, path: rawLink };
+    }
+    return { isExternal: false, path: '/admin' };
+  }
+
+  // 6. PARENT PANEL
+  if (isParent) {
+    if (rawLink.startsWith('/parent')) {
+      return { isExternal: false, path: rawLink };
+    }
+    return { isExternal: false, path: '/parent' };
+  }
+
+  // Fallback
+  return { isExternal: false, path: rawLink || '/' };
+}
+
 export function NotificationBell({ className = '' }) {
-  const { userData } = useAuth();
+  const { userData, userRole } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
@@ -153,15 +297,13 @@ export function NotificationBell({ className = '' }) {
     // 4. Invalidate queries so background sync keeps cache fresh with backend
     queryClient.invalidateQueries({ queryKey: ['notifications'] });
 
-    // 5. Navigate to link if present (must work if notification has no link as well)
-    const link = notification.link;
-    if (link && typeof link === 'string' && link.trim() !== '') {
-      const trimmedLink = link.trim();
-      if (trimmedLink.startsWith('http://') || trimmedLink.startsWith('https://')) {
-        window.open(trimmedLink, '_blank', 'noopener,noreferrer');
-      } else {
-        navigate(trimmedLink);
-      }
+    // 5. Navigate safely per role with fallback
+    const effectiveRole = userRole || userData?.role || '';
+    const target = resolveNotificationTargetRoute(notification, effectiveRole);
+    if (target?.isExternal) {
+      window.open(target.path, '_blank', 'noopener,noreferrer');
+    } else if (target?.path) {
+      navigate(target.path);
     }
   };
 

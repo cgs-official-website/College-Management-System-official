@@ -265,9 +265,19 @@ export const updateLeaveRequestStatus = async (req, res) => {
 
     const requester = await prisma.user.findUnique({
       where: { id: existing.requesterUserId },
-      select: { studentProfile: { select: { id: true } } }
+      select: {
+        role: true,
+        studentProfile: { select: { id: true } },
+        teacherProfile: { select: { id: true } }
+      }
     });
     const isStudentLeave = !!requester?.studentProfile || existing.requesterRole?.toLowerCase() === 'student';
+    const isTeacher = requester?.role === 'teacher' || requester?.role === 'faculty' || requester?.role === 'hod' || !!requester?.teacherProfile;
+    const targetLink = isStudentLeave
+      ? '/student/attendance'
+      : isTeacher
+      ? '/teacher/my-leaves'
+      : '/admin/my-leaves';
 
     if (!isAdminUser(req)) {
       if (!isStudentLeave) {
@@ -295,12 +305,12 @@ export const updateLeaveRequestStatus = async (req, res) => {
       await notify({
         collegeId: targetCollegeId,
         target: { userId: targetUserId },
-        type: status === 'approved' ? 'leave_status' : 'warning',
+        type: 'leave_status',
         title: `Leave Request ${status === 'approved' ? 'Approved' : 'Rejected'}`,
         message: isStudentLeave
           ? `Your leave request has been ${status}.`
           : `Your staff leave request has been ${status}.`,
-        link: isStudentLeave ? '/student/attendance' : '/teacher/my-leaves'
+        link: targetLink
       });
     }
 
@@ -452,10 +462,10 @@ export const createStaffLeave = async (req, res) => {
   await notify({
     collegeId,
     target: { role: 'admin' },
-    type: 'info',
+    type: 'leave_request',
     title: 'Staff Leave Request',
     message: `${mine?.user?.name || roleName} submitted a leave request.`,
-    link: '/admin/hr'
+    link: '/admin/leave-requests'
   });
 
   res.status(201).json({ success: true, data: toSafeLeave(leave) });
