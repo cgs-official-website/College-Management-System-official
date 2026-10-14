@@ -1,12 +1,20 @@
 import { z } from 'zod';
 
+const roleCategory = z.enum(['teaching', 'non_teaching']);
+
 export const createRoleSchema = z.object({
-  name: z.string().min(2, 'Role name must be at least 2 characters').max(50),
+  name: z.string().trim().min(2, 'Role name must be at least 2 characters').max(50),
+  category: roleCategory.default('non_teaching'),
 });
 
-export const updateRoleSchema = z.object({
-  name: z.string().min(2, 'Role name must be at least 2 characters').max(50),
-});
+export const updateRoleSchema = z
+  .object({
+    name: z.string().trim().min(2, 'Role name must be at least 2 characters').max(50).optional(),
+    category: roleCategory.optional(),
+  })
+  .refine((v) => v.name !== undefined || v.category !== undefined, {
+    message: 'Provide a name or a category to update.',
+  });
 
 export const updateRolePermissionsSchema = z.object({
   permissions: z.array(

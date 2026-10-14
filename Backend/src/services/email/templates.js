@@ -1,4 +1,4 @@
-const baseTemplate = (content) => `
+const baseTemplate = (content, title = '') => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -71,14 +71,13 @@ const baseTemplate = (content) => `
 <body>
   <div class="container">
     <div class="header">
-      <h1>Zuna ERP</h1>
+      <h1>${title || 'College Management System'}</h1>
     </div>
     <div class="content">
       ${content}
     </div>
     <div class="footer">
-      <p>This is an automated message from Zuna ERP College Management System.</p>
-      <p>&copy; ${new Date().getFullYear()} Carrezza Global Solutions. All rights reserved.</p>
+      <p>This is an automated message from ${title || 'College Management System'}.</p>
     </div>
   </div>
 </body>

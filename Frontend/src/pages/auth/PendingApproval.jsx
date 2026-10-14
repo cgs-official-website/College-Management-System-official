@@ -20,7 +20,7 @@ export const PendingApproval = () => {
     if (checking) return;
     setChecking(true);
     try {
-      const response = await api.get('/colleges/me/status');
+      const response = await api.get('/colleges/me/status', { authRole: 'admin' });
       const data = response.data?.data || response.data;
       if (data?.status) {
         setCollegeInfo(prev => ({
@@ -49,6 +49,11 @@ export const PendingApproval = () => {
         }
       }
     } catch (err) {
+      if (err.response?.status === 401) {
+        // If the session token is expired or missing, redirect user to log in again
+        navigate('/login', { replace: true });
+        return;
+      }
       if (isManual) {
         toast.error('Unable to fetch live status. Please check connection.', { id: 'status-check' });
       }

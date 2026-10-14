@@ -11,10 +11,10 @@ const prisma = new PrismaClient({ adapter });
 const templatesToSeed = [
   {
     name: 'Student Welcome',
-    subject: 'Welcome to Zuna ERP',
+    subject: 'Welcome - {{collegeName}}',
     contentHtml: `
-    <h2 style="color: #0f172a; margin-top: 0;">Welcome to Zuna ERP, {{name}}!</h2>
-    <p>Your account has been successfully created. You can now log in to the system using the following credentials:</p>
+    <h2 style="color: #0f172a; margin-top: 0;">Welcome, {{name}}!</h2>
+    <p>Your student account has been successfully created for <strong>{{collegeName}}</strong>. You can now log in to the portal using the following credentials:</p>
     
     <div class="highlight" style="text-align: left;">
       <div style="margin-bottom: 8px;"><strong>Email:</strong> {{email}}</div>
@@ -30,10 +30,10 @@ const templatesToSeed = [
   },
   {
     name: 'Admin Welcome',
-    subject: 'Welcome to Zuna ERP - College Admin',
+    subject: 'Welcome to {{collegeName}} - College Admin',
     contentHtml: `
-    <h2 style="color: #0f172a; margin-top: 0;">Welcome to Zuna ERP, {{name}}!</h2>
-    <p>Your college admin account has been successfully created. You can now log in to the system using the following credentials:</p>
+    <h2 style="color: #0f172a; margin-top: 0;">Welcome, {{name}}!</h2>
+    <p>Your college admin account has been successfully created for <strong>{{collegeName}}</strong>. You can now log in to the system using the following credentials:</p>
     
     <div class="highlight" style="text-align: left;">
       <div style="margin-bottom: 8px;"><strong>Email:</strong> {{email}}</div>
@@ -79,13 +79,41 @@ const templatesToSeed = [
   },
     {
     name: 'Salary Processed',
-    subject: 'Your salary for {{month}} {{year}} has been processed',
+    subject: 'Salary Processed Notification - {{collegeName}} ({{month}} {{year}})',
     contentHtml: `
     <h2 style="color: #0f172a; margin-top: 0;">Hello {{staffName}},</h2>
-    <p>Your salary for <strong>{{month}} {{year}}</strong> has been processed on {{paymentDate}}.</p>
+    <p>Your salary from <strong>{{collegeName}}</strong> for <strong>{{month}} {{year}}</strong> has been processed on {{paymentDate}}.</p>
     <p>Net pay: <strong>{{netPay}}</strong></p>
     <p>Your payslip is attached to this email.</p>
-    <p>Regards,<br/>{{collegeName}}</p>
+    <p>Regards,<br/><strong>{{collegeName}}</strong></p>
+    `
+  },
+  {
+    name: 'Teacher Account Setup',
+    subject: 'Set up your teacher account - {{collegeName}}',
+    contentHtml: `
+    <h2 style="color: #0f172a; margin-top: 0;">Welcome, {{name}}!</h2>
+    <p>Your teacher account has been created for <strong>{{collegeName}}</strong>.</p>
+    
+    <div class="highlight" style="text-align: left;">
+      <div style="margin-bottom: 8px;"><strong>Teacher ID:</strong> {{teacherId}}</div>
+      <div style="margin-bottom: 8px;"><strong>College:</strong> {{collegeName}}</div>
+      <div><strong>Email:</strong> {{email}}</div>
+    </div>
+    
+    <p>Open the secure setup link below to create your password and set up your account:</p>
+    
+    <div style="text-align: center;">
+      <a href="{{setupUrl}}" class="button">Set Up Your Account</a>
+    </div>
+    
+    <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
+      If the button doesn't work, copy this setup link into your browser:<br>
+      <a href="{{setupUrl}}">{{setupUrl}}</a>
+    </p>
+    <p style="font-size: 13px; color: #64748b; margin-top: 12px;">
+      Sent on behalf of {{collegeName}}.
+    </p>
     `
   }
 ];
@@ -102,7 +130,14 @@ async function seed() {
       });
       console.log('Seeded template: ' + template.name);
     } else {
-      console.log('Template already exists: ' + template.name);
+      await prisma.emailTemplate.update({
+        where: { id: existing.id },
+        data: {
+          subject: template.subject,
+          contentHtml: template.contentHtml
+        }
+      });
+      console.log('Updated existing template: ' + template.name);
     }
   }
 }

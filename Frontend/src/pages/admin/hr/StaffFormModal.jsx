@@ -13,8 +13,8 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
   const { departments } = useDepartments();
   const { roles, isLoading: isLoadingRoles, refetch: refetchRoles } = useRoles();
 
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm({
-    defaultValues: {
+  const { register, handleSubmit, reset, watch, setValue, getValues, formState: { errors } } = useForm({
+    defaultValues: initialData || {
       firstName: '',
       lastName: '',
       email: '',
@@ -31,6 +31,21 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
   });
 
   const staffType = watch('staffType');
+  const roleCategory = staffType === 'non-teaching' ? 'non_teaching' : 'teaching';
+  const filteredRoles = roles.filter(r => !r.isSystemRole && r.category === roleCategory);
+
+  useEffect(() => {
+    if (isOpen && initialData?.customRoleId && roles.length > 0) {
+      setValue('customRoleId', initialData.customRoleId);
+    }
+  }, [roles, isOpen, initialData, setValue]);
+
+  useEffect(() => {
+    const current = getValues('customRoleId');
+    if (roles.length > 0 && current && !filteredRoles.some(r => r.id === current)) {
+      setValue('customRoleId', '');
+    }
+  }, [staffType, roles]);
 
   useEffect(() => {
     if (isOpen) {
@@ -60,21 +75,18 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
     }
   }, [isOpen, initialData, reset, refetchRoles]);
 
-  useEffect(() => {
-    if (isOpen && initialData?.customRoleId && roles.length > 0) {
-      setValue('customRoleId', initialData.customRoleId);
-    }
-  }, [isOpen, initialData, roles, setValue]);
-
   const onFormSubmit = (data) => {
     const isNonTeaching = data.staffType === 'non-teaching';
     const selectedRole = roles.find(r => r.id === data.customRoleId);
     const designation = selectedRole ? selectedRole.name : (isNonTeaching ? 'Staff' : 'Teacher');
 
+    const TEACHING_ROLES = ['teacher', 'hod', 'faculty'];
+    const keepExisting = initialData && TEACHING_ROLES.includes(initialData.role);
+
     const payload = {
       ...data,
       staffType: isNonTeaching ? 'non-teaching' : 'teaching',
-      role: isNonTeaching ? 'staff' : (data.role && data.role !== 'staff' ? data.role : 'teacher'),
+      role: isNonTeaching ? 'staff' : (keepExisting ? initialData.role : (data.role && data.role !== 'staff' ? data.role : 'teacher')),
       name: `${data.firstName || ''} ${data.lastName || ''}`.trim(),
       designation: designation,
       customRoleId: data.customRoleId || null,
@@ -206,7 +218,6 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
                 { value: 'non-teaching', label: 'Non-Teaching Staff' }
               ]}
             />
-
             {staffType === 'non-teaching' ? (
               <div className="space-y-1">
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
@@ -225,7 +236,7 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
                     <option value="">
                       {isLoadingRoles ? 'Loading roles...' : 'Select a Role'}
                     </option>
-                    {roles.map(r => (
+                    {filteredRoles.map(r => (
                       <option key={r.id} value={r.id}>{r.name}</option>
                     ))}
                   </select>
@@ -238,7 +249,7 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
                 {errors.customRoleId && (
                   <p className="text-red-500 text-sm mt-1">{errors.customRoleId.message}</p>
                 )}
-                {!isLoadingRoles && roles.length === 0 && (
+                {!isLoadingRoles && filteredRoles.length === 0 && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                     No roles yet. Create one in Roles & Permissions.
                   </p>
@@ -251,11 +262,16 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
                   {...register('customRoleId')}
                   className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white"
                 >
-                  <option value="">Teacher</option>
-                  {roles.map(r => (
+                  <option value="">Teacher (Standard)</option>
+                  {filteredRoles.map(r => (
                     <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
                 </select>
+                {filteredRoles.length === 0 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    No teaching roles yet. Create one under Roles &amp; Permissions.
+                  </p>
+                )}
               </div>
             )}
 

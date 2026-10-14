@@ -284,7 +284,8 @@ export const updatePayrollStatus = async (req, res) => {
       await sendDynamicMail({
         to: existing.staff.email,
         templateName: 'Salary Processed',
-        headerTitle: college?.name,
+        headerTitle: college?.name || 'Staff Payroll',
+        fromName: college?.name,
         variables: {
           staffName: existing.staff.name || 'Staff',
           month: monthName,

@@ -9,11 +9,11 @@ import api from '../../services/api';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { toast } from 'react-hot-toast';
 import { Pagination } from '../../components/ui/Pagination';
-import { 
-  Building2, 
-  Plus, 
-  Search, 
-  Loader2, 
+import {
+  Building2,
+  Plus,
+  Search,
+  Loader2,
   AlertCircle,
   CheckCircle2,
   MoreVertical,
@@ -61,7 +61,7 @@ const SuperColleges = () => {
 
   const handleDeleteCollege = async (collegeId) => {
     if (!(await confirm({ message: "Are you sure you want to permanently delete this college? This action cannot be undone." }))) return;
-    
+
     try {
       await deleteCollegeMutation.mutateAsync(collegeId);
     } catch (error) {
@@ -70,7 +70,7 @@ const SuperColleges = () => {
     }
   };
 
-  const filteredColleges = colleges.filter(college => 
+  const filteredColleges = colleges.filter(college =>
     college.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     college.id?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -84,7 +84,7 @@ const SuperColleges = () => {
           <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Colleges Directory</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">Manage all institutions registered in the Zuna ecosystem.</p>
         </div>
-        <button 
+        <button
           onClick={() => setIsModalOpen(true)}
           className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-primary-500/30 transition-all"
         >
@@ -164,13 +164,12 @@ const SuperColleges = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                        college.status === 'active' 
-                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' 
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${college.status === 'active'
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
                           : college.status === 'pending'
-                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
-                          : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
-                      }`}>
+                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
+                            : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
+                        }`}>
                         <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${college.status === 'active' ? 'bg-emerald-500' : college.status === 'pending' ? 'bg-amber-500' : 'bg-red-500'}`}></span>
                         {college.status === 'active' ? 'Active' : college.status === 'pending' ? 'Pending' : 'Inactive'}
                       </span>
@@ -181,7 +180,7 @@ const SuperColleges = () => {
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
                         {college.status === 'pending' && (
-                          <button 
+                          <button
                             onClick={(e) => { e.stopPropagation(); handleApproveCollege(college.id, college.adminUid); }}
                             className="text-xs px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-500/20 dark:hover:bg-emerald-500/30 dark:text-emerald-400 font-bold rounded-lg transition-colors"
                           >
@@ -189,7 +188,7 @@ const SuperColleges = () => {
                           </button>
                         )}
                         {college.status === 'active' && (
-                          <button 
+                          <button
                             onClick={(e) => { e.stopPropagation(); handleUpdateStatus(college.id, 'suspended'); }}
                             className="text-xs px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-500/20 dark:hover:bg-amber-500/30 dark:text-amber-400 font-bold rounded-lg transition-colors"
                           >
@@ -197,20 +196,20 @@ const SuperColleges = () => {
                           </button>
                         )}
                         {college.status === 'suspended' && (
-                          <button 
+                          <button
                             onClick={(e) => { e.stopPropagation(); handleUpdateStatus(college.id, 'active'); }}
                             className="text-xs px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-500/20 dark:hover:bg-emerald-500/30 dark:text-emerald-400 font-bold rounded-lg transition-colors"
                           >
                             Activate
                           </button>
                         )}
-                        <button 
+                        <button
                           onClick={(e) => { e.stopPropagation(); setSubscriptionCollege(college); }}
                           className="text-xs px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-500/20 dark:hover:bg-blue-500/30 dark:text-blue-400 font-bold rounded-lg transition-colors"
                         >
                           Manage Plan
                         </button>
-                        <button 
+                        <button
                           onClick={(e) => { e.stopPropagation(); handleDeleteCollege(college.id); }}
                           className="text-xs px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-500/20 dark:hover:bg-red-500/30 dark:text-red-400 font-bold rounded-lg transition-colors"
                         >
@@ -240,7 +239,7 @@ const SuperColleges = () => {
       {/* Subscription Modal */}
       <AnimatePresence>
         {subscriptionCollege && (
-          <ManageSubscriptionModal 
+          <ManageSubscriptionModal
             college={subscriptionCollege}
             onClose={() => setSubscriptionCollege(null)}
             onSuccess={() => {
@@ -253,8 +252,8 @@ const SuperColleges = () => {
 
       <AnimatePresence>
         {isModalOpen && (
-          <OnboardCollegeModal 
-            onClose={() => setIsModalOpen(false)} 
+          <OnboardCollegeModal
+            onClose={() => setIsModalOpen(false)}
             onSuccess={() => {
               setIsModalOpen(false);
               refetch();
@@ -262,9 +261,9 @@ const SuperColleges = () => {
           />
         )}
         {selectedCollege && (
-          <CollegeDetailsModal 
-            college={selectedCollege} 
-            onClose={() => setSelectedCollege(null)} 
+          <CollegeDetailsModal
+            college={selectedCollege}
+            onClose={() => setSelectedCollege(null)}
             onManageSubscription={(col) => {
               setSelectedCollege(null);
               setSubscriptionCollege(col);
@@ -301,7 +300,7 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
   const onSubmit = async (data) => {
     setIsSubmitting(true);
     setApiError('');
-    
+
     try {
       const {
         adminName, adminEmail, adminPassword,
@@ -336,7 +335,7 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
         adminUser: { name: adminName, email: adminEmail, password: adminPassword },
         collegeData
       });
-      
+
       setSuccessData(result.data?.data);
     } catch (error) {
       console.error(error);
@@ -359,16 +358,16 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       {/* Backdrop */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
       />
-      
+
       {/* Modal Content */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -381,7 +380,7 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
             </div>
             <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Onboard New College</h2>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 shrink-0"
           >
@@ -399,7 +398,7 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
               <p className="text-slate-500 dark:text-slate-400 mb-8 max-w-sm mx-auto">
                 The institution has been registered and the admin credentials have been securely generated.
               </p>
-              
+
               <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-6 mb-8 text-left max-w-md mx-auto">
                 <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Generated College Code:</p>
                 <div className="flex items-center justify-between">
@@ -409,7 +408,7 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
                 </div>
               </div>
 
-              <button 
+              <button
                 onClick={onSuccess}
                 className="px-8 py-3.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-bold rounded-xl hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors"
               >
@@ -418,10 +417,10 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
             </div>
           ) : (
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-              
+
               <AnimatePresence>
                 {apiError && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
@@ -445,7 +444,7 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
                     </div>
                     {errors.collegeName && <p className="mt-1.5 text-xs text-red-500">{errors.collegeName.message}</p>}
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Short / Abbreviated Name</label>
                     <div className="relative group">
@@ -458,17 +457,17 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Official Email *</label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Mail className="h-5 w-5 text-slate-400" /></div>
-                      <input 
-                        type="email" 
-                        {...register("collegeEmail", { 
+                      <input
+                        type="email"
+                        {...register("collegeEmail", {
                           required: "Official Email is required",
                           pattern: {
                             value: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
                             message: "Please enter a valid email address with a valid domain (e.g. .com, .edu, .in)"
                           }
-                        })} 
-                        className="block w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl text-sm" 
-                        placeholder="contact@oxford.edu" 
+                        })}
+                        className="block w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl text-sm"
+                        placeholder="contact@oxford.edu"
                       />
                     </div>
                     {errors.collegeEmail && <p className="mt-1.5 text-xs text-red-500">{errors.collegeEmail.message}</p>}
@@ -478,17 +477,17 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Official Phone (10 Digits)</label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Phone className="h-5 w-5 text-slate-400" /></div>
-                      <input 
-                        type="tel" 
+                      <input
+                        type="tel"
                         maxLength={10}
                         {...register("officialPhone", {
                           pattern: {
                             value: /^[6-9]\d{9}$/,
                             message: "Please enter a valid 10-digit mobile number"
                           }
-                        })} 
-                        className="block w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl text-sm" 
-                        placeholder="9876543210" 
+                        })}
+                        className="block w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl text-sm"
+                        placeholder="9876543210"
                       />
                     </div>
                     {errors.officialPhone && <p className="mt-1.5 text-xs text-red-500">{errors.officialPhone.message}</p>}
@@ -640,17 +639,17 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Admin Email *</label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Mail className="h-5 w-5 text-slate-400" /></div>
-                      <input 
-                        type="email" 
-                        {...register("adminEmail", { 
+                      <input
+                        type="email"
+                        {...register("adminEmail", {
                           required: "Admin Email is required",
                           pattern: {
                             value: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
                             message: "Please enter a valid email address with a valid domain (e.g. .com, .edu, .in)"
                           }
-                        })} 
-                        className="block w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl text-sm" 
-                        placeholder="principal@oxford.edu" 
+                        })}
+                        className="block w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl text-sm"
+                        placeholder="principal@oxford.edu"
                       />
                     </div>
                     {errors.adminEmail && <p className="mt-1.5 text-xs text-red-500">{errors.adminEmail.message}</p>}
@@ -659,7 +658,7 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Temporary Password *</label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Lock className="h-5 w-5 text-slate-400" /></div>
-                      <input type="text" {...register("adminPassword", { required: "Password is required", minLength: { value: 6, message: "Min 6 characters" }})} className="block w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl text-sm" placeholder="Enter secure initial password" />
+                      <input type="text" {...register("adminPassword", { required: "Password is required", minLength: { value: 6, message: "Min 6 characters" } })} className="block w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-[#060D1A] border border-slate-200 dark:border-white/10 rounded-xl text-sm" placeholder="Enter secure initial password" />
                     </div>
                     {errors.adminPassword && <p className="mt-1.5 text-xs text-red-500">{errors.adminPassword.message}</p>}
                   </div>
@@ -685,15 +684,15 @@ const OnboardCollegeModal = ({ onClose, onSuccess }) => {
 const CollegeDetailsModal = ({ college, onClose, onManageSubscription }) => {
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
       />
-      
-      <motion.div 
+
+      <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -701,7 +700,7 @@ const CollegeDetailsModal = ({ college, onClose, onManageSubscription }) => {
       >
         <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/5 shrink-0">
           <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">College Details</h2>
-          <button 
+          <button
             onClick={onClose}
             className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"
           >
@@ -722,15 +721,14 @@ const CollegeDetailsModal = ({ college, onClose, onManageSubscription }) => {
             <div className="flex-1">
               <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{college.name} {college.shortName && `(${college.shortName})`}</h3>
               <p className="text-slate-500 dark:text-slate-400 font-mono mt-1">{college.id}</p>
-              
+
               <div className="flex flex-wrap gap-2 mt-3">
-                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                  college.status === 'active' 
-                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' 
+                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${college.status === 'active'
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
                     : college.status === 'pending'
-                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
-                    : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
-                }`}>
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
+                      : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
+                  }`}>
                   {college.status?.toUpperCase() || 'UNKNOWN'}
                 </span>
                 {college.category && (
@@ -748,7 +746,7 @@ const CollegeDetailsModal = ({ college, onClose, onManageSubscription }) => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            
+
             {/* Credentials & Identifiers */}
             <div className="space-y-6">
               <h4 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider border-b border-slate-100 dark:border-white/10 pb-2">Credentials</h4>
@@ -830,13 +828,13 @@ const CollegeDetailsModal = ({ college, onClose, onManageSubscription }) => {
                       {college.subscriptionPlan ? `${college.subscriptionPlan} Plan` : 'No Active Plan'}
                     </p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {college.subscriptionPlan 
-                        ? `${college.subscriptionStatus} • Valid until ${new Date(college.subscriptionEndDate).toLocaleDateString()}` 
+                      {college.subscriptionPlan
+                        ? `${college.subscriptionStatus} • Valid until ${new Date(college.subscriptionEndDate).toLocaleDateString()}`
                         : 'Contact Zuna global to upgrade.'}
                     </p>
                   </div>
                 </div>
-                <button 
+                <button
                   onClick={() => onManageSubscription(college)}
                   className="px-4 py-2 bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
                 >

@@ -1,79 +1,16 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import dotenv from 'dotenv';
 import { prisma } from '../../lib/prisma.js';
+import { DEFAULT_TEMPLATES } from './templateSeeder.js';
 dotenv.config();
 
-// ---------------------------------------------------------------------------
-// Transporter
-// Port 587 + STARTTLS is used because cloud hosts (Railway, Render, etc.)
-// typically block outbound port 465 (SMTPS / implicit TLS).
-// Port 587 with `secure:false` + STARTTLS is the correct production setup.
-// ---------------------------------------------------------------------------
-const createTransporter = () => {
-  const port = parseInt(process.env.SMTP_PORT || '587', 10);
-  const useImplicitTls = port === 465;
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port,
-    secure: useImplicitTls,
-    requireTLS: !useImplicitTls,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 30000,
-  });
-};
-
-// Used only for the startup verification check
-const transporter = createTransporter();
-
-// Verify SMTP connection at startup (non-blocking, NO credentials ever logged)
-transporter.verify((err) => {
-  if (err) {
-    console.error('[EmailService] ⚠️  SMTP transporter verification FAILED — emails will not be delivered.');
-    if (process.env.NODE_ENV !== 'production') {
-      const missingAuth = !process.env.SMTP_USER || !process.env.SMTP_PASS;
-      const isAuthFailure = err.code === 'EAUTH' || err.responseCode === 535;
-      const isTlsFailure = /tls|ssl|certificate/i.test(err.message || '');
-      const category = missingAuth
-        ? 'SMTP_CONFIG_MISSING'
-        : isAuthFailure
-          ? 'SMTP_AUTH_FAILED'
-          : isTlsFailure
-            ? 'SMTP_TLS_ERROR'
-            : err.code || 'SMTP_UNKNOWN';
-      const redactCredentials = (value) => {
-        let message = String(value || '');
-        for (const secret of [process.env.SMTP_USER, process.env.SMTP_PASS]) {
-          if (secret) message = message.split(secret).join('[redacted]');
-        }
-        return message;
-      };
-
-      console.error('[EmailService] SMTP failure category:', category);
-      console.error('[EmailService] SMTP host:', process.env.SMTP_HOST || 'smtp.gmail.com');
-      console.error('[EmailService] SMTP port:', process.env.SMTP_PORT || '587');
-      console.error('[EmailService] SMTP user configured:', Boolean(process.env.SMTP_USER));
-      console.error('[EmailService] SMTP password configured:', Boolean(process.env.SMTP_PASS));
-      console.error('[EmailService] SMTP error code:', err.code || 'NONE');
-      console.error('[EmailService] SMTP error command:', err.command || 'NONE');
-      console.error('[EmailService] SMTP error message:', redactCredentials(err.message));
-    } else {
-      // In production: always log SMTP errors (without credentials)
-      console.error('[EmailService] SMTP error code:', err.code || 'NONE');
-      console.error('[EmailService] SMTP error message:', err.message?.replace(process.env.SMTP_PASS || '', '[redacted]') || 'unknown');
-    }
-  } else {
-    console.log('[EmailService] ✅ SMTP transporter is ready to send emails.');
-    console.log('[EmailService]   SMTP host :', process.env.SMTP_HOST || 'smtp.gmail.com');
-    console.log('[EmailService]   SMTP port :', process.env.SMTP_PORT || '587');
-    console.log('[EmailService]   SMTP user configured:', Boolean(process.env.SMTP_USER));
-  }
-});
+if (resend) {
+  console.log('[EmailService] ✅ Resend client configured.');
+} else {
+  console.error('[EmailService] ⚠️ RESEND_API_KEY is not set — emails will not be delivered.');
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -87,8 +24,9 @@ const escapeHtml = (value = '') => String(value)
 
 // ---------------------------------------------------------------------------
 // Base HTML layout (wraps both DB templates and built-in fallbacks)
-// ---------------------------------------------------------------------------
-const baseTemplate = (content, title = 'Zuna ERP') => `
+const baseTemplate = (content, title = '') => {
+  const displayTitle = (title && title !== 'Zuna ERP') ? title : 'College Management System';
+  return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -118,7 +56,7 @@ const baseTemplate = (content, title = 'Zuna ERP') => `
     .header h1 {
       color: #ffffff;
       margin: 0;
-      font-size: 24px;
+      font-size: 22px;
       font-weight: 700;
       letter-spacing: -0.025em;
     }
@@ -161,18 +99,19 @@ const baseTemplate = (content, title = 'Zuna ERP') => `
 <body>
   <div class="container">
     <div class="header">
-      <h1>${escapeHtml(title)}</h1>
+      <h1>${escapeHtml(displayTitle)}</h1>
     </div>
     <div class="content">
       ${content}
     </div>
     <div class="footer">
-      <p>This is an automated message from Zuna ERP College Management System.</p>
+      <p>This is an automated message from ${escapeHtml(displayTitle)}.</p>
     </div>
   </div>
 </body>
 </html>
 `;
+};
 
 // ---------------------------------------------------------------------------
 // Built-in fallback templates
@@ -181,13 +120,14 @@ const baseTemplate = (content, title = 'Zuna ERP') => `
 // ---------------------------------------------------------------------------
 const FALLBACK_TEMPLATES = {
   'Teacher Account Setup': {
-    subject: 'Set up your Zuna ERP teacher account',
+    subject: (vars) => vars?.collegeName ? `Set up your teacher account - ${vars.collegeName}` : 'Set up your teacher account',
     buildHtml: (vars) => `
       <h2 style="color: #0f172a; margin-top: 0;">Welcome, ${escapeHtml(vars.name || 'Teacher')}!</h2>
-      <p>Your teacher account has been created for ${escapeHtml(vars.collegeName || 'your college')}.</p>
+      <p>Your teacher account has been created for <strong>${escapeHtml(vars.collegeName || 'your college')}</strong>.</p>
 
       <div class="highlight" style="text-align: left; font-family: sans-serif; font-size: 14px; letter-spacing: normal;">
         <div style="margin-bottom: 8px;"><strong>Teacher ID:</strong> ${escapeHtml(vars.teacherId)}</div>
+        ${vars.collegeName ? `<div style="margin-bottom: 8px;"><strong>College:</strong> ${escapeHtml(vars.collegeName)}</div>` : ''}
         <div><strong>Email:</strong> ${escapeHtml(vars.email)}</div>
       </div>
 
@@ -201,23 +141,26 @@ const FALLBACK_TEMPLATES = {
         If the button doesn't work, copy this setup link into your browser:<br>
         <a href="${escapeHtml(vars.setupUrl)}">${escapeHtml(vars.setupUrl)}</a>
       </p>
+      <p style="font-size: 13px; color: #64748b; margin-top: 12px;">
+        Sent on behalf of ${escapeHtml(vars.collegeName || 'your institution')}.
+      </p>
     `
   },
   'Student Welcome': {
-    subject: 'Welcome to Zuna ERP',
+    subject: (vars) => vars?.collegeName ? `Welcome to ${vars.collegeName}` : 'Welcome to College Management System',
     buildHtml: (vars) => `
-      <h2 style="color: #0f172a; margin-top: 0;">Welcome to Zuna ERP, ${vars.name || 'Student'}!</h2>
-      <p>Your account has been successfully created. You can now log in to the system using the following credentials:</p>
+      <h2 style="color: #0f172a; margin-top: 0;">Welcome, ${escapeHtml(vars.name || 'Student')}!</h2>
+      <p>Your student account has been successfully created${vars.collegeName ? ` for <strong>${escapeHtml(vars.collegeName)}</strong>` : ''}. You can now log in using the credentials below:</p>
 
       <div class="highlight" style="text-align: left; font-family: sans-serif; font-size: 14px; letter-spacing: normal;">
-        <div style="margin-bottom: 8px;"><strong>Email:</strong> ${vars.email}</div>
-        <div><strong>Your Password:</strong> ${vars.password}</div>
+        <div style="margin-bottom: 8px;"><strong>Email:</strong> ${escapeHtml(vars.email)}</div>
+        <div><strong>Your Password:</strong> ${escapeHtml(vars.password)}</div>
       </div>
 
       <p>We strongly recommend changing your password after your first login.</p>
 
       <div style="text-align: center;">
-        <a href="${vars.loginUrl || '#'}" class="button">Log In to Your Account</a>
+        <a href="${escapeHtml(vars.loginUrl || '#')}" class="button">Log In to Your Account</a>
       </div>
     `
   },
@@ -225,11 +168,11 @@ const FALLBACK_TEMPLATES = {
     subject: 'Password Reset Request',
     buildHtml: (vars) => `
       <h2 style="color: #0f172a; margin-top: 0;">Reset Your Password</h2>
-      <p>Hello ${vars.name || ''},</p>
+      <p>Hello ${escapeHtml(vars.name || '')},</p>
       <p>We received a request to reset your password. Click the button below to choose a new password.</p>
 
       <div style="text-align: center;">
-        <a href="${vars.resetUrl || vars.resetLink || '#'}" class="button">Reset Password</a>
+        <a href="${escapeHtml(vars.resetUrl || vars.resetLink || '#')}" class="button">Reset Password</a>
       </div>
 
       <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
@@ -239,10 +182,10 @@ const FALLBACK_TEMPLATES = {
     `
   },
   'Admin Welcome': {
-    subject: 'Welcome to Zuna ERP - College Admin',
+    subject: (vars) => vars?.collegeName ? `Welcome to ${vars.collegeName} - College Admin` : 'Welcome - College Admin',
     buildHtml: (vars) => `
-      <h2 style="color: #0f172a; margin-top: 0;">Welcome to Zuna ERP, ${escapeHtml(vars.name || 'Admin')}!</h2>
-      <p>Your college admin account has been successfully created. You can now log in using the credentials below:</p>
+      <h2 style="color: #0f172a; margin-top: 0;">Welcome, ${escapeHtml(vars.name || 'Admin')}!</h2>
+      <p>Your college admin account has been successfully created${vars.collegeName ? ` for <strong>${escapeHtml(vars.collegeName)}</strong>` : ''}. You can now log in using the credentials below:</p>
 
       <div class="highlight" style="text-align: left; font-family: sans-serif; font-size: 14px; letter-spacing: normal;">
         <div style="margin-bottom: 8px;"><strong>Email:</strong> ${escapeHtml(vars.email)}</div>
@@ -255,13 +198,13 @@ const FALLBACK_TEMPLATES = {
     `
   },
   'Salary Processed': {
-    subject: 'Salary Processed Notification',
+    subject: (vars) => vars?.collegeName ? `Salary Processed Notification - ${vars.collegeName} (${vars.month || ''} ${vars.year || ''})` : 'Salary Processed Notification',
     buildHtml: (vars) => `
       <h2 style="color: #0f172a; margin-top: 0;">Hello ${escapeHtml(vars.staffName || 'Staff')},</h2>
-      <p>Your salary for <strong>${escapeHtml(vars.month || '')} ${escapeHtml(vars.year || '')}</strong> has been processed on ${escapeHtml(vars.paymentDate || '')}.</p>
+      <p>Your salary from <strong>${escapeHtml(vars.collegeName || 'the college')}</strong> for <strong>${escapeHtml(vars.month || '')} ${escapeHtml(vars.year || '')}</strong> has been processed on ${escapeHtml(vars.paymentDate || '')}.</p>
       <p>Net Pay: <strong>${escapeHtml(vars.netPay || '')}</strong></p>
       <p>Your payslip details have been updated in your staff portal.</p>
-      <p>Regards,<br/>${escapeHtml(vars.collegeName || 'Zuna ERP')}</p>
+      <p>Regards,<br/><strong>${escapeHtml(vars.collegeName || 'College Administration')}</strong></p>
     `
   },
   'Low Stock Alert': {
@@ -280,47 +223,56 @@ const FALLBACK_TEMPLATES = {
 };
 
 // ---------------------------------------------------------------------------
-// Core sendMail — wraps nodemailer.sendMail with proper logging
+// Core sendMail — wraps resend.emails.send with proper logging
 // ---------------------------------------------------------------------------
-export const sendMail = async ({ to, subject, html, text, cc, bcc, replyTo, attachments }) => {
+const htmlToText = (html = '') => html
+  .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+  .replace(/<[^>]+>/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+export const sendMail = async ({ to, subject, html, text, fromName, cc, bcc, replyTo, attachments }) => {
   try {
-    const textContent = text || (html ? html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '');
-
-    // For Gmail SMTP, 'from' should align with the authenticated SMTP_USER to avoid DMARC/SPF rejection
-    const defaultSender = process.env.FROM_EMAIL || (process.env.SMTP_USER ? `"Zuna ERP" <${process.env.SMTP_USER}>` : '"Zuna ERP" <noreply@zuna.edu>');
-
-    const mailOptions = {
-      from: defaultSender,
-      to,
-      subject,
-      html,
-      text: textContent,
-    };
-    if (cc) mailOptions.cc = cc;
-    if (bcc) mailOptions.bcc = bcc;
-    if (replyTo) mailOptions.replyTo = replyTo;
-    if (attachments) mailOptions.attachments = attachments;
-
-    // Always use a fresh transporter per send — avoids stale/closed connections
-    // on cloud hosts (Railway) which have aggressive TCP idle timeouts.
-    const freshTransporter = createTransporter();
-    let info;
-    try {
-      info = await freshTransporter.sendMail(mailOptions);
-    } finally {
-      freshTransporter.close();
+    if (!resend) {
+      return { success: false, error: 'Email service is not configured (RESEND_API_KEY missing)' };
     }
 
-    console.log(`[EmailService] ✅ Email sent successfully to: ${to} | Subject: "${subject}" | MessageId: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
+    // Placeholder accounts can never receive mail; sending would only cause bounces
+    const recipients = [].concat(to).map(String);
+    if (recipients.some((addr) => addr.toLowerCase().endsWith('@pending.local'))) {
+      return { success: false, error: 'Recipient has no real email address registered' };
+    }
+
+    const fromEnv = process.env.FROM_EMAIL || '';
+    const senderEmail = fromEnv.match(/<([^>]+)>/)?.[1] || fromEnv || 'noreply@teamzuna.in';
+    const envName = fromEnv.includes('<') ? fromEnv.replace(/<.*>/, '').replace(/"/g, '').trim() : '';
+    const displayName = (fromName || envName || 'College Management System')
+      .replace(/["<>\r\n]/g, '').trim();
+    const from = `"${displayName}" <${senderEmail}>`;
+
+    const payload = { from, to, subject, html, text: text || htmlToText(html) };
+    if (cc) payload.cc = cc;
+    if (bcc) payload.bcc = bcc;
+    if (replyTo) payload.replyTo = replyTo;
+    if (attachments?.length) {
+      payload.attachments = attachments.map((a) => ({ filename: a.filename, content: a.content }));
+    }
+
+    const { data, error } = await resend.emails.send(payload);
+
+    if (error) {
+      console.error(
+        `[EmailService] ❌ Failed to send email to: ${to}\n` +
+        `  Subject: "${subject}"\n` +
+        `  Error: ${error.name || 'UNKNOWN'} - ${error.message}`
+      );
+      return { success: false, error: error.message };
+    }
+
+    console.log(`[EmailService] ✅ Email sent to: ${to} | Subject: "${subject}" | Id: ${data?.id}`);
+    return { success: true, messageId: data?.id };
   } catch (error) {
-    // Log the Nodemailer error code/message for debugging — never log credentials
-    console.error(
-      `[EmailService] ❌ Failed to send email to: ${to}\n` +
-      `  Subject: "${subject}"\n` +
-      `  Error Code: ${error.code || 'UNKNOWN'}\n` +
-      `  Error: ${error.message}`
-    );
+    console.error(`[EmailService] ❌ Failed to send email to: ${to} | Error: ${error.message}`);
     return { success: false, error: error.message };
   }
 };
@@ -341,6 +293,7 @@ export const sendDynamicMail = async ({
   templateName,
   variables = {},
   headerTitle,
+  fromName,
   cc,
   bcc,
   replyTo,
@@ -349,11 +302,34 @@ export const sendDynamicMail = async ({
   try {
     let subject;
     let htmlContent;
+    // Always prioritize the sending college's name for the banner header
+    const resolvedTitle = variables.collegeName || headerTitle || 'College Management System';
+    const resolvedFromName = variables.collegeName || fromName || undefined;
 
     // --- Try loading template from database first ---
-    const template = await prisma.emailTemplate.findFirst({
+    let template = await prisma.emailTemplate.findFirst({
       where: { name: templateName }
     }).catch(() => null); // DB failure should not crash email sending
+
+    // If template is missing from DB, auto-persist the default template on-the-fly
+    if (!template) {
+      const defaultTpl = DEFAULT_TEMPLATES.find((t) => t.name === templateName);
+      if (defaultTpl) {
+        try {
+          template = await prisma.emailTemplate.create({
+            data: {
+              name: defaultTpl.name,
+              subject: defaultTpl.subject,
+              contentHtml: defaultTpl.contentHtml,
+              status: 'Active'
+            }
+          });
+          console.log(`[EmailService] 🚀 Auto-seeded missing template "${templateName}" into DB.`);
+        } catch (_) {
+          // If creation fails (e.g. race condition), fallback continues
+        }
+      }
+    }
 
     // Safety guard: refuse to send any DB template that contains a {{password}}
     // placeholder, regardless of template name. Fall through to built-in fallback.
@@ -385,10 +361,10 @@ export const sendDynamicMail = async ({
           htmlContent = htmlContent.replace(regex, String(value ?? ''));
         }
 
-        const fullHtml = baseTemplate(htmlContent, headerTitle || 'Zuna ERP');
+        const fullHtml = baseTemplate(htmlContent, resolvedTitle);
         console.log(`[EmailService] Using DB template: "${templateName}"`);
 
-        return await sendMail({ to, subject, html: fullHtml, cc, bcc, replyTo, attachments });
+        return await sendMail({ to, subject, html: fullHtml, fromName: resolvedFromName, cc, bcc, replyTo, attachments });
       }
     }
 
@@ -410,10 +386,15 @@ export const sendDynamicMail = async ({
       );
     }
 
-    subject = fallback.subject;
-    htmlContent = baseTemplate(fallback.buildHtml(variables), headerTitle || 'Zuna ERP');
+    subject = typeof fallback.subject === 'function' ? fallback.subject(variables) : fallback.subject;
+    for (const [key, value] of Object.entries(variables)) {
+      const regex = new RegExp(`{{${key}}}`, 'g');
+      subject = subject.replace(regex, String(value ?? ''));
+    }
 
-    return await sendMail({ to, subject, html: htmlContent, cc, bcc, replyTo, attachments });
+    htmlContent = baseTemplate(fallback.buildHtml(variables), resolvedTitle);
+
+    return await sendMail({ to, subject, html: htmlContent, fromName: resolvedFromName, cc, bcc, replyTo, attachments });
 
   } catch (error) {
     console.error(

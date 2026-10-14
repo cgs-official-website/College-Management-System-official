@@ -4,13 +4,13 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 import { redis, redisKeys } from '../../lib/cache.js';
-import { 
-  loginSchema, 
-  registerAdminSchema, 
-  refreshTokenSchema, 
+import {
+  loginSchema,
+  registerAdminSchema,
+  refreshTokenSchema,
   studentRegisterSchema,
   studentActivationSchema,
-  forgotPasswordSchema, 
+  forgotPasswordSchema,
   resetPasswordSchema,
   staffSetupSchema,
   teacherRegisterSchema,
@@ -58,7 +58,7 @@ export const login = async (req, res) => {
           studentProfile: true
         }
       });
-        } else {
+    } else {
       matchingUsers = await prisma.user.findMany({
         where: { email: normalizedEmail },
         include: {
@@ -108,7 +108,7 @@ export const login = async (req, res) => {
 
     // Store deterministic SHA-256 hash for database and Redis lookups
     const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
-    
+
     if (redis.status === 'ready') {
       try {
         await redis.set(redisKeys.refreshToken(tokenHash), JSON.stringify({ userId: user.id }), 'EX', 7 * 24 * 60 * 60);
@@ -147,7 +147,7 @@ export const login = async (req, res) => {
       ipAddress: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '127.0.0.1',
       userAgent: req.headers['user-agent'] || 'Unknown',
       status: 'SUCCESS'
-    }).catch(() => {});
+    }).catch(() => { });
 
     res.json({
       success: true,
@@ -262,7 +262,7 @@ export const registerAdmin = async (req, res) => {
     if (redis && redis.status === 'ready') {
       try {
         await redis.set(`college_status:${result.college.id}`, 'pending', 'EX', 3600);
-      } catch (err) {}
+      } catch (err) { }
     }
 
     const accessToken = jwt.sign(
@@ -670,13 +670,13 @@ export const studentRegister = async (req, res) => {
     const normalizedEmail = email.trim().toLowerCase();
     const student = normalizedAdmissionNumber
       ? await prisma.student.findFirst({
-          where: {
-            collegeId,
-            admissionNumber: { equals: normalizedAdmissionNumber, mode: 'insensitive' },
-            deletedAt: null
-          },
-          include: { user: true }
-        })
+        where: {
+          collegeId,
+          admissionNumber: { equals: normalizedAdmissionNumber, mode: 'insensitive' },
+          deletedAt: null
+        },
+        include: { user: true }
+      })
       : null;
 
     // If an admin pre-created this admission record, verify its stored email.
@@ -797,15 +797,15 @@ export const studentRegister = async (req, res) => {
       const savedStudent = student
         ? await tx.student.update({ where: { id: student.id }, data: studentData })
         : await tx.student.create({
-            data: {
-              ...studentData,
-              collegeId,
-              departmentId: department.id,
-              admissionNumber: admissionNo,
-              rollNumber: admissionNo,
-              batchYear: String(new Date().getFullYear())
-            }
-          });
+          data: {
+            ...studentData,
+            collegeId,
+            departmentId: department.id,
+            admissionNumber: admissionNo,
+            rollNumber: admissionNo,
+            batchYear: String(new Date().getFullYear())
+          }
+        });
 
       return { user, student: savedStudent, admissionNumber: admissionNo };
     });
@@ -903,7 +903,7 @@ export const refreshToken = async (req, res) => {
 export const logout = async (req, res) => {
   try {
     const { refreshToken: rawRefreshToken } = req.body || {};
-    
+
     if (rawRefreshToken) {
       const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
       await prisma.refreshToken.updateMany({
@@ -912,13 +912,13 @@ export const logout = async (req, res) => {
       });
 
       if (redis.status === 'ready') {
-        await redis.del(redisKeys.refreshToken(tokenHash)).catch(() => {});
+        await redis.del(redisKeys.refreshToken(tokenHash)).catch(() => { });
       }
     }
 
     // If access token had a jti, blacklist it in Redis
     if (req.user?.jti && redis.status === 'ready') {
-      await redis.set(redisKeys.revokedToken(req.user.jti), 'true', 'EX', 15 * 60).catch(() => {});
+      await redis.set(redisKeys.revokedToken(req.user.jti), 'true', 'EX', 15 * 60).catch(() => { });
     }
 
     res.json({ success: true, message: 'Logged out successfully' });
@@ -946,19 +946,33 @@ export const getMe = async (req, res) => {
       return res.json({ success: true, data: { ...user, collegeStatus: user.college?.status || null } });
     }
 
-    // Teacher/HOD/faculty: lean query — skip billing join
-    if (role === 'teacher' || role === 'hod' || role === 'faculty') {
+    if (role !== 'admin' && role !== 'superadmin') {
       const user = await prisma.user.findUnique({
         where: { id: req.user.userId },
         include: {
-          college: { select: { id: true, name: true, slug: true, status: true, logoUrl: true } },
-          teacherProfile: { include: { department: true } },
+          college: {
+            select: {
+              id: true, name: true, slug: true, status: true, logoUrl: true,
+              billingSubscription: { select: { subscriptionPlan: { select: { modules: true } } } }
+            }
+          },
+          teacherProfile: { omit: { profileImageData: true }, include: { department: true } },
           customRole: { include: { permissions: { include: { module: true } } } }
         }
       });
       if (!user) return res.status(404).json({ success: false, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
       const { passwordHash, ...safeUser } = user;
-      return res.json({ success: true, data: { ...safeUser, collegeStatus: user.college?.status || null } });
+      const { billingSubscription, ...collegeSafe } = user.college || {};
+      const planModules = billingSubscription?.subscriptionPlan?.modules;
+      return res.json({
+        success: true,
+        data: {
+          ...safeUser,
+          college: user.college ? collegeSafe : null,
+          collegeStatus: user.college?.status || null,
+          ...(planModules ? { allowedModules: planModules } : {})
+        }
+      });
     }
 
     // Admin / SuperAdmin: full query with billing
@@ -1079,6 +1093,8 @@ export const teacherSendSetup = async (req, res) => {
     const emailResult = await sendDynamicMail({
       to: teacherEmail,
       templateName: 'Teacher Account Setup',
+      headerTitle: teacher.college?.name || 'College Portal',
+      fromName: teacher.college?.name,
       variables: {
         name: teacher.user?.email?.split('@')[0] || teacherId,
         email: teacherEmail,
@@ -1294,6 +1310,8 @@ export const teacherRegister = async (req, res) => {
     sendDynamicMail({
       to: teacherEmail,          // ALWAYS teacher's own email, never admin email
       templateName: 'Teacher Account Setup',
+      headerTitle: collegeName || 'Teacher Account Setup',
+      fromName: collegeName,
       variables: {
         name: fullName || teacherEmail.split('@')[0],
         email: teacherEmail,
@@ -1481,6 +1499,8 @@ export const completeStaffSetup = async (req, res) => {
     sendDynamicMail({
       to: activatedEmail,
       templateName: 'Teacher Account Setup',
+      headerTitle: collegeName || 'Welcome to Campus Portal',
+      fromName: collegeName,
       variables: {
         name: staffName || activatedEmail.split('@')[0],
         email: activatedEmail,
@@ -1538,7 +1558,7 @@ export const forgotPassword = async (req, res) => {
 
     const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
     const resetLink = `${frontendUrl}/reset-password?token=${encodeURIComponent(token)}&id=${encodeURIComponent(user.id)}`;
-    
+
     await sendDynamicMail({
       to: user.email,
       templateName: 'Password Reset',
@@ -1566,7 +1586,7 @@ export const resetPassword = async (req, res) => {
     }
 
     const secret = JWT_SECRET + (user.passwordHash || '');
-    
+
     try {
       jwt.verify(token, secret);
     } catch (err) {
