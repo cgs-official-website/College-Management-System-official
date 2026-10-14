@@ -230,7 +230,6 @@ const FALLBACK_TEMPLATES = {
       <p>Please review inventory and initiate a replenishment request.</p>
     `
   },
-<<<<<<< HEAD
   'Teacher Welcome': {
     subject: (vars) => vars?.collegeName ? `Welcome to ${vars.collegeName} - your account is ready` : 'Your teacher account is ready',
     buildHtml: (vars) => `
@@ -255,9 +254,8 @@ const FALLBACK_TEMPLATES = {
       </p>
     `
   },
-=======
   'College Activated': {
-    subject: (vars) => vars?.collegeName ? `🎉 Your College Has Been Activated - ${vars.collegeName}` : '🎉 Your College Has Been Activated',
+    subject: (vars) => vars?.collegeName ? `Your College Has Been Activated - ${vars.collegeName}` : 'Your College Has Been Activated',
     buildHtml: (vars) => `
       <h2 style="color: #0f172a; margin-top: 0;">Congratulations, ${escapeHtml(vars.name || 'Admin')}!</h2>
       <p>We are pleased to inform you that your institution, <strong>${escapeHtml(vars.collegeName || 'your college')}</strong>, has been officially reviewed, approved, and activated by the Super Administration.</p>
@@ -288,7 +286,7 @@ const FALLBACK_TEMPLATES = {
     `
   },
   'College Suspended': {
-    subject: (vars) => vars?.collegeName ? `⚠️ Notice of Account Suspension - ${vars.collegeName}` : '⚠️ Notice of Account Suspension',
+    subject: (vars) => vars?.collegeName ? `Notice of Account Suspension - ${vars.collegeName}` : 'Notice of Account Suspension',
     buildHtml: (vars) => `
       <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
       <div style="font-family: 'Poppins', Arial, sans-serif; color: #1e293b;">
@@ -328,7 +326,6 @@ const FALLBACK_TEMPLATES = {
       </div>
     `
   }
->>>>>>> 344b7cf (updated files)
 };
 
 // ---------------------------------------------------------------------------

@@ -125,7 +125,6 @@ const templatesToSeed = [
     `
   },
   {
-<<<<<<< HEAD
     name: 'Teacher Welcome',
     subject: 'Welcome to {{collegeName}} - your account is ready',
     contentHtml: `
@@ -150,7 +149,7 @@ const templatesToSeed = [
     </p>
     `
   },
-=======
+  {
     name: 'College Activated',
     subject: 'Your College Has Been Activated - {{collegeName}}',
     contentHtml: `
@@ -184,7 +183,7 @@ const templatesToSeed = [
   },
   {
     name: 'College Suspended',
-    subject: '⚠️ Notice of Account Suspension - {{collegeName}}',
+    subject: 'Notice of Account Suspension - {{collegeName}}',
     contentHtml: `
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <div style="font-family: 'Poppins', Arial, sans-serif; color: #1e293b;">
@@ -224,7 +223,6 @@ const templatesToSeed = [
     </div>
     `
   }
->>>>>>> 344b7cf (updated files)
 ];
 
 async function seed() {
