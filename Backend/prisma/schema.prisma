@@ -765,6 +765,7 @@ model Notification {
   link       String?
   isRead     Boolean  @default(false)
   readBy     String[] @default([])
+  readAt     DateTime?
   createdAt  DateTime @default(now())
 
   college College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
@@ -772,6 +773,7 @@ model Notification {
 
   @@index([collegeId, userId])
   @@index([collegeId, targetRole])
+  @@index([collegeId, userId, readAt])
 }
 
 model Notice {

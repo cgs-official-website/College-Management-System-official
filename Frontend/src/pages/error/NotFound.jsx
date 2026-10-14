@@ -17,11 +17,15 @@ const NotFound = () => {
           <AlertCircle className="w-10 h-10 text-red-500" />
         </div>
         
-        <h1 className="text-6xl font-extrabold text-slate-900 dark:text-white mb-2">404</h1>
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">Page Not Found</h2>
+        <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white mb-3">
+          Oops! We can't find this page
+        </h1>
         
-        <p className="text-slate-500 dark:text-slate-400 mb-8">
-          The page you are looking for doesn't exist, has been moved, or you don't have permission to access it.
+        <p className="text-slate-500 dark:text-slate-400 mb-2">
+          The link may be wrong or outdated, or this page is not available for your account.
+        </p>
+        <p className="text-slate-500 dark:text-slate-400 mb-8 text-sm">
+          Please go back or open your dashboard. If this keeps happening, contact your college admin.
         </p>
 
         <div className="flex flex-col gap-3">

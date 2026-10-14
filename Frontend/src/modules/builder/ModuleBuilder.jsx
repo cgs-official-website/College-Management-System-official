@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { useGetEntities, useCreateEntity, useCreateField, useGetFields, useDeleteEntity, useCreateSection, useDeleteSection, useDeleteField } from './useBuilder';
+import { useGetEntities, useCreateEntity, useCreateField, useGetFields, useDeleteEntity, useCreateSection, useDeleteSection, useDeleteField, useUpdateField } from './useBuilder';
 import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
-import { Plus, Database, Settings2, GripVertical, Check, Trash2 } from 'lucide-react';
+import { Plus, Database, Settings2, GripVertical, Check, Trash2, Pencil } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 export default function ModuleBuilder() {
@@ -10,6 +11,7 @@ export default function ModuleBuilder() {
   const createEntity = useCreateEntity();
   const deleteEntity = useDeleteEntity();
   const createField = useCreateField();
+  const updateField = useUpdateField();
   const createSection = useCreateSection();
   const deleteSection = useDeleteSection();
   const deleteField = useDeleteField();
@@ -21,6 +23,14 @@ export default function ModuleBuilder() {
   const [deleteEntityModal, setDeleteEntityModal] = useState({ isOpen: false, id: null, slug: null });
   const [deleteSectionModal, setDeleteSectionModal] = useState({ isOpen: false, id: null });
   const [deleteFieldModal, setDeleteFieldModal] = useState({ isOpen: false, id: null, name: '' });
+  const [editFieldModal, setEditFieldModal] = useState({
+    isOpen: false,
+    field: null,
+    name: '',
+    isRequired: false,
+    sectionId: '',
+    optionsText: '',
+  });
 
   const { data: fieldsData, isLoading: fieldsLoading } = useGetFields(activeEntity);
   const [newField, setNewField] = useState({ name: '', key: '', type: 'text', isRequired: false, sectionId: '' });
@@ -140,6 +150,54 @@ export default function ModuleBuilder() {
     });
   };
 
+  const openEditFieldModal = (field) => {
+    let opts = '';
+    if (Array.isArray(field.options)) {
+      opts = field.options.join(', ');
+    } else if (typeof field.options === 'string') {
+      opts = field.options;
+    }
+    setEditFieldModal({
+      isOpen: true,
+      field,
+      name: field.name || '',
+      isRequired: !!field.isRequired,
+      sectionId: field.sectionId || '',
+      optionsText: opts,
+    });
+  };
+
+  const handleUpdateField = (e) => {
+    e.preventDefault();
+    if (!editFieldModal.field) return;
+
+    const payload = {
+      id: editFieldModal.field.id,
+      name: editFieldModal.name.trim(),
+      isRequired: editFieldModal.isRequired,
+      sectionId: editFieldModal.sectionId || null,
+    };
+
+    if (editFieldModal.field.type === 'select') {
+      const parsedOptions = editFieldModal.optionsText
+        .split(',')
+        .map(o => o.trim())
+        .filter(Boolean);
+      payload.options = parsedOptions;
+    }
+
+    updateField.mutate(payload, {
+      onSuccess: () => {
+        toast.success('Custom field updated successfully!');
+        setEditFieldModal({ isOpen: false, field: null, name: '', isRequired: false, sectionId: '', optionsText: '' });
+      },
+      onError: (err) => {
+        const msg = err.data?.message || err.message || 'Failed to update field';
+        toast.error(msg);
+      }
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -255,6 +313,13 @@ export default function ModuleBuilder() {
                                     </div>
                                   )}
                                   <button
+                                    onClick={() => openEditFieldModal(field)}
+                                    className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-500/10 rounded-lg transition-all"
+                                    title="Edit Field"
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
+                                  <button
                                     onClick={() => triggerDeleteField(field.id, field.name)}
                                     className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-all"
                                     title="Delete Field"
@@ -282,6 +347,18 @@ export default function ModuleBuilder() {
                               <div className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-xs font-medium text-slate-600 dark:text-slate-300">
                                 {field.type}
                               </div>
+                              {field.isRequired && (
+                                <div className="px-3 py-1 bg-amber-100 dark:bg-amber-500/10 rounded-full text-xs font-medium text-amber-700 dark:text-amber-400">
+                                  Required
+                                </div>
+                              )}
+                              <button
+                                onClick={() => openEditFieldModal(field)}
+                                className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-500/10 rounded-lg transition-all"
+                                title="Edit Field"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
                               <button
                                 onClick={() => triggerDeleteField(field.id, field.name)}
                                 className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-all"
@@ -438,6 +515,109 @@ export default function ModuleBuilder() {
         isDestructive={true}
         isLoading={deleteField.isLoading}
       />
+
+      <Modal
+        isOpen={editFieldModal.isOpen}
+        onClose={() => setEditFieldModal({ isOpen: false, field: null, name: '', isRequired: false, sectionId: '', optionsText: '' })}
+        title={`Edit Field: ${editFieldModal.field?.name || ''}`}
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={handleUpdateField} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Field Label <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={editFieldModal.name}
+              onChange={(e) => setEditFieldModal({ ...editFieldModal, name: e.target.value })}
+              className="w-full text-sm p-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0A0F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="e.g. Department"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Field Key</label>
+              <div className="text-xs font-mono p-2.5 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 select-none">
+                {editFieldModal.field?.key}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">Immutable key used for records</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Field Type</label>
+              <div className="text-xs capitalize font-medium p-2.5 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 select-none">
+                {editFieldModal.field?.type}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">Locked to protect existing records</p>
+            </div>
+          </div>
+
+          {editFieldModal.field?.type === 'select' && (
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Options (comma-separated)
+              </label>
+              <textarea
+                rows={3}
+                value={editFieldModal.optionsText}
+                onChange={(e) => setEditFieldModal({ ...editFieldModal, optionsText: e.target.value })}
+                placeholder="e.g. Computer Science, Mechanical, Civil"
+                className="w-full text-sm p-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0A0F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">Separate dropdown choices with commas</p>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Section (Optional)
+            </label>
+            <select
+              value={editFieldModal.sectionId}
+              onChange={(e) => setEditFieldModal({ ...editFieldModal, sectionId: e.target.value })}
+              className="w-full text-sm p-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0A0F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="">No Section (Uncategorized)</option>
+              {fieldsData?.sections?.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="pt-1">
+            <label className="flex items-center gap-2 cursor-pointer p-1">
+              <input
+                type="checkbox"
+                checked={editFieldModal.isRequired}
+                onChange={(e) => setEditFieldModal({ ...editFieldModal, isRequired: e.target.checked })}
+                className="w-4 h-4 text-primary-600 rounded border-slate-300 focus:ring-primary-500"
+              />
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Required Field</span>
+            </label>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-white/5">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setEditFieldModal({ isOpen: false, field: null, name: '', isRequired: false, sectionId: '', optionsText: '' })}
+              disabled={updateField.isLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              isLoading={updateField.isLoading}
+            >
+              Save Changes
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

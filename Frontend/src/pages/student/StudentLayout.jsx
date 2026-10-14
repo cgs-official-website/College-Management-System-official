@@ -33,6 +33,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useQueryClient } from '@tanstack/react-query';
 import { subscribeToSync } from '../../utils/syncChannel';
 import { useStudentProfile, useStudentDashboard } from '../../hooks/useStudentPortal';
+import { NotificationBell } from '../../components/ui/NotificationBell';
 import StudentCoursesDashboard from './StudentCoursesDashboard'; 
 import StudentAssignmentsDashboard from './StudentAssignmentsDashboard'; 
 import StudentAttendanceDashboard from './StudentAttendanceDashboard';
@@ -239,13 +240,7 @@ const StudentLayout = () => {
               {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5" />}
             </button>
 
-            <Link
-              to="/student/notices"
-              className="p-2.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-colors relative"
-              title="Campus Notices"
-            >
-              <Bell className="w-5 h-5" />
-            </Link>
+            <NotificationBell />
 
             <div className="h-8 w-px bg-slate-200 dark:bg-white/10 mx-1"></div>
 

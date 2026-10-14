@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { prisma } from '../../lib/prisma.js';
 import { uploadBuffer, getSignedAssetUrl, deleteAsset } from '../../lib/cloudinary.js';
 import { logger } from '../../server.js';
+import { notify } from '../notifications/notify.service.js';
 
 const fail = (res, status, code, message) =>
   res.status(status).json({ success: false, error: { code, message } });
@@ -257,15 +258,18 @@ export const updateLeaveRequestStatus = async (req, res) => {
       return fail(res, 403, 'FORBIDDEN', 'You are not allowed to review leave requests.');
     }
 
-    const existing = await prisma.leaveRequest.findFirst({ where: { id, collegeId } });
+    const existing = await prisma.leaveRequest.findFirst({ where: { id, ...(collegeId ? { collegeId } : {}) } });
     if (!existing) return fail(res, 404, 'NOT_FOUND', 'Leave request not found');
 
+    const targetCollegeId = existing.collegeId || collegeId;
+
+    const requester = await prisma.user.findUnique({
+      where: { id: existing.requesterUserId },
+      select: { studentProfile: { select: { id: true } } }
+    });
+    const isStudentLeave = !!requester?.studentProfile || existing.requesterRole?.toLowerCase() === 'student';
+
     if (!isAdminUser(req)) {
-      const requester = await prisma.user.findUnique({
-        where: { id: existing.requesterUserId },
-        select: { studentProfile: { select: { id: true } } }
-      });
-      const isStudentLeave = !!requester?.studentProfile || existing.requesterRole === 'student';
       if (!isStudentLeave) {
         return fail(res, 403, 'FORBIDDEN', 'Staff can only review student leave requests.');
       }
@@ -275,6 +279,30 @@ export const updateLeaveRequestStatus = async (req, res) => {
       where: { id },
       data: { status, reviewedBy: reviewerUserId }
     });
+
+    if (status === 'approved' || status === 'rejected') {
+      let targetUserId = existing.requesterUserId;
+      if (isStudentLeave) {
+        const userExists = await prisma.user.findUnique({ where: { id: targetUserId }, select: { id: true } });
+        if (!userExists) {
+          const studentRec = await prisma.student.findUnique({ where: { id: targetUserId }, select: { userId: true } });
+          if (studentRec?.userId) {
+            targetUserId = studentRec.userId;
+          }
+        }
+      }
+
+      await notify({
+        collegeId: targetCollegeId,
+        target: { userId: targetUserId },
+        type: status === 'approved' ? 'leave_status' : 'warning',
+        title: `Leave Request ${status === 'approved' ? 'Approved' : 'Rejected'}`,
+        message: isStudentLeave
+          ? `Your leave request has been ${status}.`
+          : `Your staff leave request has been ${status}.`,
+        link: isStudentLeave ? '/student/attendance' : '/teacher/my-leaves'
+      });
+    }
 
     res.json({ success: true, data: toSafeLeave(updated) });
   } catch (error) {
@@ -421,7 +449,16 @@ export const createStaffLeave = async (req, res) => {
     throw dbErr;
   }
 
-res.status(201).json({ success: true, data: toSafeLeave(leave) });
+  await notify({
+    collegeId,
+    target: { role: 'admin' },
+    type: 'info',
+    title: 'Staff Leave Request',
+    message: `${mine?.user?.name || roleName} submitted a leave request.`,
+    link: '/admin/hr'
+  });
+
+  res.status(201).json({ success: true, data: toSafeLeave(leave) });
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
   }

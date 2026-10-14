@@ -2,6 +2,7 @@ import { prisma, logger } from '../../server.js';
 import { redis, redisKeys } from '../../lib/cache.js';
 import { processStudentProfileImageBuffer, extractBufferFromBase64Payload } from '../../lib/imageProcessor.js';
 import { parseProofMeta, buildProofPayload, toSafeLeave, discardProof } from '../leaves/leaves.controller.js';
+import { notify } from '../notifications/notify.service.js';
 
 export const getStudentProfile = async (req, res) => {
   try {
@@ -364,9 +365,16 @@ export const createStudentLeaveRequest = async (req, res) => {
     throw dbErr;
   }
 
-  res.status(201).json({ success: true, data: toSafeLeave(leave) });
+  await notify({
+    collegeId: student.collegeId,
+    target: student.sectionId ? { sectionTeachers: student.sectionId } : { role: 'admin' },
+    type: 'leave_request',
+    title: 'Student Leave Request',
+    message: `${student.firstName || 'A student'} submitted a leave request.`,
+    link: '/teacher/student-leaves'
+  });
 
-   
+  res.status(201).json({ success: true, data: toSafeLeave(leave) });
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
   }
@@ -746,6 +754,15 @@ export const createStudentComplaint = async (req, res) => {
         priority: priority || 'medium',
         status: 'open'
       }
+    });
+
+    await notify({
+      collegeId: student.collegeId,
+      target: { role: 'admin' },
+      type: 'warning',
+      title: 'New Student Complaint',
+      message: `New complaint from ${student.firstName || 'Student'}: ${finalSubject}`,
+      link: '/admin/complaints'
     });
 
     res.status(201).json({ success: true, data: complaint });

@@ -6,26 +6,114 @@ export const getNotifications = async (req, res) => {
     const user = req.user;
 
     if (!collegeId || !user) {
-      return res.json({ data: [] });
+      return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 20, totalPages: 0 } });
     }
 
-    // Fetch notifications directed to this user, or targeted to their role, or broadcast 'all'
-    const notifications = await prisma.notification.findMany({
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const skip = (page - 1) * limit;
+    const unreadOnly = req.query.unreadOnly === 'true' || req.query.unread === 'true';
+
+    // Unread filter:
+    // - Direct user notification: readAt is null, isRead is false, and user.id is not in readBy
+    // - Broadcast notification (userId is null): user.id is not in readBy
+    const unreadCondition = {
+      OR: [
+        {
+          userId: user.id,
+          readAt: null,
+          isRead: false,
+          NOT: { readBy: { has: user.id } }
+        },
+        {
+          userId: null,
+          targetRole: { in: [user.role, 'all'] },
+          NOT: { readBy: { has: user.id } }
+        }
+      ]
+    };
+
+    const allRecipientsCondition = {
+      OR: [
+        { userId: user.id },
+        { targetRole: { in: [user.role, 'all'] } }
+      ]
+    };
+
+    const where = {
+      collegeId,
+      ...(unreadOnly ? unreadCondition : allRecipientsCondition)
+    };
+
+    const [total, notifications] = await Promise.all([
+      prisma.notification.count({ where }),
+      prisma.notification.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit
+      })
+    ]);
+
+    // Format output with isRead computed specifically for this user
+    const formatted = notifications.map((n) => {
+      const isRead = n.userId
+        ? Boolean(n.readAt || n.isRead || n.readBy?.includes(user.id))
+        : Boolean(n.readBy?.includes(user.id));
+      return {
+        ...n,
+        isRead
+      };
+    });
+
+    res.json({
+      success: true,
+      data: formatted,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('[Notifications] getNotifications error:', error);
+    res.json({ success: false, data: [], pagination: { total: 0, page: 1, limit: 20, totalPages: 0 } });
+  }
+};
+
+export const getUnreadCount = async (req, res) => {
+  try {
+    const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+    const user = req.user;
+
+    if (!collegeId || !user) {
+      return res.json({ success: true, data: { unreadCount: 0, count: 0 } });
+    }
+
+    const unreadCount = await prisma.notification.count({
       where: {
         collegeId,
         OR: [
-          { userId: user.id },
-          { targetRole: user.role },
-          { targetRole: 'all' }
+          {
+            userId: user.id,
+            readAt: null,
+            isRead: false,
+            NOT: { readBy: { has: user.id } }
+          },
+          {
+            userId: null,
+            targetRole: { in: [user.role, 'all'] },
+            NOT: { readBy: { has: user.id } }
+          }
         ]
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 50
+      }
     });
 
-    res.json({ data: notifications });
+    res.json({ success: true, data: { unreadCount, count: unreadCount } });
   } catch (error) {
-    res.json({ data: [] });
+    console.error('[Notifications] getUnreadCount error:', error);
+    res.status(500).json({ success: false, error: { message: error.message } });
   }
 };
 
@@ -35,30 +123,68 @@ export const markAsRead = async (req, res) => {
     const user = req.user;
     const { id } = req.params;
 
+    if (!collegeId || !user) {
+      return res.status(401).json({ success: false, error: { message: 'Unauthorized' } });
+    }
+
+    const isSuperadmin = user.role === 'superadmin';
     const notification = await prisma.notification.findFirst({
-      where: { id, collegeId }
+      where: {
+        id,
+        ...(isSuperadmin ? {} : { collegeId })
+      }
     });
 
     if (!notification) {
-      return res.status(404).json({ error: { message: 'Notification not found' } });
+      return res.status(404).json({ success: false, error: { message: 'Notification not found' } });
     }
 
-    const readBy = notification.readBy || [];
+    // Only recipient, matching role, or superadmin can mark it
+    if (
+      !isSuperadmin &&
+      notification.userId &&
+      notification.userId !== user.id
+    ) {
+      return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    }
+
+    const now = new Date();
+    const readBy = Array.isArray(notification.readBy) ? [...notification.readBy] : [];
     if (!readBy.includes(user.id)) {
       readBy.push(user.id);
     }
 
-    const updated = await prisma.notification.update({
-      where: { id },
+    let updated;
+    if (notification.userId) {
+      // Direct user notification: mark readAt, isRead, and record in readBy
+      updated = await prisma.notification.update({
+        where: { id: notification.id },
+        data: {
+          readAt: now,
+          isRead: true,
+          readBy
+        }
+      });
+    } else {
+      // Broadcast notification: only add user.id to readBy so other recipients are not affected
+      updated = await prisma.notification.update({
+        where: { id: notification.id },
+        data: {
+          readBy
+        }
+      });
+    }
+
+    res.json({
+      success: true,
       data: {
-        isRead: true,
-        readBy
+        ...updated,
+        isRead: true
       }
     });
-
-    res.json({ data: updated });
   } catch (error) {
-    res.status(400).json({ error: { message: error.message } });
+    console.error('[Notifications] markAsRead error:', error);
+    res.status(400).json({ success: false, error: { message: error.message } });
   }
 };
 
@@ -67,30 +193,50 @@ export const markAllAsRead = async (req, res) => {
     const collegeId = req.tenant?.collegeId || req.user?.collegeId;
     const user = req.user;
 
-    const notifications = await prisma.notification.findMany({
+    if (!collegeId || !user) {
+      return res.status(401).json({ success: false, error: { message: 'Unauthorized' } });
+    }
+
+    const now = new Date();
+
+    // 1. Direct user-specific notifications
+    await prisma.notification.updateMany({
       where: {
         collegeId,
-        OR: [
-          { userId: user.id },
-          { targetRole: user.role },
-          { targetRole: 'all' }
-        ]
+        userId: user.id,
+        readAt: null
+      },
+      data: {
+        readAt: now,
+        isRead: true
       }
     });
 
-    for (const notif of notifications) {
-      const readBy = notif.readBy || [];
+    // 2. Broadcast / role-based notifications: add user.id to readBy without touching isRead/readAt
+    const roleBased = await prisma.notification.findMany({
+      where: {
+        collegeId,
+        userId: null,
+        targetRole: { in: [user.role, 'all'] },
+        NOT: { readBy: { has: user.id } }
+      },
+      select: { id: true, readBy: true }
+    });
+
+    for (const notif of roleBased) {
+      const readBy = Array.isArray(notif.readBy) ? [...notif.readBy] : [];
       if (!readBy.includes(user.id)) {
         readBy.push(user.id);
         await prisma.notification.update({
           where: { id: notif.id },
-          data: { isRead: true, readBy }
+          data: { readBy }
         });
       }
     }
 
-    res.json({ data: { success: true } });
+    res.json({ success: true, data: { success: true } });
   } catch (error) {
-    res.status(500).json({ error: { message: error.message } });
+    console.error('[Notifications] markAllAsRead error:', error);
+    res.status(500).json({ success: false, error: { message: error.message } });
   }
 };

@@ -18,8 +18,9 @@ const departmentSchema = z.object({
 router.use(authenticate);
 router.use(resolveTenant);
 
-// Only admins can create / update / delete departments (GET stays open to any logged-in user)
+// Only admins can create / update / delete departments
 const adminOnly = authorize('admin', 'superadmin');
+const staffOnly = authorize('admin', 'superadmin', 'teacher', 'hod', 'faculty');
 
 // Helper function to extract user-friendly error message
 const formatErrorMessage = (error, fallback = 'An unexpected error occurred') => {
@@ -30,7 +31,7 @@ const formatErrorMessage = (error, fallback = 'An unexpected error occurred') =>
 };
 
 // Get all departments for the college
-router.get('/', async (req, res) => {
+router.get('/', staffOnly, async (req, res) => {
   try {
     const departments = await prisma.department.findMany({
       where: { collegeId: req.tenant.collegeId },

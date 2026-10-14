@@ -18,6 +18,7 @@ import {
 import { verifyStaffSetupToken, verifyTeacherRegistrationToken, createStaffSetupToken } from './staffSetupToken.js';
 import { sendDynamicMail } from '../../services/email/email.service.js';
 import { getNextCollegeCode } from '../../lib/collegeCodeGenerator.js';
+import { notify } from '../notifications/notify.service.js';
 import { findUserWithMatchingPassword } from './auth.credentials.js';
 import { createAuditLog } from '../audit/audit.service.js';
 
@@ -1458,6 +1459,15 @@ export const completeStaffSetup = async (req, res) => {
       `[TEACHER] Teacher account created | teacher_record_id=${claims.teacherRecordId} ` +
       `teacherId=${claims.teacherId} email=${activatedEmail} college=${claims.collegeId}`
     );
+
+    await notify({
+      collegeId: claims.collegeId,
+      target: { role: 'admin' },
+      type: 'account_activated',
+      title: 'Staff Account Activated',
+      message: `Staff account for ${staffName || activatedEmail} is now active.`,
+      link: '/admin/hr'
+    });
 
     // Send welcome login-link email AFTER successful registration
     const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');

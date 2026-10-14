@@ -1,4 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
+import { logger } from '../../lib/logger.js';
+import { notify } from '../notifications/notify.service.js';
 import { z } from 'zod';
 
 const createAssignmentSchema = z.object({
@@ -99,6 +101,54 @@ export const createAssignment = async (req, res) => {
       course: true
     }
   });
+
+  // Notify students enrolled in this course
+  try {
+    const students = await prisma.student.findMany({
+      where: {
+        collegeId,
+        deletedAt: null,
+        userId: { not: null },
+        OR: [
+          { courseId: data.courseId },
+          { section: { courseId: data.courseId } },
+          { enrollments: { some: { courseId: data.courseId } } }
+        ]
+      },
+      select: { userId: true }
+    });
+
+    let recipientUserIds = [...new Set(students.map(s => s.userId).filter(Boolean))];
+
+    // Fallback: if no direct course students found, check department students
+    if (recipientUserIds.length === 0 && assignment.course?.departmentId) {
+      const deptStudents = await prisma.student.findMany({
+        where: {
+          collegeId,
+          departmentId: assignment.course.departmentId,
+          deletedAt: null,
+          userId: { not: null }
+        },
+        select: { userId: true }
+      });
+      recipientUserIds = [...new Set(deptStudents.map(s => s.userId).filter(Boolean))];
+    }
+
+    if (recipientUserIds.length > 0) {
+      const dueDateStr = new Date(data.dueDate).toISOString().slice(0, 10);
+      await notify({
+        collegeId,
+        target: { userIds: recipientUserIds },
+        title: 'New Assignment Posted',
+        message: `New assignment '${data.title}' has been posted for ${assignment.course?.name || 'your course'}. Due date: ${dueDateStr}.`,
+        type: 'assignment_new',
+        link: '/student/assignments',
+      });
+      logger?.info?.(`[Assignments] Notification sent to ${recipientUserIds.length} students for assignment ${assignment.id}`);
+    }
+  } catch (notifErr) {
+    logger?.error?.(`[Assignments] Notification error: ${notifErr.message}`);
+  }
 
   res.json({ data: assignment });
 };

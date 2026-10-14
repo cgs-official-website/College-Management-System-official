@@ -80,10 +80,6 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
       customRoleId: data.customRoleId || null,
       teacherId: (data.teacherId || '').trim(),
     };
-    
-    if (isNonTeaching) {
-      delete payload.departmentId;
-    }
 
     onSubmit(payload);
   };
@@ -103,12 +99,26 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
             Personal Details
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input 
-              label="First Name (Optional)" 
-              placeholder="e.g. Robert"
-              {...register('firstName')}
-              error={errors.firstName?.message}
-            />
+            <div className="space-y-1.5">
+              <label htmlFor="firstName" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                First Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="firstName"
+                type="text"
+                placeholder="e.g. Robert"
+                {...register('firstName', {
+                  required: 'Please enter the first name.',
+                  validate: (val) => (val && val.trim().length > 0) || 'Please enter the first name.'
+                })}
+                className={`w-full px-4 py-2.5 bg-white dark:bg-[#0A0F1C] border rounded-xl text-sm transition-all duration-200 focus:outline-none focus:ring-2 text-slate-900 dark:text-white placeholder-slate-400 ${
+                  errors.firstName
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500/50'
+                    : 'border-slate-200 dark:border-white/10 focus:border-primary-500 focus:ring-primary-500/50'
+                }`}
+              />
+              {errors.firstName && <p className="text-sm text-red-500">{errors.firstName.message}</p>}
+            </div>
             <Input 
               label="Last Name (Optional)" 
               placeholder="e.g. Oppenheimer"
@@ -117,16 +127,17 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
             />
             <div className="space-y-1.5">
               <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Email Address <span className="text-slate-400 text-xs font-normal">(optional)</span>
+                Email Address <span className="text-red-500">*</span>
               </label>
               <input
                 id="email"
                 type="email"
-                placeholder="Leave blank — teacher will enter their own"
+                placeholder="e.g. robert@college.edu"
                 {...register('email', {
+                  required: 'Please enter an email address.',
                   pattern: {
                     value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                    message: 'Please enter a valid email address.'
+                    message: 'Please enter a valid email.'
                   }
                 })}
                 className={`w-full px-4 py-2.5 bg-white dark:bg-[#0A0F1C] border rounded-xl text-sm transition-all duration-200 focus:outline-none focus:ring-2 text-slate-900 dark:text-white placeholder-slate-400 ${
@@ -137,7 +148,7 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
               />
               {errors.email
                 ? <p className="text-sm text-red-500">{errors.email.message}</p>
-                : <p className="text-xs text-slate-400 dark:text-slate-500">Optional; leave blank if the teacher's email is not available yet.</p>
+                : <p className="text-xs text-slate-400 dark:text-slate-500">Required for teacher setup link and communications.</p>
               }
             </div>
             <Input 
@@ -234,38 +245,38 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
                 )}
               </div>
             ) : (
-              <>
-                <div className="space-y-1">
-                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Role / Designation</label>
-                  <select 
-                    {...register('customRoleId')}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white"
-                  >
-                    <option value="">Teacher (Standard)</option>
-                    {roles.map(r => (
-                      <option key={r.id} value={r.id}>{r.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
-                    Department <span className="text-red-500">*</span>
-                  </label>
-                  <select 
-                    {...register('departmentId', { required: "Department is required for teaching staff" })}
-                    className={`w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white ${
-                      errors.departmentId ? 'border-red-500' : 'border-slate-200 dark:border-white/10'
-                    }`}
-                  >
-                    <option value="">Select a Department</option>
-                    {departments?.map(d => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
-                    ))}
-                  </select>
-                  {errors.departmentId && <p className="text-red-500 text-sm mt-1">{errors.departmentId.message}</p>}
-                </div>
-              </>
+              <div className="space-y-1">
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Role / Designation</label>
+                <select 
+                  {...register('customRoleId')}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white"
+                >
+                  <option value="">Teacher</option>
+                  {roles.map(r => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </div>
             )}
+
+            <div className="space-y-1">
+              <label htmlFor="departmentId" className="block text-sm font-bold text-slate-700 dark:text-slate-300">
+                Department <span className="text-red-500">*</span>
+              </label>
+              <select 
+                id="departmentId"
+                {...register('departmentId', { required: "Please select a department." })}
+                className={`w-full px-4 py-3 bg-white dark:bg-[#020813] border rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white ${
+                  errors.departmentId ? 'border-red-500' : 'border-slate-200 dark:border-white/10'
+                }`}
+              >
+                <option value="">Select a Department</option>
+                {departments?.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+              {errors.departmentId && <p className="text-red-500 text-sm mt-1">{errors.departmentId.message}</p>}
+            </div>
 
             <Input 
               label="Join Date" 

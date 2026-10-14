@@ -91,7 +91,7 @@ import ModuleBuilder from '../../modules/builder/ModuleBuilder';
 import DynamicDashboard from '../../modules/dynamic/DynamicDashboard';
 import { useGetEntities } from '../../modules/builder/useBuilder';
 import { SearchBar } from '../../components/ui/SearchBar';
-import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
+import { NotificationBell } from '../../components/ui/NotificationBell';
 import StoreDashboard from '../shared/StoreDashboard';
 
 const AdminLayout = () => {
@@ -445,7 +445,7 @@ const AdminLayout = () => {
               collegeEmail={userData?.email || ''}
             />
 
-            <NotificationDropdown />
+            <NotificationBell />
             
             <div className="h-8 w-px bg-slate-200 dark:bg-white/10 mx-1"></div>
 

@@ -84,6 +84,19 @@ export const useDeleteSection = () => {
   });
 };
 
+export const useUpdateField = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...payload }) => {
+      const { data } = await apiClient.put(`/builder/fields/${id}`, payload);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['customFields']);
+    },
+  });
+};
+
 export const useDeleteField = () => {
   const queryClient = useQueryClient();
   return useMutation({

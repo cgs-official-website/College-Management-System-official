@@ -1,8 +1,10 @@
 import { prisma } from '../../server.js';
 
 export const getDynamicRecords = async (req, res) => {
-  const collegeId = req.user.collegeId;
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const { entitySlug } = req.params;
+
+  if (!collegeId) return res.status(404).json({ success: false, message: 'Entity not found' });
 
   const entity = await prisma.customEntity.findUnique({
     where: { collegeId_slug: { collegeId, slug: entitySlug } }
@@ -16,9 +18,11 @@ export const getDynamicRecords = async (req, res) => {
 };
 
 export const createDynamicRecord = async (req, res) => {
-  const collegeId = req.user.collegeId;
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const { entitySlug } = req.params;
   const data = req.body;
+
+  if (!collegeId) return res.status(404).json({ success: false, message: 'Entity not found' });
 
   const entity = await prisma.customEntity.findUnique({
     where: { collegeId_slug: { collegeId, slug: entitySlug } }
@@ -32,11 +36,15 @@ export const createDynamicRecord = async (req, res) => {
 };
 
 export const updateDynamicRecord = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const { id } = req.params;
   const data = req.body;
 
-  // Ideally, merge with existing data
-  const existing = await prisma.customRecord.findUnique({ where: { id } });
+  if (!collegeId) return res.status(404).json({ success: false, message: 'Record not found' });
+
+  const existing = await prisma.customRecord.findFirst({
+    where: { id, collegeId }
+  });
   if (!existing) return res.status(404).json({ success: false, message: 'Record not found' });
 
   const record = await prisma.customRecord.update({
@@ -47,7 +55,16 @@ export const updateDynamicRecord = async (req, res) => {
 };
 
 export const deleteDynamicRecord = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const { id } = req.params;
+
+  if (!collegeId) return res.status(404).json({ success: false, message: 'Record not found' });
+
+  const existing = await prisma.customRecord.findFirst({
+    where: { id, collegeId }
+  });
+  if (!existing) return res.status(404).json({ success: false, message: 'Record not found' });
+
   await prisma.customRecord.delete({ where: { id } });
   res.json({ success: true, message: 'Record deleted successfully' });
 };

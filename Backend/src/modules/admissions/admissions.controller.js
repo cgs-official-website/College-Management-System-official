@@ -1,5 +1,6 @@
 import { prisma, logger } from '../../server.js';
 import { z } from 'zod';
+import { notify } from '../notifications/notify.service.js';
 
 const submitSchema = z.object({
   applicantName: z.string().optional(),
@@ -141,6 +142,16 @@ export const submitApplication = async (req, res) => {
   });
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} admissionId=${admission.id} actor=${actorId} Submitted admission inquiry`);
+
+  await notify({
+    collegeId,
+    target: { role: 'admin' },
+    type: 'admission_application',
+    title: 'New Admission Application',
+    message: `New admission application received from ${fullName}.`,
+    link: '/admin/admissions'
+  });
+
   res.status(201).json({ success: true, data: admission });
 };
 

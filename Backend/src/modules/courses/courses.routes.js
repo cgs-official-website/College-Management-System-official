@@ -1,9 +1,14 @@
 import express from 'express';
 import { authenticate } from '../../middleware/authenticate.js';
+import { authorize } from '../../middleware/authorize.js';
 import { prisma } from '../../server.js';
 import { z } from 'zod';
 
 const router = express.Router();
+
+const adminOnly = authorize('admin', 'superadmin');
+const staffOnly = authorize('admin', 'superadmin', 'teacher', 'hod', 'faculty');
+const coursesReadAccess = authorize('admin', 'superadmin', 'teacher', 'hod', 'faculty', 'student', 'parent');
 
 const courseSchema = z.object({
   name: z.string().min(2, "Course/Program name must be at least 2 characters"),
@@ -23,7 +28,7 @@ router.use((req, res, next) => {
   next();
 });
 
-router.get('/my-classes', async (req, res) => {
+router.get('/my-classes', staffOnly, async (req, res) => {
   try {
     const { collegeId } = req.tenant;
     const { userId } = req.user;
@@ -73,7 +78,7 @@ router.get('/my-classes', async (req, res) => {
   }
 });
 
-router.get('/', async (req, res) => {
+router.get('/', coursesReadAccess, async (req, res) => {
   try {
     const { departmentId } = req.query;
     
@@ -91,7 +96,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', adminOnly, async (req, res) => {
   try {
     const data = courseSchema.parse(req.body);
     
@@ -123,7 +128,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.post('/bulk', async (req, res) => {
+router.post('/bulk', adminOnly, async (req, res) => {
   try {
     const { data } = req.body;
     if (!Array.isArray(data)) {
@@ -188,7 +193,7 @@ router.post('/bulk', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
     const data = courseSchema.parse(req.body);
@@ -224,7 +229,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
     const existing = await prisma.course.findFirst({

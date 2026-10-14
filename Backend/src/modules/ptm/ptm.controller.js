@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { prisma, logger } from '../../server.js';
 import { createSlotSchema, assignMeetingSchema, updateMeetingSchema } from './ptm.schema.js';
+import { notify } from '../notifications/notify.service.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ADMIN_ROLES = ['admin', 'superadmin', 'principal'];
@@ -517,20 +518,25 @@ export const assignMeeting = async (req, res) => {
       agenda: payload.agenda,
     });
 
-    // Notify the student (non-fatal if it fails)
-    if (prisma.notification?.create && student.userId) {
+    // Notify the student
+    if (student.userId) {
       try {
-        await prisma.notification.create({
-          data: {
-            collegeId,
-            userId: student.userId,
-            title: 'PTM Meeting Scheduled',
-            message: `A meeting has been scheduled on ${slot.date ? new Date(slot.date).toISOString().slice(0, 10) : ''} at ${slot.startTime}.`,
-            type: 'info',
-            link: '/student/ptm',
-          },
+        const dateStr = slot.date ? new Date(slot.date).toISOString().slice(0, 10) : '';
+        const linkInfo = meetingLink ? ` Meeting link: ${meetingLink}` : payload.venue ? ` Venue: ${payload.venue}` : '';
+        await notify({
+          collegeId,
+          target: { userId: student.userId },
+          title: 'PTM Meeting Scheduled',
+          message: `A meeting has been scheduled on ${dateStr} at ${slot.startTime}.${linkInfo}`,
+          type: 'ptm_scheduled',
+          link: '/student/ptm',
         });
-      } catch (_) {}
+        logger?.info?.(`[PTM] Notification created for student ${student.id} (user ${student.userId})`);
+      } catch (notifErr) {
+        logger?.error?.(`[PTM] Notification error: ${notifErr.message}`);
+      }
+    } else {
+      logger?.warn?.(`[PTM] Student ${student.id} has no linked userId; skipping notification`);
     }
 
     res.status(201).json({ success: true, data: meeting });
@@ -608,6 +614,40 @@ export const updateMeeting = async (req, res) => {
     if (payload.agenda !== undefined) data.agenda = payload.agenda;
 
     const updated = await dbUpdateMeeting(id, existing, data);
+
+    // Notify student when meeting is cancelled or completed
+    if (payload.status === 'cancelled' || payload.status === 'completed') {
+      try {
+        const student = await prisma.student.findUnique({
+          where: { id: existing.studentId },
+          select: { id: true, userId: true },
+        });
+
+        if (student?.userId) {
+          const isCancelled = payload.status === 'cancelled';
+          const type = isCancelled ? 'ptm_cancelled' : 'ptm_completed';
+          const title = isCancelled ? 'PTM Meeting Cancelled' : 'PTM Meeting Completed';
+          const message = isCancelled
+            ? 'Your scheduled PTM meeting has been cancelled by the teacher.'
+            : 'Your PTM meeting has been marked as completed.';
+
+          await notify({
+            collegeId,
+            target: { userId: student.userId },
+            title,
+            message,
+            type,
+            link: '/student/ptm',
+          });
+          logger?.info?.(`[PTM] Status update notification sent to student user ${student.userId} (${type})`);
+        } else {
+          logger?.warn?.(`[PTM] Student ${existing.studentId} has no linked userId; skipping status notification`);
+        }
+      } catch (notifErr) {
+        logger?.error?.(`[PTM] Failed to send meeting update notification: ${notifErr.message}`);
+      }
+    }
+
     res.json({ success: true, data: updated });
   } catch (error) {
     handleError(res, error);

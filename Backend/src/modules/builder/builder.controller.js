@@ -1,5 +1,5 @@
 import { prisma } from '../../server.js';
-import { createEntitySchema, createFieldSchema, createSectionSchema } from './builder.schema.js';
+import { createEntitySchema, createFieldSchema, createSectionSchema, updateFieldSchema } from './builder.schema.js';
 import fs from 'fs';
 
 export const getEntities = async (req, res) => {
@@ -148,9 +148,47 @@ export const deleteSection = async (req, res) => {
   res.json({ success: true, message: 'Section deleted successfully' });
 };
 
-export const deleteField = async (req, res) => {
-  const collegeId = req.user.collegeId;
+export const updateField = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const { id } = req.params;
+
+  if (!collegeId) return res.status(404).json({ success: false, message: 'Field not found' });
+
+  const validated = updateFieldSchema.safeParse(req.body);
+  if (!validated.success) return res.status(400).json({ success: false, errors: validated.error.errors });
+
+  const existing = await prisma.customFieldDef.findFirst({
+    where: { id, collegeId }
+  });
+  if (!existing) return res.status(404).json({ success: false, message: 'Field not found' });
+
+  if (validated.data.sectionId) {
+    const section = await prisma.customSection.findFirst({
+      where: { id: validated.data.sectionId, collegeId }
+    });
+    if (!section) return res.status(404).json({ success: false, message: 'Section not found' });
+  }
+
+  const updateData = {};
+  if (validated.data.name !== undefined) updateData.name = validated.data.name;
+  if (validated.data.isRequired !== undefined) updateData.isRequired = validated.data.isRequired;
+  if (validated.data.options !== undefined) updateData.options = validated.data.options;
+  if (validated.data.sectionId !== undefined) updateData.sectionId = validated.data.sectionId;
+  if (validated.data.order !== undefined) updateData.order = validated.data.order;
+
+  const updated = await prisma.customFieldDef.update({
+    where: { id },
+    data: updateData
+  });
+
+  res.json({ success: true, data: updated });
+};
+
+export const deleteField = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const { id } = req.params;
+
+  if (!collegeId) return res.status(404).json({ success: false, message: 'Field not found' });
 
   const existing = await prisma.customFieldDef.findFirst({
     where: { id, collegeId }

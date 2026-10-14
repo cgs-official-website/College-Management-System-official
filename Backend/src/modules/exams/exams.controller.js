@@ -1,5 +1,6 @@
 import { prisma, logger } from '../../server.js';
 import { createExamSchema, updateExamSchema, enterMarksSchema, batchEnterMarksSchema } from './exams.schema.js';
+import { notify } from '../notifications/notify.service.js';
 
 // Helper to ensure dummy/default course if needed
 async function ensureDefaultCourse(collegeId, courseName, departmentId = null) {
@@ -164,6 +165,53 @@ export const createExam = async (req, res) => {
   });
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} examId=${exam.id} actor=${actorId} Scheduled exam '${exam.name}'`);
+
+  // Notify students enrolled in this course or department
+  try {
+    const students = await prisma.student.findMany({
+      where: {
+        collegeId,
+        deletedAt: null,
+        userId: { not: null },
+        OR: [
+          { courseId: targetCourseId },
+          { section: { courseId: targetCourseId } },
+          { enrollments: { some: { courseId: targetCourseId } } }
+        ]
+      },
+      select: { userId: true }
+    });
+    let recipientUserIds = [...new Set(students.map(s => s.userId).filter(Boolean))];
+
+    // Fallback: if no direct course students found, check department students
+    if (recipientUserIds.length === 0 && exam.course?.departmentId) {
+      const deptStudents = await prisma.student.findMany({
+        where: {
+          collegeId,
+          departmentId: exam.course.departmentId,
+          deletedAt: null,
+          userId: { not: null }
+        },
+        select: { userId: true }
+      });
+      recipientUserIds = [...new Set(deptStudents.map(s => s.userId).filter(Boolean))];
+    }
+
+    if (recipientUserIds.length > 0) {
+      const examDateStr = exam.date ? new Date(exam.date).toISOString().split('T')[0] : '';
+      await notify({
+        collegeId,
+        target: { userIds: recipientUserIds },
+        title: 'New Exam Scheduled',
+        message: `Exam '${exam.name}' for ${exam.course?.name || 'your course'} has been scheduled on ${examDateStr}.`,
+        type: 'exam_scheduled',
+        link: '/student/exams',
+      });
+      logger.info(`[Exams] Notified ${recipientUserIds.length} students for new exam ${exam.id}`);
+    }
+  } catch (notifErr) {
+    logger.error(`[Exams] Notification error: ${notifErr.message}`);
+  }
   
   res.status(201).json({
     success: true,
@@ -289,6 +337,17 @@ export const enterMarks = async (req, res) => {
     });
   }
 
+  const existingMark = await prisma.mark.findUnique({
+    where: {
+      examId_studentId: {
+        examId,
+        studentId
+      }
+    }
+  });
+
+  const shouldNotify = !existingMark || existingMark.obtainedMarks !== obtainedMarks;
+
   const markRecord = await prisma.mark.upsert({
     where: {
       examId_studentId: {
@@ -310,6 +369,23 @@ export const enterMarks = async (req, res) => {
       enteredByTeacherId: teacherId
     }
   });
+
+  if (shouldNotify) {
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { userId: true }
+    });
+    if (student?.userId) {
+      await notify({
+        collegeId,
+        target: { userId: student.userId },
+        type: 'exam_marks',
+        title: 'Exam Marks Published',
+        message: `Your marks for ${exam.name || exam.type || 'Exam'} have been updated: ${obtainedMarks}/${exam.maxMarks}.`,
+        link: '/student/exams'
+      });
+    }
+  }
 
   res.status(201).json({ success: true, data: markRecord });
 };
@@ -346,11 +422,32 @@ export const batchEnterMarks = async (req, res) => {
     });
   }
 
+  const studentIds = records.map(r => r.studentId);
+  const [existingMarks, students] = await Promise.all([
+    prisma.mark.findMany({
+      where: {
+        examId: exam.id,
+        studentId: { in: studentIds }
+      },
+      select: { studentId: true, obtainedMarks: true }
+    }),
+    prisma.student.findMany({
+      where: { id: { in: studentIds } },
+      select: { id: true, userId: true }
+    })
+  ]);
+
+  const existingMarksMap = new Map(existingMarks.map(m => [m.studentId, m.obtainedMarks]));
+  const studentUserMap = new Map(students.map(s => [s.id, s.userId]));
+
   const results = [];
   for (const record of records) {
     if (record.obtainedMarks > exam.maxMarks) {
       continue; // Skip invalid marks
     }
+
+    const prevMarks = existingMarksMap.get(record.studentId);
+    const shouldNotify = prevMarks === undefined || prevMarks !== record.obtainedMarks;
 
     const markRecord = await prisma.mark.upsert({
       where: {
@@ -372,6 +469,18 @@ export const batchEnterMarks = async (req, res) => {
       }
     });
     results.push(markRecord);
+
+    const studentUserId = studentUserMap.get(record.studentId);
+    if (shouldNotify && studentUserId) {
+      await notify({
+        collegeId,
+        target: { userId: studentUserId },
+        type: 'exam_marks',
+        title: 'Exam Marks Published',
+        message: `Your marks for ${exam.name || exam.type || 'Exam'} have been updated: ${record.obtainedMarks}/${exam.maxMarks}.`,
+        link: '/student/exams'
+      });
+    }
   }
 
   res.json({ success: true, count: results.length });

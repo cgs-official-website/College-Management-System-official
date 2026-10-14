@@ -1,18 +1,17 @@
 import { z } from 'zod';
 
-export const createStaffSchema = z.object({
-  name: z.string().optional().default(''),
-  // Email is optional at creation time.
-  // If provided, it is used to pre-fill the teacher's user account.
-  // If omitted, the teacher will enter their own email during registration.
+const staffBaseSchema = z.object({
+  firstName: z.string().trim().optional(),
+  lastName: z.string().trim().optional(),
+  name: z.string().trim().optional(),
+  // Email is required and must be a valid email for setup link and mail
   email: z
-    .string()
+    .string({ required_error: 'Please enter an email address.' })
     .trim()
-    .email('Please enter a valid email address.')
-    .optional()
-    .or(z.literal('')),
+    .min(1, 'Please enter an email address.')
+    .email('Please enter a valid email address.'),
   department: z.string().optional(),
-  departmentId: z.string().uuid().optional(),
+  departmentId: z.string().uuid('Please select a valid department.').optional(),
   designation: z.string().min(1, 'Designation is required'),
   joiningDate: z.string().or(z.date()).optional(),
   salaryGrade: z.string().optional(),
@@ -34,9 +33,18 @@ export const createStaffSchema = z.object({
   customFields: z.record(z.any()).nullish(),
 });
 
+export const createStaffSchema = staffBaseSchema
+  .refine(data => (data.firstName && data.firstName.trim().length > 0) || (data.name && data.name.trim().length > 0), {
+    message: 'Please enter the first name.',
+    path: ['firstName'],
+  })
+  .refine(data => !!data.departmentId || !!data.department, {
+    message: 'Please select a department.',
+    path: ['departmentId'],
+  });
 
 // For updates: teacherId is still required if provided; cannot be set to empty
-export const updateStaffSchema = createStaffSchema
+export const updateStaffSchema = staffBaseSchema
   .omit({ teacherId: true })
   .extend({
     teacherId: z.string()
@@ -46,7 +54,10 @@ export const updateStaffSchema = createStaffSchema
   })
   .partial()
   .extend({
-    // Keep email optional during edits; validate it when supplied.
+    firstName: z.string().trim().min(1, 'Please enter the first name.').optional(),
+    name: z.string().trim().min(1, 'Please enter the first name.').optional(),
+    departmentId: z.string().uuid('Please select a valid department.').optional(),
+    // Validate email format when supplied during edits
     email: z
       .string()
       .trim()

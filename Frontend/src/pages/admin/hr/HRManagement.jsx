@@ -316,15 +316,15 @@ export default function HRManagement() {
                             <button
                               onClick={() => handleGenerateSetupLink(member)}
                               disabled={generatingLinkId === member.id}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-500/10 hover:bg-primary-100 dark:hover:bg-primary-500/20 border border-primary-200 dark:border-primary-500/30 rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                              className="inline-flex items-center p-2 text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-500/10 hover:bg-primary-100 dark:hover:bg-primary-500/20 border border-primary-200 dark:border-primary-500/30 rounded-lg transition-colors shadow-sm disabled:opacity-50"
                               title="Generate Setup Link"
+                              aria-label="Generate Setup Link"
                             >
                               {generatingLinkId === member.id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <Loader2 className="w-4 h-4 animate-spin" />
                               ) : (
-                                <Link2 className="w-3.5 h-3.5" />
+                                <Link2 className="w-4 h-4" />
                               )}
-                              <span>Generate Link</span>
                             </button>
 
                             <button

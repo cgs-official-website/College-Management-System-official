@@ -72,6 +72,14 @@ export default function TeacherAttendance() {
       return;
     }
 
+    const selectedClass = courses.find(c => c.id === selectedCourse);
+    const courseId = selectedClass?.courseId;
+
+    if (!courseId) {
+      toast.error('The selected class does not have an associated course.');
+      return;
+    }
+
     setSaving(true);
     try {
       const records = students.map(student => ({
@@ -80,7 +88,7 @@ export default function TeacherAttendance() {
       }));
 
       await api.post('/attendance/batch-mark', {
-        courseId: selectedCourse, // Using selectedCourse (which is sectionId) as courseId for attendance
+        courseId,
         date: date,
         records
       });
@@ -88,7 +96,8 @@ export default function TeacherAttendance() {
       toast.success('Attendance saved successfully!');
     } catch (error) {
       console.error(error);
-      toast.error('Failed to save attendance');
+      const errorMsg = error?.data?.error?.message || error?.message || 'Failed to save attendance';
+      toast.error(errorMsg);
     } finally {
       setSaving(false);
     }

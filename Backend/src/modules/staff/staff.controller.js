@@ -146,24 +146,25 @@ export const createStaff = async (req, res) => {
 
   // Ensure department exists
   let deptId = payload.departmentId;
-  if (payload.staffType === 'non-teaching') {
-    // Non-teaching staff must always be placed in the dedicated Administration department
-    const adminDept = await getOrCreateAdministrationDepartment(collegeId);
-    deptId = adminDept.id;
-  } else if (!deptId) {
-    let dept = await prisma.department.findFirst({
-      where: { collegeId }
-    });
-    if (!dept) {
-      dept = await prisma.department.create({
-        data: {
-          name: payload.department || 'Academics',
-          code: 'ACAD',
-          collegeId
-        }
+  if (!deptId) {
+    if (payload.staffType === 'non-teaching') {
+      const adminDept = await getOrCreateAdministrationDepartment(collegeId);
+      deptId = adminDept.id;
+    } else {
+      let dept = await prisma.department.findFirst({
+        where: { collegeId }
       });
+      if (!dept) {
+        dept = await prisma.department.create({
+          data: {
+            name: payload.department || 'Academics',
+            code: 'ACAD',
+            collegeId
+          }
+        });
+      }
+      deptId = dept.id;
     }
-    deptId = dept.id;
   }
 
   // Determine final role for the User record.
@@ -191,6 +192,8 @@ export const createStaff = async (req, res) => {
   // Placeholder format: teacher+<teacherId>+<collegeId_prefix>@pending.local
   // This placeholder can never be used to log in (no password, pending_setup status).
   const placeholderEmail = adminProvidedEmail || `teacher+${teacherId.toLowerCase()}+${collegeId.slice(0, 8)}@pending.local`;
+
+  const resolvedStaffName = (payload.name && payload.name.trim()) || `${payload.firstName || ''} ${payload.lastName || ''}`.trim();
 
   const teacher = await prisma.$transaction(async (tx) => {
     const softDeletedById = await tx.teacher.findMany({
@@ -224,7 +227,7 @@ export const createStaff = async (req, res) => {
     const user = await tx.user.create({
       data: {
         email: placeholderEmail,
-        ...(payload.name ? { name: payload.name } : {}),
+        ...(resolvedStaffName ? { name: resolvedStaffName } : {}),
         collegeId,
         role: accountRole,
         customRoleId: payload.customRoleId || null,
@@ -334,19 +337,23 @@ export const updateStaff = async (req, res) => {
 
   const isNonTeaching = payload.staffType === 'non-teaching' || teacher.user?.role === 'staff';
   let targetDepartmentId = payload.departmentId;
-  if (isNonTeaching) {
+  if (isNonTeaching && !targetDepartmentId && !teacher.departmentId) {
     const adminDept = await getOrCreateAdministrationDepartment(collegeId);
     targetDepartmentId = adminDept.id;
   }
 
+  const resolvedUpdateName = payload.name !== undefined
+    ? payload.name
+    : (payload.firstName !== undefined ? `${payload.firstName || ''} ${payload.lastName || ''}`.trim() : undefined);
+
   let updated;
   try {
     updated = await prisma.$transaction(async (tx) => {
-      if ((payload.name !== undefined || payload.role || payload.customRoleId !== undefined || payload.status || normalizedEmail || isNonTeaching) && teacher.userId) {
+      if ((resolvedUpdateName !== undefined || payload.role || payload.customRoleId !== undefined || payload.status || normalizedEmail || isNonTeaching) && teacher.userId) {
         await tx.user.update({
           where: { id: teacher.userId },
           data: {
-            ...(payload.name !== undefined ? { name: payload.name } : {}),
+            ...(resolvedUpdateName !== undefined ? { name: resolvedUpdateName } : {}),
             ...(normalizedEmail ? { email: normalizedEmail } : {}),
             ...(payload.role ? { role: payload.role } : (isNonTeaching ? { role: 'staff' } : {})),
             ...(payload.customRoleId !== undefined ? { customRoleId: payload.customRoleId } : {}),
@@ -571,7 +578,7 @@ const maskEmail = (email) => {
   return `${firstChar}***@${domain}`;
 };
 
-const getTeacherSetupDetails = async (id, collegeId) => {
+const getTeacherSetupDetails = async (id, collegeId, req = null) => {
   const teacher = await prisma.teacher.findFirst({
     where: { id, collegeId, deletedAt: null },
     include: {
@@ -610,7 +617,22 @@ const getTeacherSetupDetails = async (id, collegeId) => {
     email,
   });
 
-  const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  let clientOrigin = null;
+  if (req) {
+    const reqOrigin = req.get ? req.get('origin') : req.headers?.origin;
+    if (reqOrigin && reqOrigin !== 'null') {
+      clientOrigin = reqOrigin;
+    } else {
+      const referer = req.get ? req.get('referer') : req.headers?.referer;
+      if (referer) {
+        try {
+          clientOrigin = new URL(referer).origin;
+        } catch (_) {}
+      }
+    }
+  }
+
+  const frontendUrl = (clientOrigin || process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
   const setupUrl = `${frontendUrl}/teacher/setup?token=${encodeURIComponent(token)}`;
 
   return { teacher, email, token, setupUrl, frontendUrl };
@@ -620,7 +642,7 @@ export const generateStaffSetupLink = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const { id } = req.params;
 
-  const { setupUrl } = await getTeacherSetupDetails(id, collegeId);
+  const { setupUrl } = await getTeacherSetupDetails(id, collegeId, req);
 
   res.json({
     success: true,
@@ -632,7 +654,7 @@ export const sendStaffSetupMail = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const { id } = req.params;
 
-  const { teacher, email, setupUrl, frontendUrl } = await getTeacherSetupDetails(id, collegeId);
+  const { teacher, email, setupUrl, frontendUrl } = await getTeacherSetupDetails(id, collegeId, req);
 
   let emailResult;
   try {

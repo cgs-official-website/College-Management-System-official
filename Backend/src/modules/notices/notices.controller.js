@@ -1,5 +1,6 @@
-import { prisma } from '../../server.js';
+import { prisma, logger } from '../../server.js';
 import { createNoticeSchema, updateNoticeSchema } from './notices.schema.js';
+import { notify } from '../notifications/notify.service.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -29,6 +30,25 @@ export const createNotice = async (req, res) => {
         targetAudience: payload.targetAudience ?? 'all' 
       }
     });
+
+    const audience = (notice.targetAudience || 'all').toLowerCase();
+    if (audience === 'student' || audience === 'students' || audience === 'all') {
+      try {
+        const preview = notice.content ? (notice.content.length > 120 ? `${notice.content.slice(0, 117)}...` : notice.content) : 'A new notice has been published.';
+        await notify({
+          collegeId,
+          target: { role: 'student' },
+          title: `New Notice: ${notice.title}`,
+          message: preview,
+          type: 'notice_new',
+          link: '/student/notices',
+        });
+        logger?.info?.(`[Notices] Broadcast notification dispatched for notice ${notice.id}`);
+      } catch (notifErr) {
+        logger?.error?.(`[Notices] Notification error: ${notifErr.message}`);
+      }
+    }
+
     res.status(201).json({ success: true, data: notice });
   } catch (error) {
     if (error.name === 'ZodError') {

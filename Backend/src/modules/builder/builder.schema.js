@@ -27,3 +27,11 @@ export const createSectionSchema = z.object({
   name: z.string().min(1),
   order: z.number().int().default(0),
 });
+
+export const updateFieldSchema = z.object({
+  name: z.string().trim().min(1, 'Field label cannot be empty').optional(),
+  isRequired: z.boolean().optional(),
+  options: z.any().optional(),
+  sectionId: z.string().uuid().nullable().optional().or(z.literal('')).transform(val => val === '' ? null : val),
+  order: z.number().int().optional(),
+});

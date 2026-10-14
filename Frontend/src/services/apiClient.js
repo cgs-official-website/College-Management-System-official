@@ -194,12 +194,40 @@ apiClient.interceptors.response.use(
       }
     }
 
+
+
+        // Friendly messages for college users (technical details stay in the console only)
+    let finalMessage = message;
+
+    if (!error.response) {
+      // No response from the server: network down, server off, or timeout
+      finalMessage = error.code === 'ECONNABORTED'
+        ? 'This is taking longer than usual. Please try again in a moment.'
+        : 'Unable to connect right now. Please check your internet connection and try again.';
+    } else if (status === 403) {
+      finalMessage = "You don't have permission to do this. Please contact your college admin if you need access.";
+    } else if (status === 404 && (!errorData?.message || /^cannot |route/i.test(errorData.message))) {
+      finalMessage = "We couldn't find what you were looking for. Please try again, or contact your college admin if this keeps happening.";
+    } else if (status === 429) {
+      finalMessage = 'Too many attempts. Please wait a minute and try again.';
+    } else if (status >= 500) {
+      finalMessage = 'Something went wrong on our side. Please try again in a moment.';
+    }
+
+    if (finalMessage !== message) {
+      console.warn(`[${status || 'NETWORK'}]`, originalRequest?.method?.toUpperCase(), originalRequest?.url, '-', message);
+    }
     // Return customized error object with status code and code
-    const enhancedError = new Error(message);
+    const enhancedError = new Error(finalMessage);
     enhancedError.status = status;
     enhancedError.code = errorData?.code;
     enhancedError.count = error.response?.data?.count;
     enhancedError.data = error.response?.data;
+
+    // Some pages read err.data.error.message first, so keep that friendly too
+    if (finalMessage !== message && enhancedError.data?.error) {
+      enhancedError.data = { ...enhancedError.data, error: { ...enhancedError.data.error, message: finalMessage } };
+    }
 
     return Promise.reject(enhancedError);
   }

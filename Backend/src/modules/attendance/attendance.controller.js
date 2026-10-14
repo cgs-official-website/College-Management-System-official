@@ -1,5 +1,6 @@
 import { prisma, logger } from '../../server.js';
 import { markAttendanceSchema, batchMarkAttendanceSchema } from './attendance.schema.js';
+import { notify } from '../notifications/notify.service.js';
 
 async function ensureCourseAndTeacher(collegeId, fallbackTeacherUserId) {
   let dept = await prisma.department.findFirst({ where: { collegeId } });
@@ -86,8 +87,14 @@ export const markAttendance = async (req, res) => {
     }
   });
 
+  const isLateOrAbsent = status === 'late' || status === 'absent';
+  let shouldNotify = false;
+
   let attendanceRecord;
   if (existing) {
+    if (isLateOrAbsent && existing.status !== status) {
+      shouldNotify = true;
+    }
     attendanceRecord = await prisma.attendance.update({
       where: { id: existing.id },
       data: {
@@ -97,6 +104,9 @@ export const markAttendance = async (req, res) => {
       }
     });
   } else {
+    if (isLateOrAbsent) {
+      shouldNotify = true;
+    }
     attendanceRecord = await prisma.attendance.create({
       data: {
         collegeId,
@@ -109,6 +119,23 @@ export const markAttendance = async (req, res) => {
         markedAt: new Date()
       }
     });
+  }
+
+  if (shouldNotify) {
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { userId: true }
+    });
+    if (student?.userId) {
+      await notify({
+        collegeId,
+        target: { userId: student.userId },
+        type: status === 'late' ? 'attendance_late' : 'attendance_absent',
+        title: 'Attendance Update',
+        message: `You were marked ${status === 'late' ? 'Late' : 'Absent'} for class on ${date}.`,
+        link: '/student/attendance'
+      });
+    }
   }
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} studentId=${studentId} status=${status} Marked attendance for ${date}`);
@@ -124,8 +151,62 @@ export const batchMarkAttendance = async (req, res) => {
   const actorId = req.user?.id || req.user?.userId;
   const { records, date, courseId: providedCourseId } = batchMarkAttendanceSchema.parse(req.body);
 
+  if (!collegeId) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'College ID is required' }
+    });
+  }
+
+  if (!records || records.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'No attendance records provided' }
+    });
+  }
+
   const defaults = await ensureCourseAndTeacher(collegeId, actorId);
   const targetCourseId = providedCourseId || defaults.courseId;
+
+  // Validate that the course exists for this collegeId
+  const course = await prisma.course.findFirst({
+    where: {
+      id: targetCourseId,
+      collegeId
+    }
+  });
+
+  if (!course) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: 'Selected course was not found. Please refresh and select the course again.'
+      }
+    });
+  }
+
+  // Validate that every studentId in records exists for this college
+  const studentIds = [...new Set(records.map(r => r.studentId))];
+  const existingStudents = await prisma.student.findMany({
+    where: {
+      collegeId,
+      id: { in: studentIds }
+    },
+    select: { id: true, userId: true }
+  });
+
+  const studentUserMap = new Map(existingStudents.map(s => [s.id, s.userId]));
+  const existingStudentIdSet = new Set(existingStudents.map(s => s.id));
+  const invalidStudentIds = studentIds.filter(id => !existingStudentIdSet.has(id));
+
+  if (invalidStudentIds.length > 0) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: 'One or more students were not found for this college. Please refresh and try again.'
+      }
+    });
+  }
 
   const attendanceDate = new Date(date);
   attendanceDate.setHours(0, 0, 0, 0);
@@ -146,7 +227,13 @@ export const batchMarkAttendance = async (req, res) => {
       }
     });
 
+    const isLateOrAbsent = item.status === 'late' || item.status === 'absent';
+    let shouldNotify = false;
+
     if (existing) {
+      if (isLateOrAbsent && existing.status !== item.status) {
+        shouldNotify = true;
+      }
       const updated = await prisma.attendance.update({
         where: { id: existing.id },
         data: {
@@ -157,6 +244,9 @@ export const batchMarkAttendance = async (req, res) => {
       });
       results.push(updated);
     } else {
+      if (isLateOrAbsent) {
+        shouldNotify = true;
+      }
       const created = await prisma.attendance.create({
         data: {
           collegeId,
@@ -170,6 +260,18 @@ export const batchMarkAttendance = async (req, res) => {
         }
       });
       results.push(created);
+    }
+
+    const studentUserId = studentUserMap.get(item.studentId);
+    if (shouldNotify && studentUserId) {
+      await notify({
+        collegeId,
+        target: { userId: studentUserId },
+        type: item.status === 'late' ? 'attendance_late' : 'attendance_absent',
+        title: 'Attendance Update',
+        message: `You were marked ${item.status === 'late' ? 'Late' : 'Absent'} for class on ${date}.`,
+        link: '/student/attendance'
+      });
     }
   }
 

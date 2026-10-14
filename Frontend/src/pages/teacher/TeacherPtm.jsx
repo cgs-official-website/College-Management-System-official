@@ -18,7 +18,40 @@ const toArray = (res) => {
   if (Array.isArray(raw?.items)) return raw.items;
   return [];
 };
-const errMsg = (err) => err.response?.data?.error?.message || err.message || 'Something went wrong';
+const handleMutationError = (err, fallbackMsg = 'Something went wrong') => {
+  // Keep technical details only in the console
+  console.error('[PTM Error]', {
+    message: err?.message,
+    status: err?.status || err?.response?.status,
+    code: err?.code || err?.data?.error?.code,
+    data: err?.data || err?.response?.data,
+    stack: err?.stack,
+  });
+
+  const status = err?.status || err?.response?.status;
+  const code = err?.code || err?.data?.error?.code;
+
+  if (status === 409 || code === 'MEETING_CLOSED') {
+    toast.error('This meeting has already been updated.');
+    return;
+  }
+  if (status === 404 || code === 'SLOT_NOT_FOUND') {
+    toast.error('This slot is no longer available.');
+    return;
+  }
+  if (status === 404 || code === 'MEETING_NOT_FOUND') {
+    toast.error('This meeting could not be found.');
+    return;
+  }
+  if (code === 'SLOT_TAKEN') {
+    toast.error('Slot is no longer available.');
+    return;
+  }
+
+  const rawMessage = err?.data?.error?.message || err?.message;
+  toast.error(rawMessage || fallbackMsg);
+};
+
 const dayOf = (d) => String(d).slice(0, 10);
 const studentLabel = (s) => {
   const name = s.user?.name || [s.firstName, s.lastName].filter(Boolean).join(' ') || s.name || 'Student';
@@ -41,9 +74,11 @@ export default function TeacherPtm() {
   const [assignSlot, setAssignSlot] = useState(null);
   const [assignForm, setAssignForm] = useState(emptyAssign);
 
-  const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['ptm-slots'] });
-    queryClient.invalidateQueries({ queryKey: ['ptm-meetings'] });
+  const refresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['ptm-slots'] }),
+      queryClient.invalidateQueries({ queryKey: ['ptm-meetings'] }),
+    ]);
   };
 
   const { data: slots = [], isLoading: slotsLoading } = useQuery({
@@ -64,41 +99,45 @@ export default function TeacherPtm() {
 
   const createSlotMutation = useMutation({
     mutationFn: (payload) => api.post('/ptm/slots', payload),
-    onSuccess: () => {
-      refresh();
+    onSuccess: async () => {
+      await refresh();
       toast.success('Slot added');
       setSlotForm(emptySlot);
     },
-    onError: (err) => toast.error(errMsg(err)),
+    onError: (err) => handleMutationError(err, 'Failed to add slot'),
+    onSettled: () => refresh(),
   });
 
   const deleteSlotMutation = useMutation({
     mutationFn: (id) => api.delete(`/ptm/slots/${id}`),
-    onSuccess: () => {
-      refresh();
+    onSuccess: async () => {
+      await refresh();
       toast.success('Slot deleted');
     },
-    onError: (err) => toast.error(errMsg(err)),
+    onError: (err) => handleMutationError(err, 'Failed to delete slot'),
+    onSettled: () => refresh(),
   });
 
   const assignMutation = useMutation({
     mutationFn: (payload) => api.post('/ptm/meetings', payload),
-    onSuccess: () => {
-      refresh();
+    onSuccess: async () => {
+      await refresh();
       toast.success('Meeting assigned to student');
       setAssignSlot(null);
       setAssignForm(emptyAssign);
     },
-    onError: (err) => toast.error(errMsg(err)),
+    onError: (err) => handleMutationError(err, 'Failed to assign meeting'),
+    onSettled: () => refresh(),
   });
 
   const updateMeetingMutation = useMutation({
     mutationFn: ({ id, status }) => api.patch(`/ptm/meetings/${id}`, { status }),
-    onSuccess: () => {
-      refresh();
+    onSuccess: async () => {
+      await refresh();
       toast.success('Meeting updated');
     },
-    onError: (err) => toast.error(errMsg(err)),
+    onError: (err) => handleMutationError(err, 'Failed to update meeting'),
+    onSettled: () => refresh(),
   });
 
   const handleCreateSlot = (e) => {
@@ -236,19 +275,27 @@ export default function TeacherPtm() {
                       </span>
                       {s.status === 'available' && (
                         <button
+                          type="button"
                           onClick={() => setAssignSlot(s)}
-                          className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-lg flex items-center gap-1"
+                          disabled={deleteSlotMutation.isPending || updateMeetingMutation.isPending}
+                          className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-lg flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                         >
                           <UserPlus className="w-3.5 h-3.5" /> Assign
                         </button>
                       )}
                       {s.status !== 'booked' && (
                         <button
+                          type="button"
                           onClick={() => deleteSlotMutation.mutate(s.id)}
-                          className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg"
+                          disabled={deleteSlotMutation.isPending}
+                          className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                           title="Delete slot"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          {deleteSlotMutation.isPending && deleteSlotMutation.variables === s.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-rose-500" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
                         </button>
                       )}
                     </div>
@@ -312,16 +359,34 @@ export default function TeacherPtm() {
                     {m.status === 'scheduled' && (
                       <>
                         <button
+                          type="button"
                           onClick={() => updateMeetingMutation.mutate({ id: m.id, status: 'completed' })}
-                          className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-lg flex items-center gap-1"
+                          disabled={updateMeetingMutation.isPending}
+                          className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-lg flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                         >
-                          <Check className="w-3.5 h-3.5" /> Mark Completed
+                          {updateMeetingMutation.isPending &&
+                          updateMeetingMutation.variables?.id === m.id &&
+                          updateMeetingMutation.variables?.status === 'completed' ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                          Mark Completed
                         </button>
                         <button
+                          type="button"
                           onClick={() => updateMeetingMutation.mutate({ id: m.id, status: 'cancelled' })}
-                          className="px-3 py-1.5 bg-rose-50 dark:bg-rose-500/10 text-rose-600 text-xs font-bold rounded-lg flex items-center gap-1"
+                          disabled={updateMeetingMutation.isPending}
+                          className="px-3 py-1.5 bg-rose-50 dark:bg-rose-500/10 text-rose-600 text-xs font-bold rounded-lg flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                         >
-                          <X className="w-3.5 h-3.5" /> Cancel
+                          {updateMeetingMutation.isPending &&
+                          updateMeetingMutation.variables?.id === m.id &&
+                          updateMeetingMutation.variables?.status === 'cancelled' ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <X className="w-3.5 h-3.5" />
+                          )}
+                          Cancel
                         </button>
                       </>
                     )}

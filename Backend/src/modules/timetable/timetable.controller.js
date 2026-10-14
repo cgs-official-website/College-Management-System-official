@@ -1,6 +1,7 @@
 import { prisma, logger } from '../../server.js';
 import { createTimetableSlotSchema, updateTimetableSlotSchema } from './timetable.schema.js';
 import { findClashes, validateTimeRange } from './timetable.clash.js';
+import { notify } from '../notifications/notify.service.js';
 
 const DAY_MAP_TO_NAME = {
   1: 'Monday',
@@ -286,6 +287,23 @@ export const scheduleSlot = async (req, res) => {
   });
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} slotId=${slot.id} actor=${actorId} Scheduled class '${payload.subject}' on ${payload.dayOfWeek}`);
+
+  if (slot.sectionId) {
+    try {
+      const dayName = DAY_MAP_TO_NAME[slot.dayOfWeek] || payload.dayOfWeek || 'day';
+      await notify({
+        collegeId,
+        target: { sectionId: slot.sectionId },
+        title: 'Timetable Scheduled',
+        message: `New class for ${slot.course?.name || payload.subject || 'your course'} scheduled on ${dayName} at ${slot.startTime}.`,
+        type: 'timetable_change',
+        link: '/student/timetable',
+      });
+      logger?.info?.(`[Timetable] Notification sent for section ${slot.sectionId}`);
+    } catch (err) {
+      logger?.error?.(`[Timetable] Notification error: ${err.message}`);
+    }
+  }
   
   const createdTeacherFullName = slot.teacher?.user?.name
     || (() => {
@@ -437,6 +455,24 @@ export const updateSlot = async (req, res) => {
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} slotId=${id} actor=${actorId} Updated timetable slot`);
   
+  const targetSectionId = updated.sectionId || existing.sectionId;
+  if (targetSectionId) {
+    try {
+      const dayName = typeof updated.dayOfWeek === 'number' ? DAY_MAP_TO_NAME[updated.dayOfWeek] || 'day' : updated.dayOfWeek;
+      await notify({
+        collegeId,
+        target: { sectionId: targetSectionId },
+        title: 'Timetable Updated',
+        message: `Class for ${updated.course?.name || 'your course'} on ${dayName} updated to ${updated.startTime} - ${updated.endTime} (Room ${updated.room}).`,
+        type: 'timetable_change',
+        link: '/student/timetable',
+      });
+      logger?.info?.(`[Timetable] Update notification sent for section ${targetSectionId}`);
+    } catch (err) {
+      logger?.error?.(`[Timetable] Notification error: ${err.message}`);
+    }
+  }
+
   const updatedTeacherFullName = updated.teacher?.user?.name
     || (() => {
       const emailPrefix = updated.teacher?.user?.email ? updated.teacher.user.email.split('@')[0] : 'Staff';
@@ -480,6 +516,24 @@ export const deleteSlot = async (req, res) => {
   await prisma.timetableSlot.delete({ where: { id } });
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} slotId=${id} actor=${actorId} Deleted timetable slot`);
+
+  if (existing.sectionId) {
+    try {
+      const dayName = typeof existing.dayOfWeek === 'number' ? DAY_MAP_TO_NAME[existing.dayOfWeek] || 'day' : existing.dayOfWeek;
+      await notify({
+        collegeId,
+        target: { sectionId: existing.sectionId },
+        title: 'Timetable Class Cancelled',
+        message: `Class on ${dayName} at ${existing.startTime} has been removed from the schedule.`,
+        type: 'timetable_change',
+        link: '/student/timetable',
+      });
+      logger?.info?.(`[Timetable] Deletion notification sent for section ${existing.sectionId}`);
+    } catch (err) {
+      logger?.error?.(`[Timetable] Notification error: ${err.message}`);
+    }
+  }
+
   res.json({ success: true, message: 'Class schedule removed successfully' });
 };
 

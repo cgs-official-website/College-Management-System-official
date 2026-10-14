@@ -26,7 +26,7 @@ import {
   Video
 } from 'lucide-react';
 import { SearchBar } from '../../components/ui/SearchBar';
-import { NotificationDropdown } from '../../components/ui/NotificationDropdown';
+import { NotificationBell } from '../../components/ui/NotificationBell';
 import ProjectTimesheetDashboard from './ProjectTimesheetDashboard';
 import PayrollDashboard from './PayrollDashboard';
 import TeacherComplaints from './TeacherComplaints';
@@ -203,7 +203,7 @@ const TeacherLayout = () => {
             >
               <RefreshCw className="w-5 h-5" />
             </button>
-            <NotificationDropdown />
+            <NotificationBell />
             
             <div className="h-8 w-px bg-slate-200 dark:bg-white/10 mx-1"></div>
 

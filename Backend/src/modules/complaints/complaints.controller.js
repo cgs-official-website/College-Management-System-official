@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { notify } from '../notifications/notify.service.js';
 
 export const getItems = async (req, res) => {
   try {
@@ -79,6 +80,16 @@ export const createItem = async (req, res) => {
         status: 'open'
       }
     });
+
+    await notify({
+      collegeId,
+      target: { role: 'admin' },
+      type: 'complaint_new',
+      title: 'New Complaint Submitted',
+      message: `A new complaint was submitted: ${subject || 'General Complaint'}`,
+      link: '/admin/complaints'
+    });
+
     res.status(201).json({ data: item });
   } catch (error) {
     res.status(400).json({ error: { message: error.message } });
