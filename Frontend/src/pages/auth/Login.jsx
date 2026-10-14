@@ -28,7 +28,6 @@ const getRoleDestination = (role) => {
     case 'teacher':
     case 'hod':
     case 'faculty': return '/teacher';
-    case 'staff': return '/admin';
     default: return null;
   }
 };

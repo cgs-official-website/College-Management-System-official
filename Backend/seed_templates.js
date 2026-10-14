@@ -49,16 +49,27 @@ const templatesToSeed = [
   },
   {
     name: 'Password Reset',
-    subject: 'Password Reset Request',
+    subject: 'Reset your password - {{collegeName}}',
     contentHtml: `
-    <h2 style="color: #0f172a; margin-top: 0;">Password Reset Request</h2>
-    <p>We received a request to reset your password. If you didn't make this request, you can safely ignore this email.</p>
-    <p>Click the button below to reset your password:</p>
-    
+    <h2 style="color: #0f172a; margin-top: 0;">Reset your password</h2>
+    <p>Hello {{name}},</p>
+    <p>We received a request to reset the password for your <strong>{{collegeName}}</strong> account. Click the button below to choose a new password.</p>
+
     <div style="text-align: center;">
       <a href="{{resetLink}}" class="button">Reset Password</a>
     </div>
-    <p style="font-size: 13px; color: #64748b; margin-top: 24px;">This link will expire in 15 minutes.</p>
+
+    <p style="font-size: 13px; color: #64748b;">
+      If the button doesn't work, copy this link into your browser:<br>
+      <a href="{{resetLink}}">{{resetLink}}</a>
+    </p>
+
+    <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
+      This link expires in 15 minutes. If it has expired, you can request a new one from the login page.
+    </p>
+    <p style="font-size: 13px; color: #64748b;">
+      If you didn't request this, you can safely ignore this email. Your password will not change unless you use the link above.
+    </p>
     `
   },
   {
@@ -115,7 +126,33 @@ const templatesToSeed = [
       Sent on behalf of {{collegeName}}.
     </p>
     `
-  }
+  },
+    {
+    name: 'Teacher Welcome',
+    subject: 'Welcome to {{collegeName}} - your account is ready',
+    contentHtml: `
+    <h2 style="color: #0f172a; margin-top: 0;">Welcome aboard, {{name}}!</h2>
+    <p>Your teacher account at <strong>{{collegeName}}</strong> is now active. You can log in with your email and the password you just created.</p>
+
+    <div class="highlight" style="text-align: left; font-family: sans-serif; font-size: 14px; letter-spacing: normal;">
+      <div style="margin-bottom: 8px;"><strong>Teacher ID:</strong> {{teacherId}}</div>
+      <div style="margin-bottom: 8px;"><strong>College:</strong> {{collegeName}}</div>
+      <div><strong>Login email:</strong> {{email}}</div>
+    </div>
+
+    <div style="text-align: center;">
+      <a href="{{loginUrl}}" class="button">Log In to Your Account</a>
+    </div>
+
+    <p style="font-size: 13px; color: #64748b;">
+      If the button doesn't work, copy this link into your browser:<br>
+      <a href="{{loginUrl}}">{{loginUrl}}</a>
+    </p>
+    <p style="font-size: 13px; color: #64748b;">
+      Forgot your password? Use "Forgot password" on the login page. If you didn't create this account, please contact your college administrator.
+    </p>
+    `
+  },
 ];
 
 async function seed() {

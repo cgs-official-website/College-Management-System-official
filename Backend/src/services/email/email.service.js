@@ -164,22 +164,32 @@ const FALLBACK_TEMPLATES = {
       </div>
     `
   },
-  'Password Reset': {
-    subject: 'Password Reset Request',
-    buildHtml: (vars) => `
-      <h2 style="color: #0f172a; margin-top: 0;">Reset Your Password</h2>
-      <p>Hello ${escapeHtml(vars.name || '')},</p>
-      <p>We received a request to reset your password. Click the button below to choose a new password.</p>
+    'Password Reset': {
+    subject: (vars) => vars?.collegeName ? `Reset your password - ${vars.collegeName}` : 'Reset your password',
+    buildHtml: (vars) => {
+      const link = escapeHtml(vars.resetUrl || vars.resetLink || '#');
+      return `
+      <h2 style="color: #0f172a; margin-top: 0;">Reset your password</h2>
+      <p>Hello ${escapeHtml(vars.name || 'there')},</p>
+      <p>We received a request to reset the password for your <strong>${escapeHtml(vars.collegeName || 'College Management System')}</strong> account. Click the button below to choose a new password.</p>
 
       <div style="text-align: center;">
-        <a href="${escapeHtml(vars.resetUrl || vars.resetLink || '#')}" class="button">Reset Password</a>
+        <a href="${link}" class="button">Reset Password</a>
       </div>
 
-      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
-        If you did not request a password reset, you can safely ignore this email.
+      <p style="font-size: 13px; color: #64748b;">
+        If the button doesn't work, copy this link into your browser:<br>
+        <a href="${link}">${link}</a>
       </p>
-      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">This link will expire in 15 minutes.</p>
-    `
+
+      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
+        This link expires in 15 minutes. If it has expired, you can request a new one from the login page.
+      </p>
+      <p style="font-size: 13px; color: #64748b;">
+        If you didn't request this, you can safely ignore this email. Your password will not change unless you use the link above.
+      </p>
+    `;
+    }
   },
   'Admin Welcome': {
     subject: (vars) => vars?.collegeName ? `Welcome to ${vars.collegeName} - College Admin` : 'Welcome - College Admin',
@@ -219,7 +229,32 @@ const FALLBACK_TEMPLATES = {
       </div>
       <p>Please review inventory and initiate a replenishment request.</p>
     `
-  }
+  },
+    'Teacher Welcome': {
+    subject: (vars) => vars?.collegeName ? `Welcome to ${vars.collegeName} - your account is ready` : 'Your teacher account is ready',
+    buildHtml: (vars) => `
+      <h2 style="color: #0f172a; margin-top: 0;">Welcome aboard, ${escapeHtml(vars.name || 'Teacher')}!</h2>
+      <p>Your teacher account at <strong>${escapeHtml(vars.collegeName || 'your college')}</strong> is now active. You can log in with your email and the password you just created.</p>
+
+      <div class="highlight" style="text-align: left; font-family: sans-serif; font-size: 14px; letter-spacing: normal;">
+        <div style="margin-bottom: 8px;"><strong>Teacher ID:</strong> ${escapeHtml(vars.teacherId)}</div>
+        <div style="margin-bottom: 8px;"><strong>College:</strong> ${escapeHtml(vars.collegeName || '')}</div>
+        <div><strong>Login email:</strong> ${escapeHtml(vars.email)}</div>
+      </div>
+
+      <div style="text-align: center;">
+        <a href="${escapeHtml(vars.loginUrl || '#')}" class="button">Log In to Your Account</a>
+      </div>
+
+      <p style="font-size: 13px; color: #64748b;">
+        If the button doesn't work, copy this link into your browser:<br>
+        <a href="${escapeHtml(vars.loginUrl || '#')}">${escapeHtml(vars.loginUrl || '')}</a>
+      </p>
+      <p style="font-size: 13px; color: #64748b;">
+        Forgot your password? Use "Forgot password" on the login page. If you didn't create this account, please contact your college administrator.
+      </p>
+    `
+  },
 };
 
 // ---------------------------------------------------------------------------

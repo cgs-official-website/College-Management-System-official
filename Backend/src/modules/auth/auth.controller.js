@@ -1498,15 +1498,14 @@ export const completeStaffSetup = async (req, res) => {
     // the mail server is slow or unreachable.
     sendDynamicMail({
       to: activatedEmail,
-      templateName: 'Teacher Account Setup',
+      templateName: 'Teacher Welcome',
       headerTitle: collegeName || 'Welcome to Campus Portal',
       fromName: collegeName,
       variables: {
         name: staffName || activatedEmail.split('@')[0],
         email: activatedEmail,
         teacherId: claims.teacherId,
-        collegeName: collegeName || '',
-        setupUrl: loginUrl,   // re-uses the {{setupUrl}} placeholder as the login link
+        collegeName: collegeName || 'your college',
         loginUrl,
       },
     }).then((emailResult) => {
@@ -1546,7 +1545,8 @@ export const forgotPassword = async (req, res) => {
     const user = await prisma.user.findFirst({
       where: {
         email: { equals: normalizedEmail, mode: 'insensitive' }
-      }
+      },
+      include: { college: { select: { name: true } } }
     });
 
     if (!user) {
@@ -1559,11 +1559,17 @@ export const forgotPassword = async (req, res) => {
     const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
     const resetLink = `${frontendUrl}/reset-password?token=${encodeURIComponent(token)}&id=${encodeURIComponent(user.id)}`;
 
+    const collegeName = user.college?.name || 'College Management System';
+
     await sendDynamicMail({
       to: user.email,
       templateName: 'Password Reset',
+      headerTitle: collegeName,
+      fromName: collegeName,
       variables: {
-        resetLink
+        resetLink,
+        name: user.name,
+        collegeName
       }
     });
 

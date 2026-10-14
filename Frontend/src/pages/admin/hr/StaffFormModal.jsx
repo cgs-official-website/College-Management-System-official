@@ -262,7 +262,7 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
                   {...register('customRoleId')}
                   className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white"
                 >
-                  <option value="">Teacher</option>
+                  <option value="">Select a Role</option>
                   {filteredRoles.map(r => (
                     <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
