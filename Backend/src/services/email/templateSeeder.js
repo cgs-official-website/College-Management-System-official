@@ -132,7 +132,6 @@ export const DEFAULT_TEMPLATES = [
 
     <div class="highlight" style="text-align: left; font-family: sans-serif; font-size: 14px; letter-spacing: normal;">
       <div style="margin-bottom: 8px;"><strong>Teacher ID:</strong> {{teacherId}}</div>
-      <div style="margin-bottom: 8px;"><strong>College:</strong> {{collegeName}}</div>
       <div><strong>Login email:</strong> {{email}}</div>
     </div>
 

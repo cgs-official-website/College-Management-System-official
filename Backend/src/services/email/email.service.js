@@ -230,7 +230,7 @@ const FALLBACK_TEMPLATES = {
       <p>Please review inventory and initiate a replenishment request.</p>
     `
   },
-    'Teacher Welcome': {
+  'Teacher Welcome': {
     subject: (vars) => vars?.collegeName ? `Welcome to ${vars.collegeName} - your account is ready` : 'Your teacher account is ready',
     buildHtml: (vars) => `
       <h2 style="color: #0f172a; margin-top: 0;">Welcome aboard, ${escapeHtml(vars.name || 'Teacher')}!</h2>
@@ -238,7 +238,6 @@ const FALLBACK_TEMPLATES = {
 
       <div class="highlight" style="text-align: left; font-family: sans-serif; font-size: 14px; letter-spacing: normal;">
         <div style="margin-bottom: 8px;"><strong>Teacher ID:</strong> ${escapeHtml(vars.teacherId)}</div>
-        <div style="margin-bottom: 8px;"><strong>College:</strong> ${escapeHtml(vars.collegeName || '')}</div>
         <div><strong>Login email:</strong> ${escapeHtml(vars.email)}</div>
       </div>
 
