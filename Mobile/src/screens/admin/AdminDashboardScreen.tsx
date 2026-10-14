@@ -1,58 +1,70 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import {
-  Briefcase,
+  Bell,
   BookOpen,
-  Calendar,
+  Briefcase,
   CheckCircle2,
+  Clock,
   GraduationCap,
+  Link2,
   Megaphone,
+  Settings as SettingsIcon,
   User,
-  UserPlus,
   Users,
-  Wallet,
-  Zap,
 } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
 
 import { api } from '../../api/client';
 import { WEB_URL } from '../../config/env';
 import { Screen } from '../../components/ui/Screen';
-import { Card } from '../../components/ui/Card';
-import { StatCard } from '../../components/ui/StatCard';
-import { Button } from '../../components/ui/Button';
 import { SheetModal } from '../../components/ui/SheetModal';
-import { PageHeader } from '../../components/layout/ScreenHeader';
 import { useDrawerNav } from '../../components/layout/DrawerContent';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDashboardStats } from '../../hooks/useDashboardStats';
+import { useNotices } from '../../hooks/useNotices';
+import { BannerGlow, bannerDark } from '../../components/ui/BannerGlow';
 import { fontSize, fontWeight } from '../../theme/typography';
+import { formatDate } from '../../utils/format';
 import { toast } from '../../utils/toast';
 
-const timeAgo = (time: any): string => {
-  const date = new Date(time);
-  const diffMins = Math.floor((Date.now() - date.getTime()) / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffMins < 60) return diffMins <= 1 ? 'Just now' : `${diffMins} minutes ago`;
-  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-  if (diffDays === 1) return 'Yesterday';
-  return date.toLocaleDateString();
-};
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const pad = (n: number) => String(n).padStart(2, '0');
+const greeting = (hour: number) => (hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening');
 
-/** Web: AdminLayout -> <AdminDashboardHome/> ("College Dashboard"). */
+/** Own component so only the clock re-renders every second. */
+function LiveClock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const text = `${DAY_NAMES[now.getDay()]}, ${now.getDate()} ${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()} • ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  return (
+    <View style={styles.glassPill}>
+      <Clock size={16} color="#ffffff" />
+      <Text style={styles.glassText} numberOfLines={1}>{text}</Text>
+    </View>
+  );
+}
+
+/** Web: AdminLayout -> <AdminDashboardHome/>. Same data hooks as before; only the layout is new. */
 export default function AdminDashboardScreen() {
   const { colors } = useTheme();
   const nav = useDrawerNav();
   const { userData } = useAuth();
   const stats = useDashboardStats(userData?.collegeId);
+  const noticesApi = useNotices(userData?.collegeId);
   const [refreshing, setRefreshing] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const [showAllNotices, setShowAllNotices] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await stats.refetch();
+    await Promise.all([stats.refetch(), noticesApi.refetch()]);
     setRefreshing(false);
   };
 
@@ -89,15 +101,6 @@ export default function AdminDashboardScreen() {
     setInviteOpen(false);
   };
 
-  const val = (v: number | string) => (stats.isLoading ? '...' : v);
-
-  const quickActions = [
-    { label: 'Add Student', icon: UserPlus, tone: colors.success, bg: colors.successSoft, go: () => nav.navigate('students', { openAdd: true }) },
-    { label: 'Mark Attendance', icon: CheckCircle2, tone: colors.primary, bg: colors.primarySoft, go: () => nav.navigate('attendance') },
-    { label: 'Collect Fees', icon: Wallet, tone: colors.warning, bg: colors.warningSoft, go: () => nav.navigate('fees') },
-    { label: 'Post Notice', icon: Megaphone, tone: colors.danger, bg: colors.dangerSoft, go: () => nav.navigate('notices') },
-  ];
-
   const inviteOptions = [
     { role: 'student' as const, label: 'Student Link', icon: GraduationCap },
     { role: 'teacher' as const, label: 'Teacher Link', icon: Users },
@@ -105,75 +108,115 @@ export default function AdminDashboardScreen() {
     { role: 'parent' as const, label: 'Parent Link', icon: User },
   ];
 
+  const collegeName = (userData as any)?.collegeName || 'your college';
+  const loading = stats.isLoading;
+  const val = (v: number | string) => (loading ? '•••' : v);
+  const notices: any[] = noticesApi.notices || [];
+  const shownNotices = showAllNotices ? notices : notices.slice(0, 3);
+
+  const statCards: {
+    label: string;
+    value: string | number;
+    caption: string;
+    icon: LucideIcon;
+    tone: 'info' | 'primary' | 'success' | 'warning';
+    captionColor: string;
+    go: string;
+  }[] = [
+    { label: 'TOTAL STUDENTS', value: val(stats.totalStudents), caption: `${loading ? 0 : stats.totalStudents} active enrollments`, icon: GraduationCap, tone: 'info', captionColor: colors.success, go: 'students' },
+    { label: 'TEACHING STAFF', value: val(stats.totalTeachers), caption: 'Active staff', icon: Users, tone: 'primary', captionColor: colors.success, go: 'hr' },
+    { label: 'ACTIVE CLASSES', value: val(stats.activeCourses), caption: 'Across all sections', icon: BookOpen, tone: 'success', captionColor: colors.info, go: 'academic-structure' },
+    { label: 'SCHOOL NOTICES', value: noticesApi.isLoading ? '•••' : notices.length, caption: 'Broadcasts active', icon: Bell, tone: 'warning', captionColor: colors.textMuted, go: 'notices' },
+  ];
+  const tones = {
+    primary: { bg: colors.primarySoft, fg: colors.primary },
+    info: { bg: colors.infoSoft, fg: colors.info },
+    success: { bg: colors.successSoft, fg: colors.success },
+    warning: { bg: colors.warningSoft, fg: colors.warning },
+  } as const;
+
   return (
     <Screen edges={['left', 'right', 'bottom']} refreshing={refreshing} onRefresh={onRefresh}>
-      <PageHeader
-        title="College Dashboard"
-        subtitle="Manage your institution's daily operations."
-        action={<Button title="Invite Links" icon={Zap} size="sm" onPress={() => setInviteOpen(true)} />}
-      />
-
-      <View style={styles.row}>
-        <StatCard title="Total Students" value={val(stats.totalStudents)} subtitle="Current enrollment" icon={GraduationCap} tone="primary" />
-        <View style={styles.gap} />
-        <StatCard title="Total Teachers" value={val(stats.totalTeachers)} subtitle="Active staff" icon={Users} tone="success" />
-      </View>
-      <View style={[styles.row, styles.rowGap]}>
-        <StatCard title="Active Courses" value={val(stats.activeCourses)} subtitle="Departments" icon={BookOpen} tone="warning" />
-        <View style={styles.gap} />
-        <StatCard title="Avg Attendance" value={val(`${stats.attendanceRate}%`)} subtitle="Last 30 days" icon={Calendar} tone="info" />
-      </View>
-
-      <Card style={styles.section}>
-        <View style={styles.sectionHead}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
-          <Zap size={18} color={colors.primary} />
+      {/* Dashboard Overview banner */}
+      <View style={[styles.banner, bannerDark]}>
+<BannerGlow />
+        <Text style={styles.bannerTitle}>Dashboard Overview</Text>
+        <Pressable onPress={() => setInviteOpen(true)} style={({ pressed }) => [styles.whiteBtn, { opacity: pressed ? 0.85 : 1 }]}>
+          <Link2 size={18} color={'#ffffff'} />
+          <Text style={[styles.whiteBtnText, { color: '#ffffff' }]}>Generate Invite Links</Text>
+        </Pressable>
+        <Text style={styles.greeting}>{greeting(new Date().getHours())}! Welcome to {collegeName}.</Text>
+        <View style={styles.pillRow}>
+          <Pressable onPress={() => nav.navigate('settings')} style={styles.glassPill}>
+            <SettingsIcon size={16} color="#ffffff" />
+            <Text style={styles.glassText}>Customize</Text>
+          </Pressable>
+          <LiveClock />
         </View>
-        <View style={styles.grid}>
-          {quickActions.map((a) => {
-            const Icon = a.icon;
-            return (
-              <Pressable
-                key={a.label}
-                onPress={a.go}
-                style={({ pressed }) => [styles.action, { borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]}>
-                <View style={[styles.actionIcon, { backgroundColor: a.bg }]}>
-                  <Icon size={22} color={a.tone} />
-                </View>
-                <Text style={[styles.actionLabel, { color: colors.text }]}>{a.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </Card>
+      </View>
 
-      <Card style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 14 }]}>Recent Activity</Text>
-        {stats.isLoading ? (
-          <Text style={[styles.empty, { color: colors.textMuted }]}>Loading activity...</Text>
-        ) : stats.recentActivity.length > 0 ? (
-          stats.recentActivity.map((item: any) => {
-            const isStudent = item.type === 'student';
-            const Icon = isStudent ? UserPlus : Users;
-            return (
-              <View key={item.id} style={styles.activity}>
-                <View style={[styles.actIcon, { backgroundColor: isStudent ? colors.successSoft : colors.warningSoft }]}>
-                  <Icon size={16} color={isStudent ? colors.success : colors.warning} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.actTop}>
-                    <Text style={[styles.actTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
-                    <Text style={[styles.actTime, { color: colors.textMuted }]}>{timeAgo(item.time)}</Text>
-                  </View>
-                  <Text style={[styles.actDesc, { color: colors.textMuted }]}>{item.desc}</Text>
+      {/* Stat cards */}
+      <View style={styles.statGrid}>
+        {statCards.map((s) => {
+          const Icon = s.icon;
+          const t = tones[s.tone];
+          return (
+            <Pressable
+              key={s.label}
+              onPress={() => nav.navigate(s.go)}
+              style={({ pressed }) => [styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.9 : 1 }]}>
+              <View style={[styles.statIcon, { backgroundColor: t.bg }]}>
+                <Icon size={22} color={t.fg} />
+              </View>
+              <Text style={[styles.statLabel, { color: colors.textMuted }]} numberOfLines={1}>{s.label}</Text>
+              <Text style={[styles.statValue, { color: colors.text }]} numberOfLines={1}>{s.value}</Text>
+              <Text style={[styles.statCaption, { color: s.captionColor }]} numberOfLines={1}>{s.caption}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Recent Notices */}
+      <View style={[styles.panel, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.panelHead}>
+          <View style={styles.panelTitleRow}>
+            <Megaphone size={20} color={colors.primary} />
+            <Text style={[styles.panelTitle, { color: colors.text }]}>Recent Notices</Text>
+          </View>
+          {notices.length > 3 ? (
+            <Pressable onPress={() => setShowAllNotices((v) => !v)} hitSlop={8}>
+              <Text style={[styles.viewAll, { color: colors.primary }]}>{showAllNotices ? 'Show Less' : 'View All'}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+
+        {noticesApi.isLoading ? (
+          <Text style={[styles.empty, { color: colors.textMuted }]}>Loading notices...</Text>
+        ) : shownNotices.length > 0 ? (
+          shownNotices.map((notice: any) => (
+            <View key={notice.id} style={styles.notice}>
+              <View style={[styles.noticeIcon, { backgroundColor: colors.primarySoft }]}>
+                <Bell size={18} color={colors.primary} />
+              </View>
+              <View style={styles.noticeCopy}>
+                <Text style={[styles.noticeTitle, { color: colors.text }]} numberOfLines={1}>{notice.title}</Text>
+                <Text style={[styles.noticeBody, { color: colors.textMuted }]} numberOfLines={2}>{notice.content}</Text>
+                <View style={styles.noticeMeta}>
+                  <Clock size={11} color={colors.textSubtle} />
+                  <Text style={[styles.noticeDate, { color: colors.textSubtle }]}>
+                    {notice.createdAt ? formatDate(notice.createdAt) : 'Recent'}
+                  </Text>
                 </View>
               </View>
-            );
-          })
+            </View>
+          ))
         ) : (
-          <Text style={[styles.empty, { color: colors.textMuted }]}>No recent activity found.</Text>
+          <View style={styles.emptyBox}>
+            <Bell size={42} color={colors.textSubtle} strokeWidth={1.4} />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>No notices yet</Text>
+          </View>
         )}
-      </Card>
+      </View>
 
       <SheetModal visible={inviteOpen} onClose={() => setInviteOpen(false)} title="Generate Invite Links">
         {inviteOptions.map((o) => {
@@ -193,23 +236,35 @@ export default function AdminDashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row' },
-  rowGap: { marginTop: 12 },
-  gap: { width: 12 },
-  section: { marginTop: 16 },
-  sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  sectionTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.bold },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  action: { width: '47%', alignItems: 'center', paddingVertical: 16, borderWidth: 1, borderRadius: 16 },
-  actionIcon: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  actionLabel: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, textAlign: 'center' },
-  activity: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  actIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  actTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  actTitle: { flex: 1, fontSize: fontSize.sm, fontWeight: fontWeight.bold },
-  actTime: { fontSize: fontSize.xs },
-  actDesc: { fontSize: fontSize.sm, marginTop: 2 },
-  empty: { textAlign: 'center', fontSize: fontSize.sm, paddingVertical: 12 },
+  banner: { borderRadius: 22, padding: 20 },
+  bannerTitle: { color: '#ffffff', fontSize: fontSize.xl, fontWeight: fontWeight.extrabold },
+  whiteBtn: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#059669', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, marginTop: 14 },
+  whiteBtnText: { fontSize: fontSize.md, fontWeight: fontWeight.extrabold },
+  greeting: { color: 'rgba(255,255,255,0.9)', fontSize: fontSize.md, marginTop: 16 },
+  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14 },
+  glassPill: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
+  glassText: { color: '#ffffff', fontSize: fontSize.sm, fontWeight: fontWeight.bold },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 16 },
+  statCard: { width: '48%', flexGrow: 1, borderWidth: 1, borderRadius: 20, padding: 16 },
+  statIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  statLabel: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, letterSpacing: 0.3 },
+  statValue: { fontSize: fontSize.xxl, fontWeight: fontWeight.extrabold, marginTop: 8 },
+  statCaption: { fontSize: fontSize.xs, fontWeight: fontWeight.bold, marginTop: 6 },
+  panel: { borderWidth: 1, borderRadius: 20, padding: 16, marginTop: 16 },
+  panelHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  panelTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  panelTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold },
+  viewAll: { fontSize: fontSize.sm, fontWeight: fontWeight.bold },
+  empty: { textAlign: 'center', paddingVertical: 16, fontSize: fontSize.sm },
+  emptyBox: { alignItems: 'center', paddingVertical: 28, gap: 12 },
+  emptyTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold },
+  notice: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  noticeIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  noticeCopy: { flex: 1 },
+  noticeTitle: { fontSize: fontSize.sm, fontWeight: fontWeight.bold },
+  noticeBody: { fontSize: fontSize.xs, marginTop: 2, lineHeight: 16 },
+  noticeMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+  noticeDate: { fontSize: 10, fontWeight: fontWeight.medium },
   inviteRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   inviteLabel: { flex: 1, fontSize: fontSize.md, fontWeight: fontWeight.medium },
 });

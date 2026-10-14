@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Check, ChevronDown, Search } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { fontSize, fontWeight } from '../../theme/typography';
 import { radius } from '../../theme/spacing';
@@ -18,6 +19,8 @@ interface SelectProps {
   disabled?: boolean;
   /** show a search box inside the sheet (auto on when > 8 options) */
   searchable?: boolean;
+  /** optional leading icon inside the field (web parity) */
+  icon?: LucideIcon;
 }
 
 export function Select({
@@ -30,6 +33,7 @@ export function Select({
   required,
   disabled,
   searchable,
+  icon: Icon,
 }: SelectProps) {
   const { colors } = useTheme();
   const [open, setOpen] = useState(false);
@@ -64,6 +68,7 @@ export function Select({
           styles.field,
           { backgroundColor: colors.inputBg, borderColor: error ? colors.danger : colors.border, opacity: disabled ? 0.6 : 1 },
         ]}>
+        {Icon ? <Icon size={18} color={colors.textSubtle} style={{ marginRight: 10 }} /> : null}
         <Text style={{ flex: 1, fontSize: fontSize.md, color: selected ? colors.text : colors.placeholder }} numberOfLines={1}>
           {selected ? selected.label : placeholder}
         </Text>

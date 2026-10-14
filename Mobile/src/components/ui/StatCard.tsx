@@ -14,9 +14,11 @@ interface StatCardProps {
   onPress?: () => void;
   /** smaller padding / value size for dense layouts */
   compact?: boolean;
+  /** perfect square box (used in 3-in-a-row stat strips) */
+  square?: boolean;
 }
 
-export function StatCard({ title, value, subtitle, icon: Icon, tone = 'primary', onPress, compact = false }: StatCardProps) {
+export function StatCard({ title, value, subtitle, icon: Icon, tone = 'primary', onPress, compact = false, square = false }: StatCardProps) {
   const { colors } = useTheme();
   const tones = {
     primary: { bg: colors.primarySoft, fg: colors.primary },
@@ -28,8 +30,24 @@ export function StatCard({ title, value, subtitle, icon: Icon, tone = 'primary',
   const t = tones[tone];
 
   return (
-    <Card onPress={onPress} style={compact ? styles.cardCompact : styles.card}>
-      {compact ? (
+    <Card onPress={onPress} style={square ? styles.cardSquare : compact ? styles.cardCompact : styles.card}>
+      {square ? (
+        <>
+          {Icon ? (
+            <View style={[styles.icon, styles.iconSquare, { backgroundColor: t.bg }]}>
+              <Icon size={16} color={t.fg} />
+            </View>
+          ) : null}
+          <View>
+            <Text style={[styles.value, styles.valueSquare, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              {value}
+            </Text>
+            <Text style={[styles.titleSquare, { color: colors.textMuted }]} numberOfLines={2}>
+              {title}
+            </Text>
+          </View>
+        </>
+      ) : compact ? (
         <>
           {Icon ? (
             <View style={[styles.icon, styles.iconCompact, { backgroundColor: t.bg, marginLeft: 0 }]}>
@@ -67,6 +85,10 @@ export function StatCard({ title, value, subtitle, icon: Icon, tone = 'primary',
 
 const styles = StyleSheet.create({
   card: { flex: 1, minWidth: 140 },
+  cardSquare: { flex: 1, minWidth: 0, aspectRatio: 1, padding: 10, justifyContent: 'space-between', overflow: 'hidden' },
+  iconSquare: { width: 32, height: 32, borderRadius: 10, marginLeft: 0 },
+  valueSquare: { fontSize: 20, marginTop: 0 },
+  titleSquare: { fontSize: 11, fontWeight: fontWeight.bold, marginTop: 2, lineHeight: 14 },
   cardCompact: { flex: 1, minWidth: 0, padding: 10 },
   titleCompact: { fontSize: 11, fontWeight: fontWeight.bold, marginTop: 2, lineHeight: 14 },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

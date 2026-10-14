@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, NativeModules, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Building, Camera } from 'lucide-react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -9,10 +9,11 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Tabs } from '../../components/ui/Tabs';
+import { types } from '@react-native-documents/picker';
+import { pickAsDataUrl } from '../../utils/filePicker';
 import { toast } from '../../utils/toast';
 import { fontSize, fontWeight } from '../../theme/typography';
 
-const { ZunaFilePicker } = NativeModules;
 
 const TABS = [
   { key: 'profile', label: 'College Profile' },
@@ -65,20 +66,13 @@ export default function SettingsScreen() {
   const setP = (k: string) => (x: string) => { setProfile((p: any) => ({ ...p, [k]: x })); setProfileErrors((p) => ({ ...p, [k]: '' })); };
 
   const handleLogoUpload = async () => {
-    if (!ZunaFilePicker?.pickFile) {
-      Alert.alert('File picker unavailable', 'The Android file picker is not available in this build.');
-      return;
-    }
-    try {
-      const picked = await ZunaFilePicker.pickFile({ type: 'image' });
-      if (!picked?.base64) return;
-      // base64 length -> approx bytes
-      if ((picked.base64.length * 3) / 4 > 2 * 1024 * 1024) { toast.error('File size must be less than 2MB'); return; }
-      const mime = picked.mimeType || picked.type || 'image/png';
-      setLogoBase64(`data:${String(mime).startsWith('image/') ? mime : 'image/png'};base64,${picked.base64}`);
-    } catch (err: any) {
-      if (err?.message !== 'USER_CANCELLED') Alert.alert('File Picker Error', err?.message || 'Could not choose the image.');
-    }
+    const file = await pickAsDataUrl({
+      types: [types.images],
+      allowedMimes: ['image/jpeg', 'image/png', 'image/webp'],
+      maxBytes: 2 * 1024 * 1024,
+      typeError: 'Unsupported format. Allowed: JPEG, PNG, WebP',
+    });
+    if (file) setLogoBase64(file.dataUrl);
   };
 
   const handleProfileSubmit = async () => {

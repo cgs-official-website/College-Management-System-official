@@ -92,12 +92,38 @@ export function useStaff(collegeId?: string | null) {
     }
   });
 
+  // POST /staff/:id/send-setup-mail  -> backend e-mails the 'Teacher Account Setup' template
+  const sendSetupMail = useAction<string, any>(async (id) => {
+    try {
+      const res = await api.post<any>(`/staff/${id}/send-setup-mail`);
+      const masked = res?.data?.maskedEmail;
+      toast.success('Setup email sent', masked ? `Sent to ${masked}` : undefined);
+      return res;
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not send the setup email.');
+      throw err;
+    }
+  });
+
+  // POST /staff/:id/setup-link  -> returns { data: { setupUrl } } (same link the mail contains)
+  const generateSetupLink = useAction<string, string>(async (id) => {
+    try {
+      const res = await api.post<any>(`/staff/${id}/setup-link`);
+      return res?.data?.setupUrl as string;
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not generate the setup link.');
+      throw err;
+    }
+  });
+
   return {
     staff, isLoading, error,
     isAdding: addStaff.isPending, isUpdating: updateStaff.isPending,
     isDeleting: deleteStaff.isPending, isImporting: bulkImport.isPending,
+    isSendingSetup: sendSetupMail.isPending, isGeneratingLink: generateSetupLink.isPending,
     refetch: () => load(true),
     addStaff: addStaff.mutateAsync, updateStaff: updateStaff.mutateAsync,
     deleteStaff: deleteStaff.mutateAsync, bulkImport: bulkImport.mutateAsync,
+    sendSetupMail: sendSetupMail.mutateAsync, generateSetupLink: generateSetupLink.mutateAsync,
   };
 }

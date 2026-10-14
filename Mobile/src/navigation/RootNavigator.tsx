@@ -13,13 +13,14 @@ import RejectedScreen from '../screens/auth/RejectedScreen';
 import SuperDrawer from './SuperDrawer';
 import AdminDrawer from './AdminDrawer';
 import StudentDrawer from './StudentDrawer';
+import TeacherDrawer from './TeacherDrawer';
 import { Screen } from '../components/ui/Screen';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { fontSize, fontWeight } from '../theme/typography';
 import { fullName } from '../utils/format';
-import { getRoleLabel, normalizeRole } from '../utils/permissions';
+import { getRoleLabel, isTeacherRole, normalizeRole } from '../utils/permissions';
 import type { AppStackParamList, StatusStackParamList } from '../types/navigation';
 
 const StatusNav = createNativeStackNavigator<StatusStackParamList>();
@@ -36,7 +37,7 @@ function StatusStack({ initial }: { initial: keyof StatusStackParamList }) {
 
 /**
  * TEMPORARY home screen for roles that are not built yet. Each next batch replaces this with the real
- * role navigator: ParentDrawer, TeacherDrawer.  (SuperDrawer, AdminDrawer done; StudentDrawer in progress.)
+ * role navigator: ParentDrawer.  (SuperDrawer, AdminDrawer, StudentDrawer done; TeacherDrawer in progress.)
  */
 function RoleHomePlaceholder() {
   const { userData, userRole, logout } = useAuth();
@@ -74,7 +75,7 @@ function AppStack({ role }: { role: string }) {
     <AppNav.Navigator screenOptions={{ headerShown: false }}>
       <AppNav.Screen
         name="Home"
-        component={role === 'superadmin' ? SuperDrawer : role === 'admin' ? AdminDrawer : role === 'student' ? StudentDrawer : RoleHomePlaceholder}
+        component={role === 'superadmin' ? SuperDrawer : role === 'admin' ? AdminDrawer : role === 'student' ? StudentDrawer : isTeacherRole(role) ? TeacherDrawer : RoleHomePlaceholder}
       />
     </AppNav.Navigator>
   );

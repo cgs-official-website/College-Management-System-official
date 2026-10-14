@@ -3,6 +3,7 @@ export type AuthStackParamList = {
   Onboarding: undefined;
   Login: { college?: string; successMessage?: string } | undefined;
   ForgotPassword: undefined;
+  Register: undefined;
   ResetPassword: { token?: string; id?: string; userId?: string } | undefined;
 };
 

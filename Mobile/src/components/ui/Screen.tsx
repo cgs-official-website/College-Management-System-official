@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { createContext, useContext } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -11,6 +11,9 @@ import {
 } from 'react-native';
 import { Edge, SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
+
+/** Extra bottom padding for screens drawn under a floating bottom bar (Teacher app). Default 0 = no change. */
+export const ScreenInsetContext = createContext(0);
 
 interface ScreenProps {
   children: React.ReactNode;
@@ -36,6 +39,7 @@ export function Screen({
   contentContainerStyle,
 }: ScreenProps) {
   const { colors } = useTheme();
+  const bottomInset = useContext(ScreenInsetContext);
 
   return (
     <SafeAreaView edges={edges} style={[styles.flex, { backgroundColor: colors.bg }, style]}>
@@ -43,7 +47,7 @@ export function Screen({
         {scroll ? (
           <ScrollView
             style={styles.flex}
-            contentContainerStyle={[padded && styles.padded, styles.grow, contentContainerStyle]}
+            contentContainerStyle={[padded && styles.padded, styles.grow, bottomInset ? { paddingBottom: 16 + bottomInset } : null, contentContainerStyle]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             refreshControl={
@@ -54,7 +58,7 @@ export function Screen({
             {children}
           </ScrollView>
         ) : (
-          <View style={[styles.flex, padded && styles.padded, contentContainerStyle]}>{children}</View>
+          <View style={[styles.flex, padded && styles.padded, bottomInset ? { paddingBottom: 16 + bottomInset } : null, contentContainerStyle]}>{children}</View>
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>

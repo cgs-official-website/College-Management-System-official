@@ -1,8 +1,8 @@
-
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -12,8 +12,10 @@ import {
   Edit,
   Eye,
   Mail,
+  Link2,
   Phone,
   Plus,
+  Send,
   Shield,
   Trash2,
   Users,
@@ -67,6 +69,10 @@ export default function HRManagementScreen() {
     isImporting,
     bulkImport,
     refetch,
+    sendSetupMail,
+    generateSetupLink,
+    isSendingSetup,
+    isGeneratingLink,
   } = useStaff(collegeId);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -76,6 +82,7 @@ export default function HRManagementScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(10);
+  const [busySetupId, setBusySetupId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -151,6 +158,42 @@ export default function HRManagementScreen() {
       setEditingStaff(null);
     } catch {
       // Keep the form open so the user can correct the data.
+    }
+  };
+
+  // ---- Staff account-setup e-mail (same API the web admin uses) ----
+  const hasRealEmail = (member: any) =>
+    !!member?.email && !String(member.email).toLowerCase().includes('@pending.local');
+
+  const handleSendSetupMail = async (member: any) => {
+    const confirmed = await confirm({
+      title: 'Send Setup Email',
+      message: `Send the account setup link to ${member.email}?`,
+      confirmText: 'Send',
+    });
+    if (!confirmed) return;
+
+    setBusySetupId(member.id);
+    try {
+      await sendSetupMail(member.id);
+    } catch {
+      // useStaff already shows the error toast
+    } finally {
+      setBusySetupId(null);
+    }
+  };
+
+  const handleShareSetupLink = async (member: any) => {
+    setBusySetupId(member.id);
+    try {
+      const url = await generateSetupLink(member.id);
+      if (url) {
+        await Share.share({ message: `Set up your teacher account: ${url}` });
+      }
+    } catch {
+      // useStaff already shows the error toast (Share dismissal is not an error)
+    } finally {
+      setBusySetupId(null);
     }
   };
 
@@ -530,6 +573,62 @@ export default function HRManagementScreen() {
                     </Text>
                   </Pressable>
                 </View>
+
+                {status.toLowerCase() === 'pending_setup' ? (
+                  <View style={styles.cardActions}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Send setup email to ${name}`}
+                      disabled={!hasRealEmail(member) || busySetupId === member.id}
+                      onPress={() => handleSendSetupMail(member)}
+                      style={[
+                        styles.actionBtn,
+                        {
+                          borderColor: colors.border,
+                          opacity: !hasRealEmail(member) || busySetupId === member.id ? 0.45 : 1,
+                        },
+                      ]}
+                    >
+                      {busySetupId === member.id && isSendingSetup ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      ) : (
+                        <Send size={15} color={colors.primary} />
+                      )}
+                      <Text style={[styles.actionText, { color: colors.text }]}>
+                        Send Setup Mail
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Share setup link for ${name}`}
+                      disabled={!hasRealEmail(member) || busySetupId === member.id}
+                      onPress={() => handleShareSetupLink(member)}
+                      style={[
+                        styles.actionBtn,
+                        {
+                          borderColor: colors.border,
+                          opacity: !hasRealEmail(member) || busySetupId === member.id ? 0.45 : 1,
+                        },
+                      ]}
+                    >
+                      {busySetupId === member.id && isGeneratingLink ? (
+                        <ActivityIndicator size="small" color={colors.info} />
+                      ) : (
+                        <Link2 size={15} color={colors.info} />
+                      )}
+                      <Text style={[styles.actionText, { color: colors.text }]}>
+                        Share Link
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+
+                {status.toLowerCase() === 'pending_setup' && !hasRealEmail(member) ? (
+                  <Text style={[styles.meta, { color: colors.warning, marginTop: 6 }]}>
+                    Add the teacher's email (Edit) to send the setup mail.
+                  </Text>
+                ) : null}
               </Card>
             );
           })}

@@ -135,12 +135,16 @@ export default function LoginScreen({ navigation, route }: Props) {
               </Text>
             </View>
           ) : (
-            <View style={[styles.footerBox, { backgroundColor: colors.primarySoft, borderColor: colors.successBorder }]}>
+            <Pressable
+              onPress={() => navigation.navigate('Register')}
+              accessibilityRole="button"
+              accessibilityLabel="Register a new organization"
+              style={[styles.footerBox, { backgroundColor: colors.primarySoft, borderColor: colors.successBorder }]}>
               <Building2 size={17} color={colors.primary} />
               <Text style={[styles.footerText, { color: colors.textMuted }]}>
                 New organization? <Text style={[styles.footerLink, { color: colors.primary }]}>Register here</Text>
               </Text>
-            </View>
+            </Pressable>
           )}
         </View>
       </View>
