@@ -4,13 +4,14 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { DataTable } from '../../../components/tables/DataTable';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
-import { Search, Plus, Edit, Trash2, CheckCircle, Clock } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, CheckCircle, Clock, Link as LinkIcon } from 'lucide-react';
 import { StudentFormModal } from './StudentFormModal';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
 import { api } from '../../../services/api';
 import { useQueryClient } from '@tanstack/react-query';
+import { StudentRegistrationLinkModal } from './StudentRegistrationLinkModal';
 
 const STUDENT_IMPORT_FIELDS = [
   {
@@ -146,6 +147,7 @@ export default function StudentList() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
   const [activatingId, setActivatingId] = useState(null);
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
 
   // Split students by status
   const pendingStudents = students.filter(s => (s.status || '').toLowerCase() === 'pending');
@@ -338,6 +340,13 @@ export default function StudentList() {
             description="Upload an Excel (.xlsx, .xls) or CSV file with student records. Required: Admission_No and Student_Name."
             fields={STUDENT_IMPORT_FIELDS}
           />
+          <button
+            onClick={() => setIsLinkModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 text-sm font-semibold rounded-xl transition-colors"
+          >
+            <LinkIcon className="w-4 h-4" />
+            Registration Link
+          </button>
           <Button onClick={handleOpenAdd}>
             <Plus className="w-4 h-4 mr-2" />
             Add Student
@@ -416,6 +425,10 @@ export default function StudentList() {
         onSubmit={handleSubmit}
         initialData={editingStudent}
         isLoading={isAdding || isUpdating}
+      />
+      <StudentRegistrationLinkModal
+        isOpen={isLinkModalOpen}
+        onClose={() => setIsLinkModalOpen(false)}
       />
     </div>
   );

@@ -3,7 +3,7 @@ import { Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-r
 import { motion, AnimatePresence } from 'framer-motion';
 import ChatWidget from '../../components/ui/ChatWidget';
 import { useAuth } from '../../contexts/AuthContext';
-import { useDashboardStats, useDashboardInsights } from '../../hooks/useDashboardStats';
+import { useDashboardStats } from '../../hooks/useDashboardStats';
 import { 
   LayoutDashboard, 
   Users, 
@@ -51,10 +51,7 @@ import {
   History,
   Store as StoreIcon,
   AlertCircle,
-  Sparkles,
 } from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import { api } from '../../services/api';
 import { useTheme } from '../../hooks/useTheme';
 import PlaceholderModule from '../../components/ui/PlaceholderModule';
 import RaiseTicketModal from '../../components/ui/RaiseTicketModal';
@@ -149,7 +146,7 @@ const AdminLayout = () => {
     return r.charAt(0).toUpperCase() + r.slice(1);
   })();
 
-  const panelLabel = isAdmin ? 'ADMIN PANEL' : 'STAFF PORTAL';
+  const panelLabel = isAdmin ? 'ADMIN PANEL' : (userData?.customRole?.name || 'Staff Portal');
   const collegeLabel = userData?.collegeName || 'My College';
   const canReviewStudentLeaves = ['admin', 'superadmin', 'teacher', 'hod', 'faculty'].includes(userRole);
   const planAllows = (moduleKey) =>
@@ -577,9 +574,6 @@ const AdminLayout = () => {
 const AdminDashboardHome = () => {
   const { userData, userRole, permissions } = useAuth();
   const stats = useDashboardStats(userData?.collegeId);
-  const insights = useDashboardInsights(userData?.collegeId);
-  const [copiedLink, setCopiedLink] = useState(null); 
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const isStaff = userRole === 'staff';
   const isAdmin = userRole === 'admin' || userRole === 'superadmin';
@@ -643,195 +637,12 @@ const AdminDashboardHome = () => {
 
   const displayActions = candidateActions.filter(a => hasModuleAccess(a.module)).slice(0, 4);
 
-    const handleGenerateLink = async (role) => {
-    if (!userData?.collegeId && !userData?.collegeSlug) return;
-    const baseUrl = window.location.origin;
-    let inviteLink;
-
-    // ── STUDENT: must use the secure token-based registration flow ──
-    if (role === 'student') {
-      try {
-        console.log('[AdminLayout] Fetching student registration token from API...');
-        const response = await api.post('/students/registration-link/regenerate');
-        const linkData = response.data ?? response;
-        const rawToken = linkData?.rawToken;
-        const path = linkData?.path;
-
-        if (!rawToken || !path) {
-          console.error('[AdminLayout] Token API did not return rawToken. Response:', { hasData: !!linkData, hasPath: !!path });
-          toast.error('Failed to generate student registration link. Please try again.');
-          return;
-        }
-
-        console.log(`[AdminLayout] Student registration token ready. Length: ${rawToken.length}, prefix: ${rawToken.slice(0, 4)}...`);
-
-        // path from backend is e.g. /student/register?token=<rawToken>
-        inviteLink = `${baseUrl}${path}`;
-      } catch (err) {
-        console.error('[AdminLayout] Error generating student registration token:', err.message);
-        toast.error(err.message || 'Failed to generate student registration link.');
-        return;
-      }
-    } else {
-      // ── TEACHER / HOD / PARENT: general /register/:role flow ──
-      inviteLink = userData?.collegeSlug
-        ? `${baseUrl}/register/${role}/${userData.collegeSlug}`
-        : `${baseUrl}/register/${role}?code=${userData.collegeId}`;
-    }
-
-    console.log(`[AdminLayout] Generated ${role} invite link. Route: ${new URL(inviteLink).pathname}`);
-    
-    try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(inviteLink);
-        toast.success(`Copied ${role} registration link to clipboard!`);
-      } else {
-        const textArea = document.createElement('textarea');
-        textArea.value = inviteLink;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        textArea.style.top = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        try {
-          document.execCommand('copy');
-          toast.success(`Copied ${role} registration link to clipboard!`);
-        } catch (err) {
-          console.error('Fallback copy failed', err);
-          toast.error(
-            <div className="flex flex-col gap-2">
-              <span className="font-bold">Manual copy required:</span>
-              <input readOnly value={inviteLink} className="text-xs p-1 rounded bg-slate-100 dark:bg-slate-800 border-none w-full" onClick={e => e.target.select()} />
-            </div>,
-            { duration: 8000 }
-          );
-        }
-        document.body.removeChild(textArea);
-      }
-    } catch (err) {
-      console.error('Failed to copy', err);
-      toast.error(
-        <div className="flex flex-col gap-2">
-          <span className="font-bold">Manual copy required:</span>
-          <input readOnly value={inviteLink} className="text-xs p-1 rounded bg-slate-100 dark:bg-slate-800 border-none w-full" onClick={e => e.target.select()} />
-        </div>,
-        { duration: 8000 }
-      );
-    }
-
-    setCopiedLink(role);
-    setIsDropdownOpen(false);
-    setTimeout(() => setCopiedLink(null), 3000);
-  };
-
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">College Dashboard</h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">Manage your institution's daily operations.</p>
-        </div>
-        
-        <div className="relative">
-          <button 
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-primary-500/30 transition-all"
-          >
-            <Zap className="w-4 h-4" />
-            Generate Invite Links
-          </button>
-
-          <AnimatePresence>
-            {isDropdownOpen && (
-              <motion.div 
-                initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                className="absolute right-0 mt-2 w-56 bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden z-50 origin-top-right"
-              >
-                <div className="p-1">
-                  <button onClick={() => handleGenerateLink('student')} className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-lg transition-colors">
-                    <span className="flex items-center gap-2"><GraduationCap className="w-4 h-4 text-primary-500" /> Student Link</span>
-                    {copiedLink === 'student' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                  </button>
-                  {/*
-                  <button onClick={() => handleGenerateLink('teacher')} className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-lg transition-colors">
-                    <span className="flex items-center gap-2"><Users className="w-4 h-4 text-teal-500" /> Teacher Link</span>
-                    {copiedLink === 'teacher' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                  </button>
-                  <button onClick={() => handleGenerateLink('hod')} className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-lg transition-colors">
-                    <span className="flex items-center gap-2"><Briefcase className="w-4 h-4 text-indigo-500" /> HOD Link</span>
-                    {copiedLink === 'hod' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                  </button>
-                  */}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+      <div>
+        <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">College Dashboard</h1>
+        <p className="text-slate-500 dark:text-slate-400 mt-1">Manage your institution's daily operations.</p>
       </div>
-
-      {/* AI Operations Briefing Banner */}
-      <motion.div 
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-3xl p-6 bg-gradient-to-r from-primary-500/10 via-indigo-500/10 to-purple-500/10 dark:from-primary-500/15 dark:via-indigo-500/15 dark:to-purple-500/15 border border-primary-500/20 shadow-sm"
-      >
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-primary-500/20 text-primary-600 dark:text-primary-400 rounded-xl">
-              <Sparkles className="w-5 h-5 animate-pulse" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">AI Operations Intelligence</h3>
-                <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-primary-100 dark:bg-primary-950/60 text-primary-700 dark:text-primary-300 border border-primary-300 dark:border-primary-800">
-                  {roleTitle}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Real-time telemetry synthesized via Gemini AI</p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => insights.refetch()}
-            disabled={insights.isFetching}
-            className="self-start md:self-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/70 dark:bg-white/10 hover:bg-white dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 border border-slate-200/60 dark:border-white/10 transition-all shadow-xs disabled:opacity-50"
-            title="Refresh AI briefing"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${insights.isFetching ? 'animate-spin' : ''}`} />
-            <span>{insights.isFetching ? 'Analyzing...' : 'Refresh Briefing'}</span>
-          </button>
-        </div>
-
-        {insights.isLoading ? (
-          <div className="space-y-2 py-2 animate-pulse">
-            <div className="h-4 bg-primary-200/50 dark:bg-primary-900/30 rounded w-3/4"></div>
-            <div className="h-4 bg-primary-200/40 dark:bg-primary-900/20 rounded w-1/2"></div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed font-medium">
-              {insights.data?.summary || `Welcome to your ${roleTitle} control center. All assigned operational streams are monitored.`}
-            </p>
-
-            {insights.data?.recommendations && insights.data.recommendations.length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {insights.data.recommendations.map((rec, i) => (
-                  <span
-                    key={i}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg bg-white/80 dark:bg-white/5 border border-slate-200/70 dark:border-white/10 text-slate-700 dark:text-slate-300 shadow-2xs"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                    {rec}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </motion.div>
 
       {hasNoModules && (
         <div className="p-4 md:p-5 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-start gap-3 text-amber-800 dark:text-amber-300 shadow-sm">
