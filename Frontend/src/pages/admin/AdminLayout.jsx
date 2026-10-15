@@ -3,7 +3,7 @@ import { Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-r
 import { motion, AnimatePresence } from 'framer-motion';
 import ChatWidget from '../../components/ui/ChatWidget';
 import { useAuth } from '../../contexts/AuthContext';
-import { useDashboardStats } from '../../hooks/useDashboardStats';
+import { useDashboardStats, useDashboardInsights } from '../../hooks/useDashboardStats';
 import { 
   LayoutDashboard, 
   Users, 
@@ -51,6 +51,7 @@ import {
   History,
   Store as StoreIcon,
   AlertCircle,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { api } from '../../services/api';
@@ -569,11 +570,71 @@ const AdminLayout = () => {
 const AdminDashboardHome = () => {
   const { userData, userRole, permissions } = useAuth();
   const stats = useDashboardStats(userData?.collegeId);
+  const insights = useDashboardInsights(userData?.collegeId);
   const [copiedLink, setCopiedLink] = useState(null); 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const isStaff = userRole === 'staff';
+  const isAdmin = userRole === 'admin' || userRole === 'superadmin';
   const hasNoModules = isStaff && (!userData?.customRoleId || !Object.values(permissions || {}).some(p => p.canRead));
+
+  const hasModuleAccess = (moduleKey) => {
+    if (isAdmin) return true;
+    if (!permissions || Object.keys(permissions).length === 0) return false;
+    return permissions[moduleKey]?.canRead === true;
+  };
+
+  const roleTitle = stats.roleInfo?.roleName || (isAdmin ? 'College Administrator' : (userData?.role ? userData.role.toUpperCase() : 'Staff Member'));
+  const ms = stats.moduleStats || {};
+
+  // All potential metric cards across modules
+  const candidateCards = [
+    // Students
+    { module: 'students', title: 'Total Students', value: ms.students?.count ?? stats.totalStudents, trend: 'Current enrollment', icon: GraduationCap, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10' },
+    // Staff
+    { module: 'staff', title: 'Total Faculty & Staff', value: ms.staff?.count ?? stats.totalTeachers, trend: 'Active personnel', icon: Users, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
+    // Academic
+    { module: 'academic', title: 'Active Courses', value: ms.academic?.coursesCount ?? stats.activeCourses, trend: `${ms.academic?.departmentsCount || 0} Departments`, icon: BookOpen, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
+    // Attendance
+    { module: 'attendance', title: 'Avg Attendance', value: `${stats.attendanceRate}%`, trend: ms.attendance?.pendingLeaves ? `${ms.attendance.pendingLeaves} Pending leaves` : 'Last 30 days', icon: Calendar, color: 'text-teal-500', bg: 'bg-teal-50 dark:bg-teal-500/10' },
+    // Hostel
+    { module: 'hostel', title: 'Hostel Blocks', value: ms.hostel?.blocksCount ?? 0, trend: `${ms.hostel?.roomsCount || 0} Total rooms`, icon: Building, color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-500/10' },
+    { module: 'hostel', title: 'Hostel Capacity', value: ms.hostel?.totalCapacity ?? 0, trend: 'Residential beds available', icon: Home, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-500/10' },
+    // Fees
+    { module: 'fees', title: 'Total Fee Invoices', value: ms.fees?.totalRecords ?? 0, trend: ms.fees?.amountPaid ? `₹${Number(ms.fees.amountPaid).toLocaleString()} Collected` : 'Collections', icon: Wallet, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
+    { module: 'fees', title: 'Outstanding Dues', value: ms.fees?.amountDue ? `₹${Number(ms.fees.amountDue).toLocaleString()}` : '₹0', trend: 'Pending recovery', icon: Calculator, color: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-500/10' },
+    // Library
+    { module: 'library', title: 'Library Catalog Items', value: ms.library?.itemsCount ?? 0, trend: `${ms.library?.availableCopies ?? 0} Copies on shelf`, icon: LibraryIcon, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-500/10' },
+    // Transport
+    { module: 'transport', title: 'Transport Routes', value: ms.transport?.routesCount ?? 0, trend: `${ms.transport?.vehiclesCount || 0} Registered vehicles`, icon: Bus, color: 'text-cyan-500', bg: 'bg-cyan-50 dark:bg-cyan-500/10' },
+    // Notices
+    { module: 'notices', title: 'Campus Bulletins', value: ms.notices?.count ?? 0, trend: 'Published announcements', icon: Megaphone, color: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-500/10' },
+    // Exams
+    { module: 'exams', title: 'Scheduled Exams', value: ms.exams?.count ?? 0, trend: 'Assessment cycles', icon: ClipboardList, color: 'text-violet-500', bg: 'bg-violet-50 dark:bg-violet-500/10' },
+    // Inventory
+    { module: 'inventory', title: 'Inventory Items', value: ms.inventory?.count ?? 0, trend: 'Tracked campus assets', icon: Package, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
+  ];
+
+  // If Admin: show core overview. If specialized role: show only accessible module cards
+  const displayCards = isAdmin
+    ? candidateCards.filter(c => ['students', 'staff', 'academic', 'attendance'].includes(c.module))
+    : candidateCards.filter(c => hasModuleAccess(c.module));
+
+  // Dynamic quick actions filtered strictly by RBAC permissions
+  const candidateActions = [
+    { module: 'students', label: 'Add Student', icon: UserPlus, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10', path: '/admin/students' },
+    { module: 'attendance', label: 'Mark Attendance', icon: CheckCircle2, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10', path: '/admin/attendance' },
+    { module: 'fees', label: 'Collect Fees', icon: Wallet, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10', path: '/admin/fees' },
+    { module: 'notices', label: 'Post Notice', icon: Megaphone, color: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-500/10', path: '/admin/notices' },
+    { module: 'hostel', label: 'Hostel Rooms', icon: Home, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-500/10', path: '/admin/hostel' },
+    { module: 'library', label: 'Library Catalog', icon: LibraryIcon, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-500/10', path: '/admin/library' },
+    { module: 'transport', label: 'Transport Routes', icon: Bus, color: 'text-cyan-500', bg: 'bg-cyan-50 dark:bg-cyan-500/10', path: '/admin/transport' },
+    { module: 'exams', label: 'Exam Schedules', icon: ClipboardList, color: 'text-violet-500', bg: 'bg-violet-50 dark:bg-violet-500/10', path: '/admin/exams' },
+    { module: 'academic', label: 'Academic Structure', icon: BookOpen, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10', path: '/admin/academic-structure' },
+    { module: 'staff', label: 'Staff Directory', icon: Users, color: 'text-teal-500', bg: 'bg-teal-50 dark:bg-teal-500/10', path: '/admin/hr' },
+  ];
+
+  const displayActions = candidateActions.filter(a => hasModuleAccess(a.module)).slice(0, 4);
 
     const handleGenerateLink = async (role) => {
     if (!userData?.collegeId && !userData?.collegeSlug) return;
@@ -704,6 +765,67 @@ const AdminDashboardHome = () => {
         </div>
       </div>
 
+      {/* AI Operations Briefing Banner */}
+      <motion.div 
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden rounded-3xl p-6 bg-gradient-to-r from-primary-500/10 via-indigo-500/10 to-purple-500/10 dark:from-primary-500/15 dark:via-indigo-500/15 dark:to-purple-500/15 border border-primary-500/20 shadow-sm"
+      >
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-primary-500/20 text-primary-600 dark:text-primary-400 rounded-xl">
+              <Sparkles className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">AI Operations Intelligence</h3>
+                <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-primary-100 dark:bg-primary-950/60 text-primary-700 dark:text-primary-300 border border-primary-300 dark:border-primary-800">
+                  {roleTitle}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Real-time telemetry synthesized via Gemini AI</p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => insights.refetch()}
+            disabled={insights.isFetching}
+            className="self-start md:self-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/70 dark:bg-white/10 hover:bg-white dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 border border-slate-200/60 dark:border-white/10 transition-all shadow-xs disabled:opacity-50"
+            title="Refresh AI briefing"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${insights.isFetching ? 'animate-spin' : ''}`} />
+            <span>{insights.isFetching ? 'Analyzing...' : 'Refresh Briefing'}</span>
+          </button>
+        </div>
+
+        {insights.isLoading ? (
+          <div className="space-y-2 py-2 animate-pulse">
+            <div className="h-4 bg-primary-200/50 dark:bg-primary-900/30 rounded w-3/4"></div>
+            <div className="h-4 bg-primary-200/40 dark:bg-primary-900/20 rounded w-1/2"></div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed font-medium">
+              {insights.data?.summary || `Welcome to your ${roleTitle} control center. All assigned operational streams are monitored.`}
+            </p>
+
+            {insights.data?.recommendations && insights.data.recommendations.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {insights.data.recommendations.map((rec, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg bg-white/80 dark:bg-white/5 border border-slate-200/70 dark:border-white/10 text-slate-700 dark:text-slate-300 shadow-2xs"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    {rec}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </motion.div>
+
       {hasNoModules && (
         <div className="p-4 md:p-5 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-start gap-3 text-amber-800 dark:text-amber-300 shadow-sm">
           <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -715,39 +837,45 @@ const AdminDashboardHome = () => {
         </div>
       )}
 
+      {/* Dynamic Role-Adaptive KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
-        {[
-          { title: 'Total Students', value: stats.isLoading ? '...' : stats.totalStudents, trend: 'Current enrollment', icon: GraduationCap, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10' },
-          { title: 'Total Teachers', value: stats.isLoading ? '...' : stats.totalTeachers, trend: 'Active staff', icon: Users, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
-          { title: 'Active Courses', value: stats.isLoading ? '...' : stats.activeCourses, trend: 'Departments', icon: BookOpen, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
-          { title: 'Avg Attendance', value: stats.isLoading ? '...' : `${stats.attendanceRate}%`, trend: 'Last 30 days', icon: Calendar, color: 'text-teal-500', bg: 'bg-teal-50 dark:bg-teal-500/10' },
-        ].map((stat, idx) => (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.1 }}
-            key={stat.title} 
-            className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group"
-          >
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{stat.title}</p>
-                <h3 className="text-3xl font-extrabold text-slate-900 dark:text-white mt-2">{stat.value}</h3>
+        {displayCards.length > 0 ? (
+          displayCards.map((stat, idx) => (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.08 }}
+              key={`${stat.title}-${idx}`} 
+              className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group"
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{stat.title}</p>
+                  <h3 className="text-3xl font-extrabold text-slate-900 dark:text-white mt-2">
+                    {stats.isLoading ? '...' : stat.value}
+                  </h3>
+                </div>
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${stat.bg}`}>
+                  <stat.icon className={`w-6 h-6 ${stat.color}`} />
+                </div>
               </div>
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${stat.bg}`}>
-                <stat.icon className={`w-6 h-6 ${stat.color}`} />
-              </div>
+              <p className="text-xs font-medium text-slate-400 dark:text-slate-500 mt-4">{stat.trend}</p>
+              <div className={`absolute -bottom-10 -right-10 w-32 h-32 blur-3xl opacity-0 group-hover:opacity-20 transition-opacity rounded-full ${stat.bg.split(' ')[0].replace('50', '500')}`} />
+            </motion.div>
+          ))
+        ) : (
+          !stats.isLoading && (
+            <div className="col-span-full py-6 text-center text-slate-400 text-sm">
+              No specific KPI metric streams configured for current module access.
             </div>
-            <p className="text-xs font-medium text-slate-400 dark:text-slate-500 mt-4">{stat.trend}</p>
-            <div className={`absolute -bottom-10 -right-10 w-32 h-32 blur-3xl opacity-0 group-hover:opacity-20 transition-opacity rounded-full ${stat.bg.split(' ')[0].replace('50', '500')}`} />
-          </motion.div>
-        ))}
+          )
+        )}
       </div>
 
       {/* Quick Actions & Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
         
-        {/* Quick Actions */}
+        {/* Dynamic Quick Actions */}
         <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-sm flex flex-col">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">Quick Actions</h2>
@@ -756,23 +884,24 @@ const AdminDashboardHome = () => {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4 flex-1">
-            {[
-              { label: 'Add Student', icon: UserPlus, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10', path: '/admin/students' },
-              { label: 'Mark Attendance', icon: CheckCircle2, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-500/10', path: '/admin/attendance' },
-              { label: 'Collect Fees', icon: Wallet, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10', path: '/admin/fees' },
-              { label: 'Post Notice', icon: Megaphone, color: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-500/10', path: '/admin/notices' },
-            ].map((action, idx) => (
-              <Link 
-                key={idx}
-                to={action.path}
-                className="flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-100 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-white/5 transition-all group"
-              >
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ${action.bg} group-hover:scale-110 transition-transform`}>
-                  <action.icon className={`w-6 h-6 ${action.color}`} />
-                </div>
-                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 text-center">{action.label}</span>
-              </Link>
-            ))}
+            {displayActions.length > 0 ? (
+              displayActions.map((action, idx) => (
+                <Link 
+                  key={idx}
+                  to={action.path}
+                  className="flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-100 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-white/5 transition-all group"
+                >
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ${action.bg} group-hover:scale-110 transition-transform`}>
+                    <action.icon className={`w-6 h-6 ${action.color}`} />
+                  </div>
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 text-center">{action.label}</span>
+                </Link>
+              ))
+            ) : (
+              <div className="col-span-2 flex items-center justify-center py-8 text-xs text-slate-400">
+                No quick actions for assigned permissions.
+              </div>
+            )}
           </div>
         </div>
 

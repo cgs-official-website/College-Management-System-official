@@ -8,7 +8,10 @@ export function useDashboardStats(collegeId, isSuperAdmin = false) {
     activeCourses: 0,
     attendanceRate: 0,
     totalColleges: 0,
-  }, isLoading, error } = useQuery({
+    moduleStats: {},
+    roleInfo: { accessibleModules: [] },
+    recentActivity: [],
+  }, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboardStats', collegeId, isSuperAdmin],
     queryFn: async () => {
       const response = await api.get('/dashboards/stats', {
@@ -17,12 +20,26 @@ export function useDashboardStats(collegeId, isSuperAdmin = false) {
       return response.data?.data || response.data;
     },
     enabled: !!(collegeId || isSuperAdmin),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
   });
 
   return {
     ...data,
     isLoading,
-    error
+    error,
+    refetch,
   };
+}
+
+export function useDashboardInsights(collegeId, enabled = true) {
+  return useQuery({
+    queryKey: ['dashboardInsights', collegeId],
+    queryFn: async () => {
+      const response = await api.get('/dashboards/insights');
+      return response.data?.data || response.data;
+    },
+    enabled: !!collegeId && enabled,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
 }
