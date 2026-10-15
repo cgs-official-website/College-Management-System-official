@@ -31,9 +31,24 @@ export const getTemplates = async (req, res) => {
 export const createTemplate = async (req, res) => {
   try {
     const payload = templateSchema.parse(req.body);
+
+    const existing = await prisma.emailTemplate.findFirst({
+      where: {
+        name: { equals: payload.name.trim(), mode: 'insensitive' },
+        collegeId: null
+      }
+    });
+
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        error: { message: `A template named "${payload.name.trim()}" already exists` }
+      });
+    }
+
     const newTemplate = await prisma.emailTemplate.create({
       data: {
-        name: payload.name,
+        name: payload.name.trim(),
         subject: payload.subject,
         status: payload.status || 'Active',
         contentHtml: payload.contentHtml || '',

@@ -1,18 +1,29 @@
 import React, { useState } from 'react';
 import { Mail, Plus, Search, Edit2, Trash2, Loader2, X, Save } from 'lucide-react';
 import { useEmailTemplates } from '../../hooks/useEmailTemplates';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import toast from 'react-hot-toast';
 
 const SuperEmailTemplates = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingTemplate, setEditingTemplate] = useState(null);
+  const [deletingTemplate, setDeletingTemplate] = useState(null);
 
-  const { templates, isLoading, updateTemplate } = useEmailTemplates();
+  const { templates, isLoading, createTemplate, updateTemplate, deleteTemplate } = useEmailTemplates();
 
   const filteredTemplates = templates?.filter(t =>
     t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     t.subject.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
+
+  const handleCreateClick = () => {
+    setEditingTemplate({
+      name: '',
+      subject: '',
+      status: 'Active',
+      contentHtml: '',
+    });
+  };
 
   const handleEditClick = (template) => {
     setEditingTemplate({ ...template });
@@ -20,19 +31,53 @@ const SuperEmailTemplates = () => {
 
   const handleSave = async () => {
     if (!editingTemplate) return;
+    const isCreate = !editingTemplate.id;
+
+    if (!editingTemplate.name?.trim()) {
+      toast.error('Template name is required');
+      return;
+    }
+    if (!editingTemplate.subject?.trim()) {
+      toast.error('Subject is required');
+      return;
+    }
+
     try {
-      await updateTemplate.mutateAsync({
-        id: editingTemplate.id,
-        name: editingTemplate.name,
-        subject: editingTemplate.subject,
-        status: editingTemplate.status || 'Active',
-        contentHtml: editingTemplate.contentHtml || '',
-      });
-      toast.success('Email template updated successfully!');
+      if (isCreate) {
+        await createTemplate.mutateAsync({
+          name: editingTemplate.name.trim(),
+          subject: editingTemplate.subject.trim(),
+          status: editingTemplate.status || 'Active',
+          contentHtml: editingTemplate.contentHtml || '',
+        });
+        toast.success('Email template created successfully!');
+      } else {
+        await updateTemplate.mutateAsync({
+          id: editingTemplate.id,
+          name: editingTemplate.name.trim(),
+          subject: editingTemplate.subject.trim(),
+          status: editingTemplate.status || 'Active',
+          contentHtml: editingTemplate.contentHtml || '',
+        });
+        toast.success('Email template updated successfully!');
+      }
       setEditingTemplate(null);
     } catch (error) {
-      console.error('Failed to update email template:', error);
-      const errMsg = error.response?.data?.error?.message || error.message || 'Failed to update email template';
+      console.error(`Failed to ${isCreate ? 'create' : 'update'} email template:`, error);
+      const errMsg = error.response?.data?.error?.message || error.message || `Failed to ${isCreate ? 'create' : 'update'} email template`;
+      toast.error(errMsg);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingTemplate) return;
+    try {
+      await deleteTemplate.mutateAsync(deletingTemplate.id);
+      toast.success('Template deleted successfully!');
+      setDeletingTemplate(null);
+    } catch (error) {
+      console.error('Failed to delete email template:', error);
+      const errMsg = error.response?.data?.error?.message || 'Failed to delete template';
       toast.error(errMsg);
     }
   };
@@ -44,6 +89,13 @@ const SuperEmailTemplates = () => {
           <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Email Templates</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">Manage global email templates across the system.</p>
         </div>
+        <button
+          onClick={handleCreateClick}
+          className="px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-colors cursor-pointer"
+        >
+          <Plus className="w-4 h-4" />
+          Add Template
+        </button>
       </div>
 
       <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm overflow-hidden">
@@ -93,17 +145,29 @@ const SuperEmailTemplates = () => {
                     </td>
                     <td className="px-6 py-4 truncate max-w-xs">{template.subject}</td>
                     <td className="px-6 py-4">
-                      <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                        template.status === 'Active'
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
+                          : 'bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-400'
+                      }`}>
                         {template.status}
                       </span>
                     </td>
                     <td className="px-6 py-4">{new Date(template.updatedAt).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right space-x-1 whitespace-nowrap">
                       <button
                         onClick={() => handleEditClick(template)}
-                        className="p-2 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                        className="p-2 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                        title="Edit"
                       >
                         <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeletingTemplate(template)}
+                        className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
                   </tr>
@@ -119,12 +183,12 @@ const SuperEmailTemplates = () => {
           <div className="bg-white dark:bg-[#0A0F1C] rounded-2xl w-full max-w-3xl shadow-xl flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-white/10">
               <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Edit2 className="w-5 h-5 text-primary-500" />
-                Edit Template: {editingTemplate.name}
+                {editingTemplate.id ? <Edit2 className="w-5 h-5 text-primary-500" /> : <Plus className="w-5 h-5 text-primary-500" />}
+                {editingTemplate.id ? `Edit Template: ${editingTemplate.name}` : 'Add New Template'}
               </h2>
               <button
                 onClick={() => setEditingTemplate(null)}
-                className="text-slate-400 hover:text-slate-500 dark:hover:text-slate-300"
+                className="text-slate-400 hover:text-slate-500 dark:hover:text-slate-300 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -138,6 +202,7 @@ const SuperEmailTemplates = () => {
                     type="text"
                     value={editingTemplate.name || ''}
                     onChange={(e) => setEditingTemplate({ ...editingTemplate, name: e.target.value })}
+                    placeholder="e.g. Subscription Expiry Reminder"
                     className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm dark:text-white"
                   />
                 </div>
@@ -160,6 +225,7 @@ const SuperEmailTemplates = () => {
                   type="text"
                   value={editingTemplate.subject || ''}
                   onChange={(e) => setEditingTemplate({ ...editingTemplate, subject: e.target.value })}
+                  placeholder="e.g. Reminder: Subscription for {{collegeName}} expires {{daysLeftText}}"
                   className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm dark:text-white"
                 />
               </div>
@@ -169,12 +235,13 @@ const SuperEmailTemplates = () => {
                   HTML Content (Inner Body)
                 </label>
                 <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">
-                  You can use variables like {'{{name}}'}, {'{{email}}'}, etc. based on the template type. This content is injected into the standard Zuna ERP wrapper.
+                  You can use variables like {'{{name}}'}, {'{{collegeName}}'}, {'{{daysLeftText}}'}, etc. based on the template type. This content is injected into the standard Zuna wrapper.
                 </div>
                 <textarea
                   rows={15}
-                  value={editingTemplate.contentHtml}
+                  value={editingTemplate.contentHtml || ''}
                   onChange={(e) => setEditingTemplate({ ...editingTemplate, contentHtml: e.target.value })}
+                  placeholder="<p>Hello {{name}},</p>"
                   className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm dark:text-white"
                 />
               </div>
@@ -183,22 +250,39 @@ const SuperEmailTemplates = () => {
             <div className="p-6 border-t border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 rounded-b-2xl flex justify-end gap-3">
               <button
                 onClick={() => setEditingTemplate(null)}
-                className="px-5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-[#0A0F1C] border border-slate-300 dark:border-white/10 rounded-xl hover:bg-slate-50 dark:hover:bg-white/5"
+                className="px-5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-[#0A0F1C] border border-slate-300 dark:border-white/10 rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
-                disabled={updateTemplate.isPending}
-                className="px-5 py-2.5 text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-xl flex items-center gap-2 disabled:opacity-50"
+                disabled={createTemplate.isPending || updateTemplate.isPending}
+                className="px-5 py-2.5 text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-xl flex items-center gap-2 disabled:opacity-50 cursor-pointer"
               >
-                {updateTemplate.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Save Changes
+                {(createTemplate.isPending || updateTemplate.isPending) ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                {editingTemplate.id ? 'Save Changes' : 'Create Template'}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal for Deletion */}
+      <ConfirmModal
+        isOpen={!!deletingTemplate}
+        onClose={() => setDeletingTemplate(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Email Template"
+        message={`Delete template "${deletingTemplate?.name}"? Emails that use this template may fall back to default content or stop being sent. This cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDestructive={true}
+        isLoading={deleteTemplate.isPending}
+      />
     </div>
   );
 };

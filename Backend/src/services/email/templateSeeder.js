@@ -223,6 +223,39 @@ export const DEFAULT_TEMPLATES = [
       </p>
     </div>
     `
+  },
+  {
+    name: 'Subscription Expiry Reminder',
+    subject: 'Reminder: Subscription for {{collegeName}} expires {{daysLeftText}} ({{expiryDate}})',
+    status: 'Active',
+    contentHtml: `
+    <h2 style="color: #b45309; margin-top: 0; font-size: 20px;">Important: Subscription Expiring {{daysLeftText}}</h2>
+    <p style="color: #475569; font-size: 14px;">
+      The institutional subscription for <strong>{{collegeName}}</strong> is scheduled to expire <strong>{{daysLeftText}}</strong>.
+    </p>
+
+    <div class="badge-box" style="border-left: 4px solid #f59e0b; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 24px 0;">
+      <div class="badge-row" style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px;">
+        <span class="badge-label" style="color: #64748b; font-weight: 500;">Institution:</span>
+        <span class="badge-val" style="color: #0f172a; font-weight: 700; text-align: right;">{{collegeName}}</span>
+      </div>
+      <div class="badge-row" style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px;">
+        <span class="badge-label" style="color: #64748b; font-weight: 500;">Current Plan:</span>
+        <span class="badge-val" style="color: #0f172a; font-weight: 700; text-align: right;">{{planName}}</span>
+      </div>
+      <div class="badge-row" style="display: flex; justify-content: space-between; margin-bottom: 0; font-size: 14px;">
+        <span class="badge-label" style="color: #64748b; font-weight: 500;">Exact Expiry Date:</span>
+        <span class="badge-val" style="color: #b45309; font-weight: 700; text-align: right;">{{expiryDate}} (IST)</span>
+      </div>
+    </div>
+
+    <p style="color: #475569; font-size: 14px;">
+      To ensure uninterrupted access for your administrators, faculty, and students, please contact support or your account representative to renew your subscription.
+    </p>
+    <p style="color: #64748b; font-size: 13px;">
+      Need assistance or wish to renew? Contact support at <a href="mailto:support@teamzuna.in" style="color: #0d9488; font-weight: 600;">support@teamzuna.in</a>.
+    </p>
+    `
   }
 ];
 

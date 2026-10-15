@@ -23,6 +23,16 @@ export function useExams(collegeId, filters = {}) {
     ? response.data 
     : (Array.isArray(response) ? response : []);
 
+  const getFriendlyErrorMessage = (err, defaultMsg) => {
+    console.error('[Exams API Error]:', err);
+    const msg = err?.data?.error?.message || err?.message || '';
+    const isValidation = err?.code === 'VALIDATION_ERROR' || /invalid option|expected one of|validation/i.test(msg);
+    if (isValidation) {
+      return 'Please check the exam details and ensure all required fields are valid.';
+    }
+    return msg || defaultMsg;
+  };
+
   const addMutation = useMutation({
     mutationFn: (newExam) => api.post('/exams', newExam),
     onSuccess: () => {
@@ -30,7 +40,7 @@ export function useExams(collegeId, filters = {}) {
       queryClient.invalidateQueries({ queryKey: ['exams', collegeId] });
     },
     onError: (err) => {
-      toast.error(err.message || 'Failed to schedule exam');
+      toast.error(getFriendlyErrorMessage(err, 'Failed to schedule exam'));
     }
   });
 
@@ -41,7 +51,7 @@ export function useExams(collegeId, filters = {}) {
       queryClient.invalidateQueries({ queryKey: ['exams', collegeId] });
     },
     onError: (err) => {
-      toast.error(err.message || 'Failed to update exam');
+      toast.error(getFriendlyErrorMessage(err, 'Failed to update exam'));
     }
   });
 

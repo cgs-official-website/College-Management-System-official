@@ -239,12 +239,24 @@ export const updateExam = async (req, res) => {
   const payload = updateExamSchema.parse(req.body);
 
   const existing = await prisma.exam.findFirst({
-    where: { id, collegeId }
+    where: { id, collegeId },
+    include: {
+      course: {
+        include: { department: true }
+      }
+    }
   });
 
   if (!existing) {
     return res.status(404).json({ success: false, error: { code: 'EXAM_NOT_FOUND', message: 'Exam not found' } });
   }
+
+  const oldDateStr = existing.date ? new Date(existing.date).toISOString().split('T')[0] : null;
+  const newDateStr = payload.date ? new Date(payload.date).toISOString().split('T')[0] : null;
+  const isDateChanged = Boolean(newDateStr && oldDateStr && newDateStr !== oldDateStr);
+
+  const todayISTStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  const isPastDate = Boolean(newDateStr && newDateStr < todayISTStr);
 
   const updateData = {};
   if (payload.courseId) {
@@ -276,8 +288,82 @@ export const updateExam = async (req, res) => {
   const updated = await prisma.exam.update({
     where: { id },
     data: updateData,
-    include: { course: true }
+    include: {
+      course: {
+        include: { department: true }
+      }
+    }
   });
+
+  // Notify students if exam date was rescheduled to a current or future date
+  if (isDateChanged && !isPastDate) {
+    try {
+      const targetCourseId = updated.courseId || existing.courseId;
+      const students = await prisma.student.findMany({
+        where: {
+          collegeId,
+          deletedAt: null,
+          userId: { not: null },
+          OR: [
+            { courseId: targetCourseId },
+            { section: { courseId: targetCourseId } },
+            { enrollments: { some: { courseId: targetCourseId } } }
+          ]
+        },
+        select: { userId: true }
+      });
+      let recipientUserIds = [...new Set(students.map(s => s.userId).filter(Boolean))];
+
+      // Fallback: if no direct course students found, check department students
+      const deptId = updated.course?.departmentId || existing.course?.departmentId;
+      if (recipientUserIds.length === 0 && deptId) {
+        const deptStudents = await prisma.student.findMany({
+          where: {
+            collegeId,
+            departmentId: deptId,
+            deletedAt: null,
+            userId: { not: null }
+          },
+          select: { userId: true }
+        });
+        recipientUserIds = [...new Set(deptStudents.map(s => s.userId).filter(Boolean))];
+      }
+
+      if (recipientUserIds.length > 0) {
+        const formatISTDate = (d) => {
+          if (!d) return '';
+          return new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Kolkata',
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+          }).format(new Date(d));
+        };
+
+        const oldDateFormatted = formatISTDate(existing.date);
+        let newDateFormatted = formatISTDate(updated.date);
+        if (req.body?.startTime) {
+          newDateFormatted += ` at ${req.body.startTime}`;
+        }
+
+        const courseOrSubject = updated.course?.name || existing.course?.name || updated.name;
+        const subjectPart = courseOrSubject ? ` (${courseOrSubject})` : '';
+        const message = `${updated.name}${subjectPart} has been rescheduled from ${oldDateFormatted} to ${newDateFormatted}.`;
+
+        await notify({
+          collegeId,
+          target: { userIds: recipientUserIds },
+          title: 'Exam Rescheduled',
+          message,
+          type: 'exam_scheduled',
+          link: '/student/exams',
+        });
+        logger.info(`[Exams] Notified ${recipientUserIds.length} students for rescheduled exam ${updated.id}`);
+      }
+    } catch (notifErr) {
+      logger.error(`[Exams] Reschedule notification error: ${notifErr.message}`);
+    }
+  }
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} examId=${id} actor=${actorId} Updated exam details`);
   res.json({

@@ -8,22 +8,35 @@ import { useDepartments } from '../../../hooks/useDepartments';
 import { useCourses } from '../../../hooks/useCourses';
 import { Sparkles, Edit3 } from 'lucide-react';
 
-const PRESET_EXAM_TYPES = [
-  'Midterm Exam',
-  'Final Exam / Semester End',
-  'Internal Assessment 1',
-  'Internal Assessment 2',
-  'Unit Test',
-  'Model Examination',
-  'Practical / Lab Exam',
-  'Quiz / Class Test',
-  'Viva Voce'
+const ALLOWED_EXAM_TYPES = ['Midterm', 'Final', 'Quiz', 'Practical', 'Internal', 'Semester'];
+
+const EXAM_TYPE_OPTIONS = [
+  { value: 'Midterm', label: 'Midterm Exam' },
+  { value: 'Internal', label: 'Internal Assessment' },
+  { value: 'Semester', label: 'Semester Exam' },
+  { value: 'Final', label: 'Final Exam / End Semester' },
+  { value: 'Quiz', label: 'Quiz / Class Test' },
+  { value: 'Practical', label: 'Practical / Lab Exam' }
 ];
+
+export const normalizeExamType = (type) => {
+  if (!type) return 'Midterm';
+  if (ALLOWED_EXAM_TYPES.includes(type)) return type;
+
+  const lower = String(type).toLowerCase().trim();
+  if (lower.includes('mid')) return 'Midterm';
+  if (lower.includes('internal') || lower.includes('unit') || lower.includes('cat') || lower.includes('model') || lower.includes('assessment')) return 'Internal';
+  if (lower.includes('sem')) return 'Semester';
+  if (lower.includes('final')) return 'Final';
+  if (lower.includes('quiz') || lower.includes('test')) return 'Quiz';
+  if (lower.includes('pract') || lower.includes('lab') || lower.includes('viva')) return 'Practical';
+
+  return 'Midterm';
+};
 
 export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading }) {
   const { departments, isLoading: isDepartmentsLoading } = useDepartments();
   const { courses = [], isLoading: isCoursesLoading, error: coursesError } = useCourses();
-  const [isCustomType, setIsCustomType] = useState(false);
   
   const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm({
     defaultValues: {
@@ -36,19 +49,16 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
       endTime: '12:00',
       room: '',
       totalMarks: 100,
-      type: 'Midterm Exam',
-      customType: ''
+      type: 'Midterm'
     }
   });
 
   const selectedDeptId = watch('departmentId');
-  const selectedType = watch('type');
 
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
-        const isPreset = PRESET_EXAM_TYPES.includes(initialData.type);
-        setIsCustomType(!isPreset && Boolean(initialData.type));
+        const safeType = normalizeExamType(initialData.type);
         reset({
           title: initialData.title || initialData.name || '',
           departmentId: initialData.departmentId || '',
@@ -59,11 +69,9 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
           endTime: initialData.endTime || '12:00',
           room: initialData.room || '',
           totalMarks: initialData.maxMarks || initialData.totalMarks || 100,
-          type: isPreset ? initialData.type : 'CUSTOM',
-          customType: isPreset ? '' : (initialData.type || '')
+          type: safeType
         });
       } else {
-        setIsCustomType(false);
         reset({
           title: '',
           departmentId: '',
@@ -74,20 +82,11 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
           endTime: '12:00',
           room: '',
           totalMarks: 100,
-          type: 'Midterm Exam',
-          customType: ''
+          type: 'Midterm'
         });
       }
     }
   }, [isOpen, initialData, reset]);
-
-  useEffect(() => {
-    if (selectedType === 'CUSTOM') {
-      setIsCustomType(true);
-    } else if (PRESET_EXAM_TYPES.includes(selectedType)) {
-      setIsCustomType(false);
-    }
-  }, [selectedType]);
 
   // Filter courses for the selected department
   const filteredCourses = selectedDeptId 
@@ -97,7 +96,7 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
   const onFormSubmit = (data) => {
     const selectedDept = departments.find(d => d.id === data.departmentId);
     const selectedCourse = courses.find(c => c.id === data.courseId);
-    const examType = isCustomType ? (data.customType?.trim() || 'Custom Exam') : data.type;
+    const examType = normalizeExamType(data.type);
 
     const finalData = {
       ...data,
@@ -176,11 +175,8 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
           <div>
             <Select 
               label="Exam Type *"
-              {...register('type')}
-              options={[
-                ...PRESET_EXAM_TYPES.map(t => ({ value: t, label: t })),
-                { value: 'CUSTOM', label: '✨ + Create Custom Exam Type...' }
-              ]}
+              {...register('type', { required: "Exam type is required" })}
+              options={EXAM_TYPE_OPTIONS}
             />
           </div>
 
@@ -190,22 +186,6 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
             {...register('totalMarks')}
           />
         </div>
-
-        {/* Custom Exam Type Input (Revealed when Custom is selected) */}
-        {isCustomType && (
-          <div className="p-4 bg-primary-50/60 dark:bg-primary-500/5 border border-primary-200/80 dark:border-primary-500/20 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="flex items-center gap-2 mb-2 text-xs font-bold text-primary-800 dark:text-primary-300">
-              <Edit3 className="w-4 h-4 text-primary-600 dark:text-primary-400" />
-              <span>Custom Exam Type Name</span>
-            </div>
-            <Input 
-              placeholder="e.g. Pre-Semester Practical Test, Surprise Assessment 1, etc."
-              {...register('customType', { required: isCustomType ? "Please enter a custom exam type" : false })}
-              error={errors.customType?.message}
-              className="bg-white dark:bg-[#060D1A]"
-            />
-          </div>
-        )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Input 

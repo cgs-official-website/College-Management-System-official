@@ -199,20 +199,6 @@ export const onboardCollege = async (req, res) => {
       return { collegeCode: registrationNo, registrationNo, collegeId: college.id, adminEmail: admin.email, collegeName: college.name };
     }, { maxWait: 15000, timeout: 30000 });
 
-    // Send subscription welcome email to the newly onboarded college admin (wrapped so failure never breaks onboarding)
-    try {
-      const trialExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-      await sendSubscriptionWelcomeEmail({
-        collegeId: result.collegeId,
-        collegeName: result.collegeName,
-        planTier: 'Enterprise',
-        validUntilDate: trialExpiresAt,
-        adminEmails: [result.adminEmail]
-      });
-    } catch (mailErr) {
-      logger.error({ err: mailErr, collegeId: result.collegeId }, '[Onboarding] Failed to send subscription welcome email');
-    }
-
     res.status(201).json({ data: result });
   } catch (error) {
     if (error.name === 'ZodError' || error.issues || error.errors) {
@@ -269,13 +255,16 @@ export const updateCollegeStatus = async (req, res) => {
     const { id } = req.params;
     const { status, reason } = updateCollegeStatusSchema.parse(req.body);
     
-    // Find existing college and its admin users
+    // Find existing college and its admin users along with subscription details
     const existingCollege = await prisma.college.findUnique({
       where: { id },
       include: {
         users: {
           where: { role: 'admin' },
           select: { id: true, name: true, email: true }
+        },
+        billingSubscription: {
+          include: { subscriptionPlan: true }
         }
       }
     });
@@ -294,13 +283,9 @@ export const updateCollegeStatus = async (req, res) => {
     // Invalidate Redis cache for live status
     await invalidateCollegeStatusCache(id);
 
-    // If status is updated to active from a non-active state (or explicitly activated), send activation notification email
+    // If status is updated to active from a non-active state (or explicitly activated), send single upgraded Welcome email with invoice
     if (status === 'active' && previousStatus !== 'active') {
-      const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
-      const loginUrl = `${frontendUrl}/login`;
-      const collegeCode = college.registrationNo || college.slug || 'N/A';
-
-      // Gather recipient targets: admin users + official contact email
+      // Gather recipient targets: strictly college admin login emails only (never official email)
       const targets = [];
       const seenEmails = new Set();
 
@@ -314,45 +299,26 @@ export const updateCollegeStatus = async (req, res) => {
         }
       }
 
-      if (existingCollege.contactEmail && !seenEmails.has(existingCollege.contactEmail.trim().toLowerCase())) {
-        seenEmails.add(existingCollege.contactEmail.trim().toLowerCase());
-        targets.push({
-          email: existingCollege.contactEmail.trim(),
-          name: `${college.name} Administration`
-        });
-      }
-
-      // Asynchronously send emails (fire-and-forget so HTTP response remains snappy)
+      // Send single Welcome mail with invoice details (fire-and-forget so HTTP response remains snappy)
       if (targets.length > 0) {
-        Promise.allSettled(
-          targets.map(target =>
-            sendDynamicMail({
-              to: target.email,
-              templateName: 'College Activated',
-              headerTitle: college.name || 'College Management System',
-              fromName: 'Super Admin - Campus Portal',
-              variables: {
-                name: target.name,
-                email: target.email,
-                collegeName: college.name,
-                collegeCode: collegeCode,
-                loginUrl,
-                frontendUrl
-              }
-            })
-          )
-        ).then(results => {
-          results.forEach((r, idx) => {
-            const target = targets[idx];
-            if (r.status === 'fulfilled' && r.value?.success) {
-              console.log(`[CollegeActivation] ✅ Activation email sent to ${target.email} for college "${college.name}"`);
-            } else {
-              console.error(`[CollegeActivation] ❌ Failed sending activation email to ${target?.email}:`, r.reason || r.value?.error);
-            }
-          });
-        }).catch(err => {
-          console.error('[CollegeActivation] Error in activation email process:', err);
+        const adminEmails = targets.map((t) => t.email);
+        sendSubscriptionWelcomeEmail({
+          collegeId: id,
+          collegeName: college.name,
+          planTier: existingCollege.billingSubscription?.planTier,
+          validUntilDate:
+            existingCollege.billingSubscription?.currentPeriodEnd ||
+            existingCollege.billingSubscription?.trialExpiresAt,
+          adminEmails,
+          subscription: existingCollege.billingSubscription,
+        }).catch((err) => {
+          logger.error({ err, collegeId: id }, '[CollegeActivation] Error in activation welcome email process');
         });
+      } else {
+        logger.warn(
+          { collegeId: id, collegeName: college.name },
+          '[CollegeActivation] No admin user found for college; skipping welcome email'
+        );
       }
     }
 

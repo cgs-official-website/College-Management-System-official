@@ -66,14 +66,14 @@ export async function checkAndSendSubscriptionReminders({ dryRun = false } = {})
         const expiryIST = getISTCalendarDateString(expiryDate);
         const daysLeft = getCalendarDaysDiffIST(expiryDate, now);
 
-        // Rule: send reminder ONLY when subscription has exactly 7 days left
-        const isExactly7Days = daysLeft === 7;
+        // Rule: send reminder when subscription has between 1 and 7 days left (inclusive) in IST
+        const isWithinReminderWindow = daysLeft !== null && daysLeft >= 1 && daysLeft <= 7;
 
-        // Deduplication check: compare reminderSentForDate with current expiryDate
-        let alreadySentForThisExpiry = false;
+        // Deduplication check: compare reminderSentForDate with today's IST date
+        let alreadySentToday = false;
         if (sub.reminderSentForDate) {
-          const sentForIST = getISTCalendarDateString(sub.reminderSentForDate);
-          alreadySentForThisExpiry = sentForIST === expiryIST;
+          const sentDateIST = getISTCalendarDateString(sub.reminderSentForDate);
+          alreadySentToday = sentDateIST === todayIST;
         }
 
         const itemSummary = {
@@ -84,18 +84,21 @@ export async function checkAndSendSubscriptionReminders({ dryRun = false } = {})
           expiryDate: expiryIST,
           todayIST,
           daysLeft,
-          isExactly7Days,
-          alreadySentForThisExpiry,
+          isWithinReminderWindow,
+          alreadySentToday,
         };
 
-        if (!isExactly7Days) {
-          itemSummary.action = `SKIPPED_DAYS_LEFT_${daysLeft}`;
+        if (!isWithinReminderWindow) {
+          itemSummary.action =
+            daysLeft !== null && daysLeft < 1
+              ? `SKIPPED_EXPIRED_OR_TODAY_${daysLeft}`
+              : `SKIPPED_DAYS_LEFT_${daysLeft}`;
           results.push(itemSummary);
           continue;
         }
 
-        if (alreadySentForThisExpiry) {
-          itemSummary.action = 'SKIPPED_ALREADY_SENT_FOR_THIS_EXPIRY';
+        if (alreadySentToday) {
+          itemSummary.action = 'SKIPPED_ALREADY_SENT_TODAY';
           results.push(itemSummary);
           continue;
         }
@@ -105,7 +108,7 @@ export async function checkAndSendSubscriptionReminders({ dryRun = false } = {})
           results.push(itemSummary);
           logger.info(
             itemSummary,
-            `[SubscriptionReminder:DRY-RUN] ${collegeName} has exactly 7 days left (${expiryIST}). Would send reminder.`
+            `[SubscriptionReminder:DRY-RUN] ${collegeName} has ${daysLeft} day(s) left (${expiryIST}). Would send daily reminder.`
           );
           continue;
         }
@@ -116,12 +119,13 @@ export async function checkAndSendSubscriptionReminders({ dryRun = false } = {})
           collegeName,
           planTier: sub.planTier,
           expiryDate,
+          daysLeft,
         });
 
-        // Record reminderSentForDate for deduplication
+        // Record reminderSentForDate as today's timestamp for daily deduplication
         await prisma.billingSubscription.update({
           where: { id: sub.id },
-          data: { reminderSentForDate: expiryDate },
+          data: { reminderSentForDate: now },
         });
 
         itemSummary.action = 'SENT_REMINDER';
@@ -154,15 +158,112 @@ export async function checkAndSendSubscriptionReminders({ dryRun = false } = {})
 }
 
 /**
- * Initializes the subscription reminder cron schedule and runs once on server start.
+ * Finds all BillingSubscription rows where status is "Active" and the expiry date
+ * (currentPeriodEnd or trialExpiresAt) is before today (IST), and updates their status to "Expired".
+ *
+ * @param {Object} [options]
+ * @param {boolean} [options.dryRun=false] - If true, only calculates and logs without updating DB
+ * @returns {Promise<Array>} List of expired subscription summaries
+ */
+export async function checkAndExpireSubscriptions({ dryRun = false } = {}) {
+  logger.info({ dryRun }, '[SubscriptionExpiry] Starting check for expired subscriptions');
+
+  const results = [];
+
+  try {
+    const subscriptions = await prisma.billingSubscription.findMany({
+      where: {
+        status: {
+          equals: 'Active',
+          mode: 'insensitive',
+        },
+      },
+      include: {
+        college: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            contactEmail: true,
+          },
+        },
+      },
+    });
+
+    const now = new Date();
+    const todayIST = getISTCalendarDateString(now);
+
+    for (const sub of subscriptions) {
+      const collegeId = sub.collegeId;
+      const collegeName = sub.college?.name || 'College';
+      const expiryDate = sub.currentPeriodEnd || sub.trialExpiresAt;
+
+      if (!expiryDate) continue;
+
+      const expiryIST = getISTCalendarDateString(expiryDate);
+      const daysLeft = getCalendarDaysDiffIST(expiryDate, now);
+
+      // If expiry date is before today in IST (daysLeft < 0, e.g. -1 for yesterday)
+      if (daysLeft !== null && daysLeft < 0) {
+        if (dryRun) {
+          logger.info(
+            { collegeId, collegeName, expiryDate: expiryIST, todayIST, daysLeft },
+            `[SubscriptionExpiry:DRY-RUN] ${collegeName} expired on ${expiryIST} (${Math.abs(daysLeft)} day(s) ago). Would update status to "Expired".`
+          );
+          results.push({
+            collegeId,
+            collegeName,
+            planTier: sub.planTier,
+            status: sub.status,
+            newStatus: 'Expired',
+            expiryDate: expiryIST,
+            todayIST,
+            daysLeft,
+            action: 'WOULD_EXPIRE',
+          });
+        } else {
+          await prisma.billingSubscription.update({
+            where: { id: sub.id },
+            data: { status: 'Expired' },
+          });
+
+          logger.info(
+            { collegeId, collegeName, expiryDate: expiryIST, todayIST, daysLeft },
+            `[SubscriptionExpiry] ${collegeName} expired on ${expiryIST}. Updated status to "Expired".`
+          );
+          results.push({
+            collegeId,
+            collegeName,
+            planTier: sub.planTier,
+            previousStatus: sub.status,
+            status: 'Expired',
+            expiryDate: expiryIST,
+            todayIST,
+            daysLeft,
+            action: 'EXPIRED',
+          });
+        }
+      }
+    }
+  } catch (err) {
+    logger.error({ err }, '[SubscriptionExpiry] Unexpected error during expired subscription check');
+  }
+
+  logger.info({ totalExpiredFound: results.length }, '[SubscriptionExpiry] Finished expired subscription check');
+  return results;
+}
+
+/**
+ * Initializes the subscription reminder & auto-expiry cron schedule and runs once on server start.
  */
 export function startSubscriptionReminderJob() {
   // 1. Schedule daily at 09:00 IST (timezone Asia/Kolkata)
   cron.schedule(
     '0 9 * * *',
     async () => {
-      logger.info('[SubscriptionReminder] Running daily 09:00 IST scheduled reminder check');
+      logger.info('[SubscriptionReminder] Running daily 09:00 IST scheduled checks');
       try {
+        await checkAndExpireSubscriptions();
         await checkAndSendSubscriptionReminders();
       } catch (err) {
         logger.error({ err }, '[SubscriptionReminder] Scheduled job encountered error');
@@ -176,10 +277,14 @@ export function startSubscriptionReminderJob() {
   logger.info('[SubscriptionReminder] Cron job scheduled daily at 09:00 IST (Asia/Kolkata)');
 
   // 2. Also run once when the server starts (deferred slightly to allow DB connect)
-  setTimeout(() => {
-    logger.info('[SubscriptionReminder] Running on-startup subscription reminder verification');
-    checkAndSendSubscriptionReminders().catch((err) => {
+  setTimeout(async () => {
+    logger.info('[SubscriptionReminder] Running on-startup subscription verification');
+    try {
+      await checkAndExpireSubscriptions();
+      await checkAndSendSubscriptionReminders();
+    } catch (err) {
       logger.error({ err }, '[SubscriptionReminder] On-startup check failed');
-    });
+    }
   }, 3500);
 }
+
