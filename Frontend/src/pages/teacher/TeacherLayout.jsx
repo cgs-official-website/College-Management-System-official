@@ -24,8 +24,11 @@ import {
   CalendarClock,
   CalendarOff,
   Video,
-  Megaphone
+  Megaphone,
+  Sun,
+  Moon
 } from 'lucide-react';
+import { useTheme } from '../../hooks/useTheme';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationBell } from '../../components/ui/NotificationBell';
 import ProjectTimesheetDashboard from './ProjectTimesheetDashboard';
@@ -51,6 +54,7 @@ const TeacherLayout = () => {
   const navigate = useNavigate();
   const { logout, userData, permissions } = useAuth();
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
@@ -185,7 +189,7 @@ const TeacherLayout = () => {
                </div>
                <div className="truncate">
                  <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate">{userData?.name || 'Faculty Member'}</p>
-                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">{roleLabel}</p>
+                 <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">{roleLabel}</p>
                </div>
              </div>
              <LogOut className="w-5 h-5 text-slate-400 group-hover:text-red-600 transition-colors shrink-0 ml-2" />
@@ -210,7 +214,7 @@ const TeacherLayout = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button 
               onClick={() => window.location.reload()}
               className="p-2.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
@@ -218,9 +222,19 @@ const TeacherLayout = () => {
             >
               <RefreshCw className="w-5 h-5" />
             </button>
+
+            <button 
+              onClick={toggleTheme}
+              className="p-2.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+              title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              aria-label="Toggle Theme"
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5" />}
+            </button>
+
             <NotificationBell />
             
-            <div className="h-8 w-px bg-slate-200 dark:bg-white/10 mx-1"></div>
+            <div className="h-8 w-px bg-slate-200 dark:bg-white/10 mx-0.5 sm:mx-1"></div>
 
             <button 
               onClick={() => navigate('/teacher/settings')}

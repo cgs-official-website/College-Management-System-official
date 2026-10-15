@@ -38,8 +38,13 @@ export const requirePermission = (moduleKey, action) => async (req, res, next) =
     if (role === 'superadmin' || role === 'admin') {
       return next();
     }
-    // Teachers can read students (needed for attendance, grades, PTM)
-    if (role === 'teacher' && moduleKey === 'students' && action === 'read') {
+    // Teachers, faculty, hod and staff can read students and notices by default
+    const TEACHER_STAFF_ROLES = ['teacher', 'hod', 'faculty', 'staff'];
+    if (
+      TEACHER_STAFF_ROLES.includes(role) &&
+      (moduleKey === 'students' || moduleKey === 'notices') &&
+      action === 'read'
+    ) {
       return next();
     }
 

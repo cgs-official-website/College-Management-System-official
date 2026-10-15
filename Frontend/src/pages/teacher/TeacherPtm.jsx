@@ -132,9 +132,15 @@ export default function TeacherPtm() {
 
   const updateMeetingMutation = useMutation({
     mutationFn: ({ id, status }) => api.patch(`/ptm/meetings/${id}`, { status }),
-    onSuccess: async () => {
+    onSuccess: async (_, vars) => {
+      const meeting = meetings.find((m) => m.id === vars.id);
+      if (meeting?.slotId) {
+        queryClient.setQueryData(['ptm-slots'], (prev) =>
+          Array.isArray(prev) ? prev.filter((s) => s.id !== meeting.slotId) : []
+        );
+      }
       await refresh();
-      toast.success('Meeting updated');
+      toast.success(vars.status === 'completed' ? 'Meeting marked as completed' : 'Meeting updated');
     },
     onError: (err) => handleMutationError(err, 'Failed to update meeting'),
     onSettled: () => refresh(),
@@ -249,13 +255,13 @@ export default function TeacherPtm() {
           <div className="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">My Slots</h2>
             <span className="text-xs font-bold px-2 py-0.5 bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 rounded-full">
-              {slots.length}
+              {slots.filter((s) => s.status === 'available' || s.status === 'booked').length}
             </span>
           </div>
           <div className="p-6 max-h-[360px] overflow-y-auto">
             {slotsLoading ? (
               <div className="py-10 text-center"><Loader2 className="w-7 h-7 animate-spin mx-auto text-primary-500" /></div>
-            ) : slots.length === 0 ? (
+            ) : slots.filter((s) => s.status === 'available' || s.status === 'booked').length === 0 ? (
               <div className="flex flex-col items-center py-10 text-center">
                 <CalendarClock className="w-10 h-10 text-slate-300 dark:text-slate-600 mb-2" />
                 <p className="text-sm font-bold text-slate-900 dark:text-white">No slots yet</p>
@@ -263,7 +269,9 @@ export default function TeacherPtm() {
               </div>
             ) : (
               <div className="space-y-3">
-                {slots.map((s) => (
+                {slots
+                  .filter((s) => s.status === 'available' || s.status === 'booked')
+                  .map((s) => (
                   <div key={s.id} className="p-4 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/5 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-bold text-slate-900 dark:text-white">{dayOf(s.date)}</p>

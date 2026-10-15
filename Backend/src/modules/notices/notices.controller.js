@@ -6,12 +6,65 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 export const getNotices = async (req, res) => {
   try {
-    const { collegeId } = req.tenant;
+    const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+    if (!collegeId) {
+      return res.status(400).json({ success: false, error: { message: 'College context is required' } });
+    }
+
+    const role = (req.user?.role || '').toLowerCase();
+    const isTeacherOrStaff = ['teacher', 'hod', 'faculty', 'staff'].includes(role);
+
+    const where = { collegeId };
+    if (isTeacherOrStaff) {
+      where.targetAudience = { in: ['all', 'staff', 'teachers', 'teacher'] };
+    }
+
     const notices = await prisma.notice.findMany({
-      where: { collegeId },
+      where,
       orderBy: { createdAt: 'desc' }
     });
     res.json({ success: true, data: notices });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getNoticeById = async (req, res) => {
+  try {
+    const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+    const { id } = req.params;
+
+    if (!id || !UUID_REGEX.test(id)) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_ID', message: 'Invalid notice ID format' }
+      });
+    }
+
+    const notice = await prisma.notice.findFirst({
+      where: { id, collegeId }
+    });
+
+    if (!notice) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOTICE_NOT_FOUND', message: 'Notice not found' }
+      });
+    }
+
+    const role = (req.user?.role || '').toLowerCase();
+    const isTeacherOrStaff = ['teacher', 'hod', 'faculty', 'staff'].includes(role);
+    if (isTeacherOrStaff) {
+      const aud = (notice.targetAudience || 'all').toLowerCase();
+      if (!['all', 'staff', 'teachers', 'teacher'].includes(aud)) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'This notice is not accessible to staff members.' }
+        });
+      }
+    }
+
+    res.json({ success: true, data: notice });
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
   }

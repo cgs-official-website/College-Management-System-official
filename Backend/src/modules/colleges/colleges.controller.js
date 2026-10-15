@@ -1,8 +1,10 @@
 import { prisma } from '../../server.js';
+import { logger } from '../../lib/logger.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { onboardCollegeSchema, updateCollegeStatusSchema, updateCollegeSchema, updateSubscriptionSchema } from './colleges.schema.js';
 import { sendDynamicMail } from '../../services/email/email.service.js';
+import { sendSubscriptionWelcomeEmail } from '../../services/email/subscriptionEmail.service.js';
 
 export const getCollegeBySlug = async (req, res) => {
   try {
@@ -196,6 +198,20 @@ export const onboardCollege = async (req, res) => {
 
       return { collegeCode: registrationNo, registrationNo, collegeId: college.id, adminEmail: admin.email, collegeName: college.name };
     }, { maxWait: 15000, timeout: 30000 });
+
+    // Send subscription welcome email to the newly onboarded college admin (wrapped so failure never breaks onboarding)
+    try {
+      const trialExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      await sendSubscriptionWelcomeEmail({
+        collegeId: result.collegeId,
+        collegeName: result.collegeName,
+        planTier: 'Enterprise',
+        validUntilDate: trialExpiresAt,
+        adminEmails: [result.adminEmail]
+      });
+    } catch (mailErr) {
+      logger.error({ err: mailErr, collegeId: result.collegeId }, '[Onboarding] Failed to send subscription welcome email');
+    }
 
     res.status(201).json({ data: result });
   } catch (error) {
@@ -499,18 +515,23 @@ export const updateCollegeSubscription = async (req, res) => {
     const { planTier, status, currentPeriodEnd } = updateSubscriptionSchema.parse(req.body);
 
     const college = await prisma.college.findUnique({
-      where: { id }
+      where: { id },
+      include: { billingSubscription: true }
     });
 
     if (!college) {
       return res.status(404).json({ error: { message: 'College not found' } });
     }
 
+    const previousStatus = college.billingSubscription?.status;
+    const newStatus = status || 'Active';
+    const isBecomingActive = newStatus.toLowerCase() === 'active' && previousStatus?.toLowerCase() !== 'active';
+
     const subscription = await prisma.billingSubscription.upsert({
       where: { collegeId: id },
       update: {
         planTier,
-        status: status || 'Active',
+        status: newStatus,
         currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd) : null,
         updatedAt: new Date()
       },
@@ -520,10 +541,25 @@ export const updateCollegeSubscription = async (req, res) => {
         pricePerStudent: 0,
         maxStudents: 5000,
         storageLimitGb: 50,
-        status: status || 'Active',
+        status: newStatus,
         currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd) : null
       }
     });
+
+    // Send welcome email only when status transitions to 'Active' from another status
+    if (isBecomingActive) {
+      try {
+        const validUntil = subscription.currentPeriodEnd || subscription.trialExpiresAt;
+        await sendSubscriptionWelcomeEmail({
+          collegeId: id,
+          collegeName: college.name,
+          planTier: subscription.planTier,
+          validUntilDate: validUntil,
+        });
+      } catch (mailErr) {
+        logger.error({ err: mailErr, collegeId: id }, '[updateCollegeSubscription] Failed to send subscription welcome email');
+      }
+    }
 
     res.json({ data: subscription });
   } catch (error) {

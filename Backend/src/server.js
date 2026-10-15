@@ -237,6 +237,7 @@ const PORT = process.env.PORT || 5000;
 import { ensureCollegeCodeSequence } from './lib/collegeCodeGenerator.js';
 import { ensureEmailTemplates } from './services/email/templateSeeder.js';
 import { connectWithRetry } from './lib/prisma.js';
+import { startSubscriptionReminderJob } from './jobs/subscriptionReminder.job.js';
 
 const startServer = (retries = 5, delay = 600) => {
   const server = app.listen(PORT, () => {
@@ -249,6 +250,7 @@ const startServer = (retries = 5, delay = 600) => {
       ensureEmailTemplates().catch(err => {
         logger.warn(`[warn] Failed to initialize default email templates: ${err.message}`);
       });
+      startSubscriptionReminderJob();
     });
   });
 

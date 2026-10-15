@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell,
+  BellRing,
   Info,
   AlertTriangle,
   AlertCircle,
@@ -191,7 +192,26 @@ export function NotificationBell({ className = '' }) {
 
   const userId = userData?.id || userData?.uid;
 
-  // Poll unread count every 30s + instant on focus
+  // Browser notification permission state
+  const [browserPermission, setBrowserPermission] = useState(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission;
+    }
+    return 'unsupported';
+  });
+
+  const requestBrowserPermission = async () => {
+    try {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        const res = await Notification.requestPermission();
+        setBrowserPermission(res);
+      }
+    } catch (err) {
+      console.error('[NotificationBell] Request permission error:', err);
+    }
+  };
+
+  // Poll unread count every 15s + instant on focus
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ['notifications', 'unread-count', userId],
     queryFn: async () => {
@@ -206,11 +226,11 @@ export function NotificationBell({ className = '' }) {
       );
     },
     enabled: !!userId,
-    refetchInterval: 30000,
+    refetchInterval: 15000,
     refetchOnWindowFocus: true,
   });
 
-  // Query notifications list (unread only)
+  // Query notifications list (unread only, poll every 15s)
   const { data: notifications = [], isLoading } = useQuery({
     queryKey: ['notifications', 'list', userId],
     queryFn: async () => {
@@ -223,47 +243,8 @@ export function NotificationBell({ className = '' }) {
       return rawList.filter((n) => !n.isRead);
     },
     enabled: !!userId,
-    refetchInterval: 30000,
+    refetchInterval: 15000,
     refetchOnWindowFocus: true,
-  });
-
-  // Close dropdown on click outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Mark all notifications as read
-  const markAllAsReadMutation = useMutation({
-    mutationFn: async () => {
-      await api.patch('/notifications/read-all');
-    },
-    onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: ['notifications'] });
-      const prevList = queryClient.getQueryData(['notifications', 'list', userId]);
-      const prevCount = queryClient.getQueryData(['notifications', 'unread-count', userId]);
-
-      // Clear the list immediately
-      queryClient.setQueryData(['notifications', 'list', userId], []);
-      queryClient.setQueryData(['notifications', 'unread-count', userId], 0);
-      return { prevList, prevCount };
-    },
-    onError: (err, vars, context) => {
-      if (context?.prevList) {
-        queryClient.setQueryData(['notifications', 'list', userId], context.prevList);
-      }
-      if (context?.prevCount !== undefined) {
-        queryClient.setQueryData(['notifications', 'unread-count', userId], context.prevCount);
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
-    },
   });
 
   const handleNotificationClick = async (notification) => {
@@ -306,6 +287,138 @@ export function NotificationBell({ className = '' }) {
       navigate(target.path);
     }
   };
+
+  // Seen IDs tracking for desktop notifications
+  const seenIdsRef = useRef(new Set());
+  const hasInitializedRef = useRef(false);
+
+  // Reset baseline when userId changes or on logout
+  useEffect(() => {
+    seenIdsRef.current = new Set();
+    hasInitializedRef.current = false;
+  }, [userId]);
+
+  // Detect newly arrived notifications and trigger Web Notification API
+  useEffect(() => {
+    try {
+      if (!Array.isArray(notifications)) return;
+
+      // 1. Initial baseline after login: record existing notification IDs without popping alerts
+      if (!hasInitializedRef.current) {
+        if (!isLoading) {
+          notifications.forEach((n) => {
+            if (n?.id) seenIdsRef.current.add(n.id);
+          });
+          hasInitializedRef.current = true;
+        }
+        return;
+      }
+
+      // 2. Subsequent polls: find new unread notifications that were not in baseline
+      const newlyArrived = notifications.filter(
+        (n) => n?.id && !seenIdsRef.current.has(n.id) && !n.isRead
+      );
+
+      // Record all current IDs into seen set
+      notifications.forEach((n) => {
+        if (n?.id) seenIdsRef.current.add(n.id);
+      });
+
+      if (newlyArrived.length === 0) return;
+
+      // 3. Permission check
+      if (typeof window === 'undefined' || !('Notification' in window)) return;
+      if (Notification.permission !== 'granted') return;
+
+      // 4. Anti-spam: if > 3 notifications arrive in one poll, show single summary notification
+      if (newlyArrived.length > 3) {
+        const summaryNotif = new Notification('Zuna Notifications', {
+          body: `You have ${newlyArrived.length} new notifications.`,
+          icon: '/logo.png',
+          tag: `zuna-summary-${Date.now()}`,
+          requireInteraction: true,
+        });
+
+        summaryNotif.onclick = () => {
+          try {
+            window.focus();
+            summaryNotif.close();
+            setIsOpen(true);
+          } catch (e) {
+            console.error('[NotificationBell] Summary notification click error:', e);
+          }
+        };
+        return;
+      }
+
+      // 5. Spawn one notification per item (always, even when tab is focused)
+      newlyArrived.forEach((item) => {
+        const trimmedBody = item.message
+          ? item.message.length > 120
+            ? `${item.message.slice(0, 117)}...`
+            : item.message
+          : '';
+
+        const notif = new Notification(item.title || 'New Notification', {
+          body: trimmedBody,
+          icon: '/logo.png',
+          tag: item.id,
+          requireInteraction: true,
+        });
+
+        notif.onclick = () => {
+          try {
+            window.focus();
+            notif.close();
+            handleNotificationClick(item);
+          } catch (e) {
+            console.error('[NotificationBell] Notification click error:', e);
+          }
+        };
+      });
+    } catch (err) {
+      console.error('[NotificationBell] Browser notification error:', err);
+    }
+  }, [notifications, isLoading]);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Mark all notifications as read
+  const markAllAsReadMutation = useMutation({
+    mutationFn: async () => {
+      await api.patch('/notifications/read-all');
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['notifications'] });
+      const prevList = queryClient.getQueryData(['notifications', 'list', userId]);
+      const prevCount = queryClient.getQueryData(['notifications', 'unread-count', userId]);
+
+      // Clear the list immediately
+      queryClient.setQueryData(['notifications', 'list', userId], []);
+      queryClient.setQueryData(['notifications', 'unread-count', userId], 0);
+      return { prevList, prevCount };
+    },
+    onError: (err, vars, context) => {
+      if (context?.prevList) {
+        queryClient.setQueryData(['notifications', 'list', userId], context.prevList);
+      }
+      if (context?.prevCount !== undefined) {
+        queryClient.setQueryData(['notifications', 'unread-count', userId], context.prevCount);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
 
   const getIcon = (type) => {
     switch (type) {
@@ -397,6 +510,29 @@ export function NotificationBell({ className = '' }) {
                 </button>
               </div>
             </div>
+
+            {/* Browser Notification Permission Banner */}
+            {browserPermission === 'default' && (
+              <div className="px-4 py-2.5 bg-primary-50/80 dark:bg-primary-500/10 border-b border-primary-100 dark:border-primary-500/20 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs text-primary-900 dark:text-primary-200">
+                  <BellRing className="w-3.5 h-3.5 shrink-0 text-primary-600 dark:text-primary-400" />
+                  <span className="font-medium">Enable browser notifications</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={requestBrowserPermission}
+                  className="px-2.5 py-1 text-[11px] font-bold bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors shrink-0 shadow-sm"
+                >
+                  Enable
+                </button>
+              </div>
+            )}
+            {browserPermission === 'denied' && (
+              <div className="px-4 py-2 bg-slate-50 dark:bg-white/5 border-b border-slate-100 dark:border-white/5 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                <span>Desktop alerts blocked. Allow in browser site settings to enable.</span>
+              </div>
+            )}
 
             {/* List */}
             <div className="max-h-96 overflow-y-auto divide-y divide-slate-100 dark:divide-white/5">

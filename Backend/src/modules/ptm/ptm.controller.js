@@ -132,7 +132,11 @@ async function dbFindSlots({ collegeId, teacherId, status }) {
     const where = {};
     if (collegeId) where.collegeId = collegeId;
     if (teacherId) where.teacherId = teacherId;
-    if (status) where.status = status;
+    if (status && status !== 'all') {
+      where.status = status;
+    } else if (!status) {
+      where.status = { in: ['available', 'booked'] };
+    }
     return prisma.ptmSlot.findMany({
       where,
       orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
@@ -148,9 +152,11 @@ async function dbFindSlots({ collegeId, teacherId, status }) {
     params.push(teacherId);
     query += ` AND "teacherId" = $${params.length}::uuid`;
   }
-  if (status) {
+  if (status && status !== 'all') {
     params.push(status);
     query += ` AND "status" = $${params.length}`;
+  } else if (!status) {
+    query += ` AND "status" IN ('available', 'booked')`;
   }
   query += ` ORDER BY "date" ASC, "startTime" ASC`;
   return prisma.$queryRawUnsafe(query, ...params);
@@ -321,60 +327,73 @@ async function dbFindMeetingById(id, collegeId = null, teacherId = null) {
 }
 
 async function dbUpdateMeeting(id, existing, data) {
-  if (prisma.ptmMeeting?.update && prisma.ptmSlot?.update) {
+  if (prisma.ptmMeeting?.update && prisma.ptmSlot?.updateMany) {
     return prisma.$transaction(async (tx) => {
       const meeting = await tx.ptmMeeting.update({ where: { id }, data, include: meetingInclude });
       if (data.status === 'cancelled') {
-        await tx.ptmSlot.update({ where: { id: existing.slotId }, data: { status: 'cancelled' } });
+        await tx.ptmSlot.updateMany({
+          where: { id: existing.slotId, collegeId: existing.collegeId, teacherId: existing.teacherId },
+          data: { status: 'cancelled' },
+        });
+      } else if (data.status === 'completed') {
+        await tx.ptmSlot.updateMany({
+          where: { id: existing.slotId, collegeId: existing.collegeId, teacherId: existing.teacherId },
+          data: { status: 'completed' },
+        });
       }
       return meeting;
     });
   }
 
-  const updates = ['"updatedAt" = NOW()'];
-  const params = [id];
-  if (data.status !== undefined) {
-    params.push(data.status);
-    updates.push(`"status" = $${params.length}`);
-  }
-  if (data.teacherNotes !== undefined) {
-    params.push(data.teacherNotes);
-    updates.push(`"teacherNotes" = $${params.length}`);
-  }
-  if (data.agenda !== undefined) {
-    params.push(data.agenda);
-    updates.push(`"agenda" = $${params.length}`);
-  }
+  return prisma.$transaction(async (tx) => {
+    const updates = ['"updatedAt" = NOW()'];
+    const params = [id];
+    if (data.status !== undefined) {
+      params.push(data.status);
+      updates.push(`"status" = $${params.length}`);
+    }
+    if (data.teacherNotes !== undefined) {
+      params.push(data.teacherNotes);
+      updates.push(`"teacherNotes" = $${params.length}`);
+    }
+    if (data.agenda !== undefined) {
+      params.push(data.agenda);
+      updates.push(`"agenda" = $${params.length}`);
+    }
 
-  const query = `UPDATE "PtmMeeting" SET ${updates.join(', ')} WHERE "id" = $1::uuid RETURNING *;`;
-  const rows = await prisma.$queryRawUnsafe(query, ...params);
-  const updatedMeeting = rows[0];
+    const query = `UPDATE "PtmMeeting" SET ${updates.join(', ')} WHERE "id" = $1::uuid RETURNING *;`;
+    const rows = await tx.$queryRawUnsafe(query, ...params);
+    const updatedMeeting = rows[0];
 
-  if (data.status === 'cancelled') {
-    await prisma.$executeRawUnsafe(
-      `UPDATE "PtmSlot" SET "status" = 'cancelled', "updatedAt" = NOW() WHERE "id" = $1::uuid;`,
-      existing.slotId
-    );
-  }
+    if (data.status === 'cancelled' || data.status === 'completed') {
+      await tx.$executeRawUnsafe(
+        `UPDATE "PtmSlot" SET "status" = $1, "updatedAt" = NOW() WHERE "id" = $2::uuid AND "collegeId" = $3::uuid AND "teacherId" = $4::uuid;`,
+        data.status,
+        existing.slotId,
+        existing.collegeId,
+        existing.teacherId
+      );
+    }
 
-  const [slot, teacher, student] = await Promise.all([
-    dbFindSlotById(existing.slotId),
-    prisma.teacher.findFirst({
-      where: { id: existing.teacherId },
-      select: { id: true, designation: true, user: { select: { name: true, email: true } } },
-    }),
-    prisma.student.findFirst({
-      where: { id: existing.studentId },
-      select: { id: true, rollNumber: true, user: { select: { name: true, email: true } } },
-    }),
-  ]);
+    const [slot, teacher, student] = await Promise.all([
+      dbFindSlotById(existing.slotId),
+      prisma.teacher.findFirst({
+        where: { id: existing.teacherId },
+        select: { id: true, designation: true, user: { select: { name: true, email: true } } },
+      }),
+      prisma.student.findFirst({
+        where: { id: existing.studentId },
+        select: { id: true, rollNumber: true, user: { select: { name: true, email: true } } },
+      }),
+    ]);
 
-  return {
-    ...updatedMeeting,
-    slot,
-    teacher,
-    student,
-  };
+    return {
+      ...updatedMeeting,
+      slot,
+      teacher,
+      student,
+    };
+  });
 }
 
 // ---------- SLOTS (teacher availability) ----------

@@ -21,35 +21,50 @@ export default function TeacherDashboard() {
       try {
         if (!userData?.collegeId) return;
 
-        // Fetch dashboard stats from backend
-        // Since we migrated, we can hit a dedicated dashboard endpoint or fetch individual entities
-        const [noticesRes, statsRes] = await Promise.all([
+        // Fetch dashboard stats, notices, and today's schedule concurrently and independently
+        const [noticesResult, statsResult, scheduleResult] = await Promise.allSettled([
           api.get('/notices'),
-          api.get('/dashboards/teacher-stats')
+          api.get('/dashboards/teacher-stats'),
+          api.get('/timetable/today')
         ]);
         
-        const noticesList = noticesRes.data || [];
-        const filteredNotices = noticesList.filter(n => 
-          n.audience === 'all' || 
-          n.audience === 'teachers' || 
-          n.audience === 'staff'
-        ).slice(0, 3);
+        // 1. Notices widget
+        if (noticesResult.status === 'fulfilled') {
+          const raw = noticesResult.value?.data;
+          const noticesList = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : []);
+          const filteredNotices = noticesList.filter(n => {
+            const aud = (n.targetAudience || n.audience || 'all').toLowerCase();
+            return aud === 'all' || aud === 'teachers' || aud === 'teacher' || aud === 'staff';
+          }).slice(0, 3);
+          setNotices(filteredNotices);
+        } else {
+          console.error('Error fetching notices for teacher dashboard:', noticesResult.reason);
+          setNotices([]);
+        }
         
-        setNotices(filteredNotices);
-        
-        const teacherStats = statsRes.data || {};
-        
-        setStats({
-          totalClasses: teacherStats.totalClasses || 0,
-          studentsTaught: teacherStats.studentsTaught || 0,
-          attendanceRate: teacherStats.attendanceRate || 0,
-          pendingGrades: teacherStats.pendingGrades || 0
-        });
+        // 2. Stats
+        if (statsResult.status === 'fulfilled') {
+          const rawStats = statsResult.value?.data;
+          const teacherStats = rawStats?.data || rawStats || {};
+          setStats({
+            totalClasses: teacherStats.totalClasses || 0,
+            studentsTaught: teacherStats.studentsTaught || 0,
+            attendanceRate: teacherStats.attendanceRate || 0,
+            pendingGrades: teacherStats.pendingGrades || 0
+          });
+        } else {
+          console.error('Error fetching teacher stats:', statsResult.reason);
+        }
 
-        // Fetch today's schedule
-        const scheduleRes = await api.get('/timetable/today');
-        setTodayClasses(scheduleRes.data || []);
-        
+        // 3. Today's schedule
+        if (scheduleResult.status === 'fulfilled') {
+          const rawSchedule = scheduleResult.value?.data;
+          const scheduleList = Array.isArray(rawSchedule?.data) ? rawSchedule.data : (Array.isArray(rawSchedule) ? rawSchedule : []);
+          setTodayClasses(scheduleList);
+        } else {
+          console.error('Error fetching today schedule:', scheduleResult.reason);
+          setTodayClasses([]);
+        }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -178,7 +193,11 @@ export default function TeacherDashboard() {
                           <div className="flex items-center gap-2 mt-2">
                             <Clock className="w-3 h-3 text-slate-400" />
                             <span className="text-[10px] font-medium text-slate-400">
-                              {notice.createdAt?.toDate?.()?.toLocaleDateString() || 'Recent'}
+                              {notice.createdAt
+                                ? (typeof notice.createdAt?.toDate === 'function'
+                                    ? notice.createdAt.toDate().toLocaleDateString()
+                                    : new Date(notice.createdAt).toLocaleDateString())
+                                : 'Recent'}
                             </span>
                           </div>
                         </div>
