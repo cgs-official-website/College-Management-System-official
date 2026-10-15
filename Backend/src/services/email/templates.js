@@ -77,7 +77,7 @@ const baseTemplate = (content, title = '') => `
       ${content}
     </div>
     <div class="footer">
-      <p>This is an automated message from ${title || 'College Management System'}.</p>
+      <p>This is an automated message.</p>
     </div>
   </div>
 </body>

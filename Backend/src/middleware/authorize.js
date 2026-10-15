@@ -8,7 +8,20 @@ export const authorize = (...allowedRoles) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    const userRole = (req.user.role || '').trim().toLowerCase();
+    const normalizedAllowed = allowedRoles.map((r) => String(r).trim().toLowerCase());
+
+    // Superadmin has universal administrative access
+    if (userRole === 'superadmin') {
+      return next();
+    }
+
+    // College admin has access to tenant administrative and staff routes (unless exclusively superadmin)
+    if (userRole === 'admin' && (normalizedAllowed.includes('admin') || !normalizedAllowed.includes('superadmin'))) {
+      return next();
+    }
+
+    if (!normalizedAllowed.includes(userRole)) {
       console.log(`[authorize] Forbidden! req.user.role='${req.user.role}', allowedRoles=[${allowedRoles.join(',')}]`);
       return res.status(403).json({ 
         error: 'Forbidden', 

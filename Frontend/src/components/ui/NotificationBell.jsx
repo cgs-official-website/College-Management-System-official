@@ -77,6 +77,10 @@ export function resolveNotificationTargetRoute(notification, rawRole) {
     if (type === 'notice_new' || rawLink.includes('notice')) {
       return { isExternal: false, path: '/admin/notices' };
     }
+    // Calendar events
+    if (type === 'calendar' || rawLink.includes('calendar')) {
+      return { isExternal: false, path: '/admin/calendar' };
+    }
     // If link is already valid admin path
     if (rawLink.startsWith('/admin')) {
       if (rawLink === '/admin/admissions') return { isExternal: false, path: '/admin/admission' };
@@ -91,6 +95,10 @@ export function resolveNotificationTargetRoute(notification, rawRole) {
 
   // 3. TEACHER / FACULTY / HOD PANEL
   if (isTeacher) {
+    // Calendar events
+    if (type === 'calendar' || rawLink.includes('calendar')) {
+      return { isExternal: false, path: '/teacher/calendar' };
+    }
     // Student leave review
     if (type === 'leave_request' || rawLink.includes('student-leaves')) {
       return { isExternal: false, path: '/teacher/student-leaves' };
@@ -129,6 +137,10 @@ export function resolveNotificationTargetRoute(notification, rawRole) {
 
   // 4. STUDENT PANEL
   if (isStudent) {
+    // Calendar events
+    if (type === 'calendar' || rawLink.includes('calendar')) {
+      return { isExternal: false, path: '/student/calendar' };
+    }
     if (
       type === 'leave_request' ||
       type === 'leave_status' ||
@@ -162,6 +174,9 @@ export function resolveNotificationTargetRoute(notification, rawRole) {
 
   // 5. OTHER STAFF (e.g. librarian, accountant using /admin/*)
   if (isOtherStaff) {
+    if (type === 'calendar' || rawLink.includes('calendar')) {
+      return { isExternal: false, path: '/admin/calendar' };
+    }
     if (type === 'leave_status' || rawLink.includes('my-leaves') || rawLink.includes('leave')) {
       return { isExternal: false, path: '/admin/my-leaves' };
     }

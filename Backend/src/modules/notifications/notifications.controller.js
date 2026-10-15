@@ -1,5 +1,45 @@
 import { prisma } from '../../lib/prisma.js';
 
+export async function getTargetRolesForUser(user) {
+  if (!user) return ['all', 'everyone'];
+  const r = (user.role || '').toLowerCase();
+  const roles = new Set([r, 'all', 'everyone']);
+  if (r === 'teacher') {
+    roles.add('teachers');
+    roles.add('faculty');
+  } else if (r === 'student') {
+    roles.add('students');
+  } else if (r === 'hod') {
+    roles.add('hods');
+    roles.add('teacher');
+    roles.add('teachers');
+    roles.add('faculty');
+  } else if (r === 'admin' || r === 'superadmin') {
+    roles.add('admin');
+    roles.add('admins');
+    roles.add('superadmin');
+  } else if (r === 'staff') {
+    roles.add('staffs');
+  }
+
+  // Include custom role name if user has customRoleId
+  if (user.customRoleId) {
+    try {
+      const customRole = await prisma.role.findUnique({
+        where: { id: user.customRoleId },
+        select: { name: true }
+      });
+      if (customRole?.name) {
+        const cName = customRole.name.toLowerCase().trim();
+        roles.add(cName);
+        roles.add(cName.replace(/\s+/g, '_'));
+      }
+    } catch (_) {}
+  }
+
+  return Array.from(roles);
+}
+
 export const getNotifications = async (req, res) => {
   try {
     const collegeId = req.tenant?.collegeId || req.user?.collegeId;
@@ -14,6 +54,8 @@ export const getNotifications = async (req, res) => {
     const skip = (page - 1) * limit;
     const unreadOnly = req.query.unreadOnly === 'true' || req.query.unread === 'true';
 
+    const userRoles = await getTargetRolesForUser(user);
+
     // Unread filter:
     // - Direct user notification: readAt is null, isRead is false, and user.id is not in readBy
     // - Broadcast notification (userId is null): user.id is not in readBy
@@ -27,7 +69,7 @@ export const getNotifications = async (req, res) => {
         },
         {
           userId: null,
-          targetRole: { in: [user.role, 'all'] },
+          targetRole: { in: userRoles },
           NOT: { readBy: { has: user.id } }
         }
       ]
@@ -36,7 +78,7 @@ export const getNotifications = async (req, res) => {
     const allRecipientsCondition = {
       OR: [
         { userId: user.id },
-        { targetRole: { in: [user.role, 'all'] } }
+        { targetRole: { in: userRoles } }
       ]
     };
 
@@ -91,6 +133,7 @@ export const getUnreadCount = async (req, res) => {
       return res.json({ success: true, data: { unreadCount: 0, count: 0 } });
     }
 
+    const userRoles = await getTargetRolesForUser(user);
     const unreadCount = await prisma.notification.count({
       where: {
         collegeId,
@@ -103,7 +146,7 @@ export const getUnreadCount = async (req, res) => {
           },
           {
             userId: null,
-            targetRole: { in: [user.role, 'all'] },
+            targetRole: { in: userRoles },
             NOT: { readBy: { has: user.id } }
           }
         ]
@@ -139,9 +182,10 @@ export const markAsRead = async (req, res) => {
       return res.status(404).json({ success: false, error: { message: 'Notification not found' } });
     }
 
-    // Only recipient, matching role, or superadmin can mark it
+    // Only recipient, college admin, or superadmin can mark it
+    const isCollegeAdminOrSuper = user.role === 'admin' || user.role === 'superadmin';
     if (
-      !isSuperadmin &&
+      !isCollegeAdminOrSuper &&
       notification.userId &&
       notification.userId !== user.id
     ) {
@@ -213,11 +257,12 @@ export const markAllAsRead = async (req, res) => {
     });
 
     // 2. Broadcast / role-based notifications: add user.id to readBy without touching isRead/readAt
+    const userRoles = getTargetRolesForUser(user);
     const roleBased = await prisma.notification.findMany({
       where: {
         collegeId,
         userId: null,
-        targetRole: { in: [user.role, 'all'] },
+        targetRole: { in: userRoles },
         NOT: { readBy: { has: user.id } }
       },
       select: { id: true, readBy: true }

@@ -76,7 +76,8 @@ export const requireApprovedCollege = async (req, res, next) => {
     return res.status(404).json({ success: false, error: { code: 'COLLEGE_NOT_FOUND', message: 'College institution not found' } });
   }
 
-  if (currentStatus === 'active' || currentStatus === 'trial') {
+  const normStatus = (currentStatus || '').trim().toLowerCase();
+  if (normStatus === 'active' || normStatus === 'trial' || normStatus === 'approved') {
     req.tenant = req.tenant || {};
     req.tenant.status = currentStatus;
     return next();

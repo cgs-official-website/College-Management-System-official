@@ -9,7 +9,7 @@ const router = Router();
 
 router.use(authenticate, resolveTenant);
 
-const employees = authorize('teacher', 'hod', 'faculty', 'staff');
+const employees = authorize('teacher', 'hod', 'faculty', 'staff', 'admin', 'superadmin');
 
 router.get('/', employees, catchAsync(controller.getMyProfile));
 router.put('/', employees, catchAsync(controller.updateMyProfile));

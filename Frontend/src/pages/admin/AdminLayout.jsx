@@ -6,13 +6,13 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useDashboardStats } from '../../hooks/useDashboardStats';
 import { 
   LayoutDashboard, 
-  Users, 
+  Users,
   GraduationCap,
   BookOpen,
   Calendar,
   FileText,
   Settings2,
-  Settings as SettingsIcon, 
+  Settings as SettingsIcon,
   LogOut,
   Bell,
   Search,
@@ -51,6 +51,7 @@ import {
   History,
   Store as StoreIcon,
   AlertCircle,
+  CalendarDays,
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 import PlaceholderModule from '../../components/ui/PlaceholderModule';
@@ -82,8 +83,8 @@ import AdminStudentDocuments from './students/AdminStudentDocuments';
 import MobileAppsDashboard from './apps/MobileAppsDashboard';
 import ApiIntegrations from './integrations/ApiIntegrations';
 import InventoryDashboard from './inventory/InventoryDashboard';
-import PayrollDashboard from './payroll/PayrollDashboard';      
-import MyPayslip from '../teacher/PayrollDashboard';          
+import PayrollDashboard from './payroll/PayrollDashboard';
+import MyPayslip from '../teacher/PayrollDashboard';
 import TeacherMyLeaves from '../teacher/TeacherMyLeaves';
 // TEMP DISABLED: Custom module
 // import CustomDashboard from '../../modules/custom/CustomDashboard';
@@ -94,6 +95,7 @@ import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationBell } from '../../components/ui/NotificationBell';
 import StoreDashboard from '../shared/StoreDashboard';
 import StaffSettings from '../shared/StaffSettings';
+import CalendarView from '../calendar/Calendar';
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -129,10 +131,10 @@ const AdminLayout = () => {
     }
 
     if (userRole === 'admin' || userRole === 'superadmin') return true;
-    if (!moduleKey) return true; 
+    if (!moduleKey) return true;
     return permissions?.[moduleKey]?.canRead === true;
   };
-  
+
   const isAdmin = userRole === 'admin' || userRole === 'superadmin';
   const displayName = isAdmin ? 'Admin' : (userData?.name || 'Staff');
   const initials = isAdmin
@@ -148,11 +150,13 @@ const AdminLayout = () => {
 
   const panelLabel = isAdmin ? 'ADMIN PANEL' : (userData?.customRole?.name || 'Staff Portal');
   const collegeLabel = userData?.collegeName || 'My College';
+  const isHod = userRole === 'hod' || Boolean(userData?.isHod);
+  const isAdminOrHod = isAdmin || isHod;
   const canReviewStudentLeaves = ['admin', 'superadmin', 'teacher', 'hod', 'faculty'].includes(userRole);
   const planAllows = (moduleKey) =>
-  !moduleKey ||
-  !Array.isArray(userData?.allowedModules) ||
-  userData.allowedModules.includes(moduleKey);
+    !moduleKey ||
+    !Array.isArray(userData?.allowedModules) ||
+    userData.allowedModules.includes(moduleKey);
 
   const navLinks = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard, moduleKey: null },
@@ -169,6 +173,7 @@ const AdminLayout = () => {
     { name: 'Academic Structure', path: '/admin/academic-structure', icon: BookOpen, moduleKey: 'academic' },
     { name: 'Assignments', path: '/admin/assignments', icon: FileEdit, moduleKey: 'academic' },
     { name: 'Timetable', path: '/admin/timetable', icon: Calendar, moduleKey: 'timetable' },
+    { name: 'Calendar', path: '/admin/calendar', icon: CalendarDays, moduleKey: null, adminOrHodOnly: true },
     { name: 'Attendance', path: '/admin/attendance', icon: Clock, moduleKey: 'attendance' },
     { name: 'Leave Requests', path: '/admin/leave-requests', icon: CalendarOff, moduleKey: isAdmin ? 'attendance' : null, leaveReviewerOnly: true },
     { name: 'Apply for Leave', path: '/admin/my-leaves', icon: CalendarClock, moduleKey: null, staffOnly: true },
@@ -201,7 +206,7 @@ const AdminLayout = () => {
     { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon, moduleKey: 'settings' },
     { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck, moduleKey: 'roles' },
   ]
-     .map(link => {
+    .map(link => {
       if (link.children) {
         return { ...link, children: link.children.filter(child => hasAccess(child.moduleKey)) };
       }
@@ -214,7 +219,8 @@ const AdminLayout = () => {
     )
     .filter(link => !link.adminOnly || isAdmin)
     .filter(link => !link.staffOnly || !isAdmin)
-    .filter(link => !link.leaveReviewerOnly || canReviewStudentLeaves);
+    .filter(link => !link.leaveReviewerOnly || canReviewStudentLeaves)
+    .filter(link => !link.adminOrHodOnly || isAdminOrHod);
 
   useEffect(() => {
     const activeGroup = navLinks.find(link =>
@@ -242,7 +248,7 @@ const AdminLayout = () => {
           <p className="text-slate-500 dark:text-slate-400 mb-6">
             Your college registration is currently pending approval from the Super Admin. You will receive an email once it is approved.
           </p>
-          <button 
+          <button
             onClick={handleLogout}
             className="flex items-center justify-center gap-2 w-full py-3.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition-all"
           >
@@ -256,16 +262,16 @@ const AdminLayout = () => {
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-[#020813] text-slate-900 dark:text-slate-200 overflow-hidden font-sans transition-colors duration-300">
-      
+
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
-      <motion.aside 
+      <motion.aside
         initial={{ x: -250 }}
         animate={{ x: sidebarOpen || isDesktop ? 0 : -280 }}
         transition={{ type: 'spring', damping: 20 }}
@@ -278,7 +284,7 @@ const AdminLayout = () => {
           <span className="ml-3 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
             Zuna
           </span>
-          <button 
+          <button
             onClick={() => setSidebarOpen(false)}
             className="ml-auto lg:hidden text-slate-400 hover:text-slate-600 dark:hover:text-white"
           >
@@ -289,7 +295,7 @@ const AdminLayout = () => {
         <div className="px-4 py-2 mt-2">
           <div className="bg-slate-50 dark:bg-white/5 rounded-2xl p-3 flex items-center gap-3 border border-slate-100 dark:border-white/10 shadow-sm">
             <div className="w-10 h-10 rounded-xl bg-white dark:bg-[#0A0F1C] flex items-center justify-center shadow-sm p-1 border border-slate-100 dark:border-white/10">
-               {userData?.collegeLogo ? <img src={userData.collegeLogo} alt="Logo" className="w-full h-full object-contain rounded-lg"/> : <Building className="w-5 h-5 text-slate-400" />}
+              {userData?.collegeLogo ? <img src={userData.collegeLogo} alt="Logo" className="w-full h-full object-contain rounded-lg" /> : <Building className="w-5 h-5 text-slate-400" />}
             </div>
             <div className="flex-1 overflow-hidden">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate" title={userData?.collegeName || 'College Name'}>{userData?.collegeName || 'College Name'}</h3>
@@ -312,11 +318,10 @@ const AdminLayout = () => {
                   <button
                     type="button"
                     onClick={() => toggleGroup(link.name)}
-                    className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group relative ${
-                      isGroupActive
+                    className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group relative ${isGroupActive
                         ? 'text-primary-700 dark:text-white font-bold'
                         : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
-                    }`}
+                      }`}
                   >
                     {isGroupActive && (
                       <motion.div
@@ -326,17 +331,15 @@ const AdminLayout = () => {
                       />
                     )}
                     <Icon
-                      className={`w-5 h-5 relative z-10 transition-colors ${
-                        isGroupActive
+                      className={`w-5 h-5 relative z-10 transition-colors ${isGroupActive
                           ? 'text-primary-600 dark:text-primary-400'
                           : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'
-                      }`}
+                        }`}
                     />
                     <span className="relative z-10 flex-1 text-left">{link.name}</span>
                     <ChevronDown
-                      className={`w-4 h-4 relative z-10 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} ${
-                        isGroupActive ? 'text-primary-600 dark:text-primary-400' : 'text-slate-400'
-                      }`}
+                      className={`w-4 h-4 relative z-10 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} ${isGroupActive ? 'text-primary-600 dark:text-primary-400' : 'text-slate-400'
+                        }`}
                     />
                   </button>
 
@@ -359,16 +362,14 @@ const AdminLayout = () => {
                                 key={child.name}
                                 to={child.path}
                                 onClick={() => setSidebarOpen(false)}
-                                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-sm ${
-                                  isChildActive
+                                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-sm ${isChildActive
                                     ? 'text-primary-700 dark:text-white font-bold bg-primary-50 dark:bg-primary-500/10 border border-primary-100 dark:border-primary-500/20'
                                     : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
-                                }`}
+                                  }`}
                               >
                                 <ChildIcon
-                                  className={`w-4 h-4 ${
-                                    isChildActive ? 'text-primary-600 dark:text-primary-400' : 'text-slate-400'
-                                  }`}
+                                  className={`w-4 h-4 ${isChildActive ? 'text-primary-600 dark:text-primary-400' : 'text-slate-400'
+                                    }`}
                                 />
                                 <span>{child.name}</span>
                               </Link>
@@ -384,22 +385,21 @@ const AdminLayout = () => {
 
             const isActive = location.pathname === link.path || (link.path !== '/admin' && location.pathname.startsWith(link.path));
             const Icon = link.icon;
-            
+
             return (
               <Link
                 key={link.name}
                 to={link.path}
                 onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group relative ${
-                  isActive 
-                    ? 'text-primary-700 dark:text-white font-bold' 
+                className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group relative ${isActive
+                    ? 'text-primary-700 dark:text-white font-bold'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
-                }`}
+                  }`}
               >
                 {isActive && (
-                  <motion.div 
-                    layoutId="activeAdminTab" 
-                    className="absolute inset-0 bg-primary-50 dark:bg-primary-500/10 rounded-xl border border-primary-100 dark:border-primary-500/20" 
+                  <motion.div
+                    layoutId="activeAdminTab"
+                    className="absolute inset-0 bg-primary-50 dark:bg-primary-500/10 rounded-xl border border-primary-100 dark:border-primary-500/20"
                     initial={false}
                   />
                 )}
@@ -411,36 +411,36 @@ const AdminLayout = () => {
         </div>
 
         <div className="p-4 border-t border-slate-100 dark:border-white/5 mt-auto">
-           <div className="flex items-center justify-between group cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 p-2 rounded-xl transition-colors" onClick={handleLogout}>
-             <div className="flex items-center gap-3 overflow-hidden">
-               <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-400 flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
-                 {userData?.collegeLogo ? (
-                   <img src={userData.collegeLogo} alt="Logo" className="w-full h-full object-contain p-1 rounded-full" />
-                 ) : (
-                   <span>{initials}</span>
-                 )}
-               </div>
-               <div className="truncate">
-                 <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate" title={isAdmin ? (userData?.collegeName || userData?.college?.name || 'College Admin') : displayName}>
-                   {isAdmin ? (userData?.collegeName || userData?.college?.name || 'College Admin') : displayName}
-                 </p>
-                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">
-                   {isAdmin ? (userData?.name ? `${userData.name} • ADMIN` : 'ADMIN') : roleLabel}
-                 </p>
-               </div>
-             </div>
-             <LogOut className="w-5 h-5 text-slate-400 group-hover:text-red-600 transition-colors shrink-0 ml-2" />
-           </div>
+          <div className="flex items-center justify-between group cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 p-2 rounded-xl transition-colors" onClick={handleLogout}>
+            <div className="flex items-center gap-3 overflow-hidden">
+              <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-400 flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
+                {userData?.collegeLogo ? (
+                  <img src={userData.collegeLogo} alt="Logo" className="w-full h-full object-contain p-1 rounded-full" />
+                ) : (
+                  <span>{initials}</span>
+                )}
+              </div>
+              <div className="truncate">
+                <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate" title={isAdmin ? (userData?.collegeName || userData?.college?.name || 'College Admin') : displayName}>
+                  {isAdmin ? (userData?.collegeName || userData?.college?.name || 'College Admin') : displayName}
+                </p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">
+                  {isAdmin ? (userData?.name ? `${userData.name} • ADMIN` : 'ADMIN') : roleLabel}
+                </p>
+              </div>
+            </div>
+            <LogOut className="w-5 h-5 text-slate-400 group-hover:text-red-600 transition-colors shrink-0 ml-2" />
+          </div>
         </div>
       </motion.aside>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        
+
         {/* Top Header */}
         <header className="h-20 bg-white/80 dark:bg-[#0A0F1C]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/10 flex items-center justify-between px-6 z-30">
           <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={() => setSidebarOpen(true)}
               className="lg:hidden p-2 -ml-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
             >
@@ -453,7 +453,7 @@ const AdminLayout = () => {
           </div>
 
           <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={() => window.location.reload()}
               className="p-2.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
               title="Refresh Data"
@@ -461,7 +461,7 @@ const AdminLayout = () => {
               <RefreshCw className="w-5 h-5" />
             </button>
 
-            <button 
+            <button
               onClick={toggleTheme}
               className="p-2.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
               title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
@@ -469,7 +469,7 @@ const AdminLayout = () => {
               {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5" />}
             </button>
 
-            <button 
+            <button
               onClick={() => setShowTicketModal(true)}
               className="p-2.5 text-amber-600 hover:text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 rounded-xl hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-colors"
               title="Raise Support Ticket to Zuna"
@@ -477,7 +477,7 @@ const AdminLayout = () => {
               <LifeBuoy className="w-5 h-5" />
             </button>
 
-            <RaiseTicketModal 
+            <RaiseTicketModal
               isOpen={showTicketModal}
               onClose={() => setShowTicketModal(false)}
               collegeName={userData?.collegeName || userData?.college?.name || 'College Admin'}
@@ -485,10 +485,10 @@ const AdminLayout = () => {
             />
 
             <NotificationBell />
-            
+
             <div className="h-8 w-px bg-slate-200 dark:bg-white/10 mx-1"></div>
 
-            <button 
+            <button
               onClick={() => navigate(isAdmin ? '/admin/settings' : '/admin')}
               className="flex items-center gap-3 pl-2 pr-1 py-1 rounded-full hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
             >
@@ -513,7 +513,7 @@ const AdminLayout = () => {
 
         <main className="flex-1 overflow-y-auto p-6 md:p-8 relative">
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03] dark:opacity-[0.05] pointer-events-none mix-blend-overlay"></div>
-          
+
           <div className="max-w-7xl mx-auto relative">
             <Routes>
               <Route path="/" element={<AdminDashboardHome />} />
@@ -526,6 +526,7 @@ const AdminLayout = () => {
               <Route path="/academic-structure/*" element={hasAccess('academic') ? <AcademicStructure /> : <Navigate to="/404" replace />} />
               <Route path="/assignments/*" element={hasAccess('academic') ? <AssignmentsDashboard /> : <Navigate to="/404" replace />} />
               <Route path="/timetable/*" element={hasAccess('timetable') ? <Timetable /> : <Navigate to="/404" replace />} />
+              <Route path="/calendar/*" element={<CalendarView />} />
               <Route path="/attendance/*" element={hasAccess('attendance') ? <Attendance /> : <Navigate to="/404" replace />} />
               <Route
                 path="/leave-requests/*"
@@ -574,6 +575,7 @@ const AdminLayout = () => {
 const AdminDashboardHome = () => {
   const { userData, userRole, permissions } = useAuth();
   const stats = useDashboardStats(userData?.collegeId);
+
 
   const isStaff = userRole === 'staff';
   const isAdmin = userRole === 'admin' || userRole === 'superadmin';
@@ -643,7 +645,6 @@ const AdminDashboardHome = () => {
         <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">College Dashboard</h1>
         <p className="text-slate-500 dark:text-slate-400 mt-1">Manage your institution's daily operations.</p>
       </div>
-
       {hasNoModules && (
         <div className="p-4 md:p-5 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-start gap-3 text-amber-800 dark:text-amber-300 shadow-sm">
           <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -659,11 +660,11 @@ const AdminDashboardHome = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
         {displayCards.length > 0 ? (
           displayCards.map((stat, idx) => (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.08 }}
-              key={`${stat.title}-${idx}`} 
+              key={`${stat.title}-${idx}`}
               className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group"
             >
               <div className="flex justify-between items-start">
@@ -692,7 +693,7 @@ const AdminDashboardHome = () => {
 
       {/* Quick Actions & Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-        
+
         {/* Dynamic Quick Actions */}
         <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-sm flex flex-col">
           <div className="flex items-center justify-between mb-6">
@@ -704,7 +705,7 @@ const AdminDashboardHome = () => {
           <div className="grid grid-cols-2 gap-4 flex-1">
             {displayActions.length > 0 ? (
               displayActions.map((action, idx) => (
-                <Link 
+                <Link
                   key={idx}
                   to={action.path}
                   className="flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-100 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-white/5 transition-all group"
@@ -731,7 +732,7 @@ const AdminDashboardHome = () => {
               View All
             </button>
           </div>
-          
+
           <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 dark:before:via-white/10 before:to-transparent">
             {stats.isLoading ? (
               <p className="text-sm text-slate-500 text-center py-4">Loading activity...</p>
@@ -740,14 +741,14 @@ const AdminDashboardHome = () => {
                 const Icon = item.type === 'student' ? UserPlus : Users;
                 const color = item.type === 'student' ? 'text-emerald-500' : 'text-amber-500';
                 const bg = item.type === 'student' ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-amber-50 dark:bg-amber-500/10';
-                
+
                 const date = new Date(item.time);
                 const now = new Date();
                 const diffMs = now - date;
                 const diffMins = Math.floor(diffMs / 60000);
                 const diffHours = Math.floor(diffMins / 60);
                 const diffDays = Math.floor(diffHours / 24);
-                
+
                 let timeStr;
                 if (diffMins < 60) timeStr = diffMins <= 1 ? 'Just now' : `${diffMins} minutes ago`;
                 else if (diffHours < 24) timeStr = `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;

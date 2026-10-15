@@ -538,45 +538,50 @@ export const deleteSlot = async (req, res) => {
 };
 
 export const getTodayTimetable = async (req, res) => {
-  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
-  const userId = req.user?.id || req.user?.userId;
-  
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { teacherProfile: true }
-  });
+  try {
+    const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+    const userId = req.user?.id || req.user?.userId;
+    
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { teacherProfile: true }
+    });
 
-  if (!user || !user.teacherProfile) {
+    if (!user || !user.teacherProfile) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const todayInt = new Date().getDay();
+    const dayName = DAY_MAP_TO_NAME[todayInt];
+
+    const slots = await prisma.timetableSlot.findMany({
+      where: { 
+        collegeId, 
+        teacherId: user.teacherProfile.id,
+        dayOfWeek: todayInt
+      },
+      include: {
+        course: true,
+        section: true
+      },
+      orderBy: {
+        startTime: 'asc'
+      }
+    });
+
+    const formattedSlots = slots.map(slot => ({
+      id: slot.id,
+      subject: slot.subject || slot.course?.name || 'Subject',
+      class: `${slot.course?.name || ''} - ${slot.section?.name || ''}`,
+      time: `${slot.startTime} - ${slot.endTime}`,
+      room: slot.room || 'TBA',
+      type: slot.type || 'Lecture',
+      status: 'upcoming' 
+    }));
+
+    return res.json({ success: true, data: formattedSlots });
+  } catch (error) {
+    console.warn('[Timetable] Error in getTodayTimetable (transient DB issue):', error.message);
     return res.json({ success: true, data: [] });
   }
-
-  const todayInt = new Date().getDay();
-  const dayName = DAY_MAP_TO_NAME[todayInt];
-
-  const slots = await prisma.timetableSlot.findMany({
-    where: { 
-      collegeId, 
-      teacherId: user.teacherProfile.id,
-      dayOfWeek: todayInt
-    },
-    include: {
-      course: true,
-      section: true
-    },
-    orderBy: {
-      startTime: 'asc'
-    }
-  });
-
-  const formattedSlots = slots.map(slot => ({
-    id: slot.id,
-    subject: slot.subject || slot.course?.name || 'Subject',
-    class: `${slot.course?.name || ''} - ${slot.section?.name || ''}`,
-    time: `${slot.startTime} - ${slot.endTime}`,
-    room: slot.room || 'TBA',
-    type: slot.type || 'Lecture',
-    status: 'upcoming' 
-  }));
-
-  res.json({ success: true, data: formattedSlots });
 };

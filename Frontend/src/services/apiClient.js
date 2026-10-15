@@ -217,7 +217,17 @@ apiClient.interceptors.response.use(
         ? 'This is taking longer than usual. Please try again in a moment.'
         : 'Unable to connect right now. Please check your internet connection and try again.';
     } else if (status === 403) {
-      finalMessage = "You don't have permission to do this. Please contact your college admin if you need access.";
+      const serverMsg = (typeof errorData?.error === 'string' ? errorData.error : errorData?.error?.message) || errorData?.message;
+      if (serverMsg && serverMsg !== 'Forbidden' && serverMsg !== 'FORBIDDEN') {
+        finalMessage = serverMsg;
+      } else {
+        const userRole = (session?.role || '').toLowerCase();
+        if (userRole === 'admin' || userRole === 'superadmin') {
+          finalMessage = "Access restricted. Please verify your administrative role privileges.";
+        } else {
+          finalMessage = "You don't have permission to do this. Please contact your college admin if you need access.";
+        }
+      }
     } else if (status === 404 && (!errorData?.message || /^cannot |route/i.test(errorData.message))) {
       finalMessage = "We couldn't find what you were looking for. Please try again, or contact your college admin if this keeps happening.";
     } else if (status === 429) {

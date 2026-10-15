@@ -8,6 +8,7 @@ import {
   FileBarChart, 
   CheckSquare, 
   Calendar, 
+  CalendarDays,
   ClipboardList,
   Calculator,
   Megaphone,
@@ -27,7 +28,7 @@ import {
   RefreshCw,
   Bell,    
   ArrowUpRight,
-  Video
+  Video,
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 import { useQueryClient } from '@tanstack/react-query';
@@ -48,6 +49,7 @@ import StudentPlacements from './StudentPlacements';
 import StudentComplaints from './StudentComplaints';
 import StudentDocumentsDashboard from './StudentDocumentsDashboard';
 import StudentSettings from './StudentSettings';
+import CalendarView from '../calendar/Calendar';
 // TEMP DISABLED: PTM module
 // import StudentPtm from './StudentPtm';
 
@@ -90,6 +92,7 @@ const StudentLayout = () => {
 
   const allNavLinks = [
     { name: 'Dashboard', path: '/student', icon: LayoutDashboard },
+    { name: 'Calendar', path: '/student/calendar', icon: CalendarDays },
     { name: 'My Courses', path: '/student/courses', icon: BookOpen },
     { name: 'Assignments', path: '/student/assignments', icon: FileBarChart },
     { name: 'Attendance', path: '/student/attendance', icon: CheckSquare },
@@ -276,6 +279,7 @@ const StudentLayout = () => {
               <Route path="/courses" element={<StudentCoursesDashboard />} />
               <Route path="/assignments" element={<StudentAssignmentsDashboard />} />
               <Route path="/attendance" element={<StudentAttendanceDashboard />} />
+              <Route path="/calendar/*" element={<CalendarView />} />
               <Route path="/timetable" element={<StudentTimetableDashboard />} />
               <Route path="/exams" element={<StudentExamsDashboard />} />
               <Route path="/fees" element={<StudentFeesDashboard />} />

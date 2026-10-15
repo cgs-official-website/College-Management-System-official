@@ -22,7 +22,13 @@ router.get('/modules', authenticate, catchAsync(getModules));
 // All role endpoints require tenant context
 router.use(authenticate, resolveTenant);
 
-router.get('/', requirePermission('roles', 'read'), catchAsync(getRoles));
+router.get('/', (req, res, next) => {
+  const role = (req.user?.role || '').toLowerCase();
+  if (role === 'admin' || role === 'superadmin' || role === 'hod' || Boolean(req.user?.isHod)) {
+    return next();
+  }
+  return requirePermission('roles', 'read')(req, res, next);
+}, catchAsync(getRoles));
 router.post('/', requirePermission('roles', 'create'), catchAsync(createRole));
 router.get('/:id', requirePermission('roles', 'read'), catchAsync(getRoleById));
 router.put('/:id', requirePermission('roles', 'update'), catchAsync(updateRole));

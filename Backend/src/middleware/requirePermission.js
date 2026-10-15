@@ -31,17 +31,18 @@ export const requirePermission = (moduleKey, action) => async (req, res, next) =
       });
     }
 
-    const { role, customRoleId, collegeId, userId } = req.user;
-    console.log(`[requirePermission] role='${role}', customRoleId='${customRoleId}', module='${moduleKey}', action='${action}'`);
+    const rawRole = (req.user.role || '').trim().toLowerCase();
+    const { customRoleId, collegeId, userId } = req.user;
+    console.log(`[requirePermission] role='${rawRole}', customRoleId='${customRoleId}', module='${moduleKey}', action='${action}'`);
 
-    // 1. System roles (superadmin, admin) have full access by default
-    if (role === 'superadmin' || role === 'admin') {
+    // 1. System roles (superadmin, admin) have full universal access by default
+    if (rawRole === 'superadmin' || rawRole === 'admin') {
       return next();
     }
     // Teachers, faculty, hod and staff can read students and notices by default
     const TEACHER_STAFF_ROLES = ['teacher', 'hod', 'faculty', 'staff'];
     if (
-      TEACHER_STAFF_ROLES.includes(role) &&
+      TEACHER_STAFF_ROLES.includes(rawRole) &&
       (moduleKey === 'students' || moduleKey === 'notices') &&
       action === 'read'
     ) {

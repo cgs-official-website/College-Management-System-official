@@ -7,6 +7,7 @@ import {
   Users, 
   BookOpen,
   Calendar,
+  CalendarDays,
   CheckSquare,
   FileBarChart,
   Settings as SettingsIcon, 
@@ -48,6 +49,7 @@ import TeacherMyLeaves from './TeacherMyLeaves';
 import Timetable from '../admin/timetable/Timetable';
 import LeaveRequestsDashboard from '../admin/leaves/LeaveRequestsDashboard';
 import NoticeBoard from '../admin/notices/NoticeBoard';
+import CalendarView from '../calendar/Calendar';
 
 const TeacherLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -71,6 +73,7 @@ const TeacherLayout = () => {
   const navLinks = [
     { name: 'Dashboard', path: '/teacher', icon: LayoutDashboard },
     { name: 'My Classes', path: '/teacher/classes', icon: Users },
+    { name: 'Calendar', path: '/teacher/calendar', icon: CalendarDays },
     { name: 'Assignments', path: '/teacher/assignments', icon: BookOpen },
     { name: 'Attendance', path: '/teacher/attendance', icon: CheckSquare },
     { name: 'Schedule', path: '/teacher/schedule', icon: Calendar },
@@ -262,6 +265,7 @@ const TeacherLayout = () => {
               <Route path="/classes" element={<TeacherClasses />} />
               <Route path="/assignments" element={<TeacherAssignments />} />
               <Route path="/attendance" element={<TeacherAttendance />} />
+              <Route path="/calendar/*" element={<CalendarView />} />
               <Route path="/schedule" element={<TeacherSchedule />} />
               <Route path="/grades" element={<TeacherGrades />} />
               <Route path="/complaints" element={<TeacherComplaints />} />

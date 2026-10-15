@@ -105,7 +105,7 @@ const baseTemplate = (content, title = '') => {
       ${content}
     </div>
     <div class="footer">
-      <p>This is an automated message from ${escapeHtml(displayTitle)}.</p>
+      <p>This is an automated message.</p>
     </div>
   </div>
 </body>

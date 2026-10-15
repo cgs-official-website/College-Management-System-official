@@ -9,6 +9,8 @@
   "scripts": {
     "start": "node --import ./src/instrument.js src/server.js",
     "dev": "nodemon --delay 500ms --exec node --import ./src/instrument.js src/server.js",
+    "kill:port": "node killPort.mjs",
+    "kill:5000": "node killPort.mjs 5000",
     "test": "node src/testAuditLoggingFilter.js",
     "test:audit": "node src/testAuditLoggingFilter.js",
     "postinstall": "prisma generate"

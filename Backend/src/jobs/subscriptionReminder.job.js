@@ -123,10 +123,17 @@ export async function checkAndSendSubscriptionReminders({ dryRun = false } = {})
         });
 
         // Record reminderSentForDate as today's timestamp for daily deduplication
-        await prisma.billingSubscription.update({
-          where: { id: sub.id },
-          data: { reminderSentForDate: now },
-        });
+        try {
+          await prisma.billingSubscription.update({
+            where: { id: sub.id },
+            data: { reminderSentForDate: now },
+          });
+        } catch (updateErr) {
+          logger.warn(
+            { err: updateErr.message, collegeId },
+            `[SubscriptionReminder] Could not record reminderSentForDate: ${updateErr.message}`
+          );
+        }
 
         itemSummary.action = 'SENT_REMINDER';
         results.push(itemSummary);

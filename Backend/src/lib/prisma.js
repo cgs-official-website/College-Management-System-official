@@ -7,16 +7,18 @@ const connectionString = process.env.DATABASE_URL;
 
 const pool = new pg.Pool({
   connectionString,
-  // Keep TCP connections alive so the remote DB doesn't drop idle ones
+  // Keep TCP connections alive with frequent probes so remote proxy doesn't drop them
   keepAlive: true,
-  keepAliveInitialDelayMillis: 10000,
-  // Remove idle connections after 120s
-  idleTimeoutMillis: 120000,
-  // Connection attempt timeout — generous for slow remote DBs
-  connectionTimeoutMillis: 30000,
-  // Pool size
-  max: 15,
-  min: 2,
+  keepAliveInitialDelayMillis: 3000,
+  // Recycle idle connections quickly (15s) so stale proxy connections aren't reused
+  idleTimeoutMillis: 15000,
+  // Fail fast within 10s if remote DB cannot be reached
+  connectionTimeoutMillis: 10000,
+  // Prevent hanging on broken sockets
+  query_timeout: 15000,
+  // Pool size: on-demand creation without holding stale idle connections
+  max: 10,
+  min: 0,
 });
 
 // Log pool-level errors so they don't crash the process silently
