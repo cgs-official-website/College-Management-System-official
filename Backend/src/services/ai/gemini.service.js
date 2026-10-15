@@ -52,58 +52,52 @@ export async function generateRoleInsights({
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    return {
-      summary: `Welcome to your ${roleName} dashboard. Operational metrics for your assigned modules (${accessibleModules.join(', ') || 'assigned areas'}) are up to date.`,
-      recommendations: ['Review pending operational tickets.', 'Ensure regular data synchronization.'],
-      generatedAt: new Date().toISOString(),
-      fallback: true,
-    };
+    return buildFallback(roleName, accessibleModules, metrics);
   }
 
-  const prompt = `You are the AI Operations Intelligence Assistant for a college ERP system.
-User: ${userName}
+  const prompt = `You write short task notes for staff on a college ERP dashboard.
 Role: ${roleName}
 Institution: ${collegeName}
-Permitted Modules: ${accessibleModules.join(', ')}
+Modules this role can access: ${accessibleModules.join(', ')}
 
-Current Real-time System Metrics:
-${JSON.stringify(metrics, null, 2)}
+Data:
+${JSON.stringify(metrics)}
 
-Instructions:
-1. Provide a sharp, role-specific executive briefing (2-3 sentences max).
-2. Highlight any notable metric, capacity, or key operational status.
-3. Suggest 2-3 brief, concrete, actionable next steps or priorities for this role today.
-4. If numbers are 0 or empty, suggest initial setup or monitoring.
-5. Return strictly valid JSON in this format:
-{
-  "summary": "Short 2-3 sentence executive briefing here.",
-  "recommendations": ["Action item 1", "Action item 2"]
-}
-Do NOT include markdown backticks like \`\`\`json. Output ONLY the JSON object.`;
+Rules:
+- Use only the data above. Never invent numbers.
+- Do not repeat totals that are already shown as cards (enrollment, staff count, capacity).
+- Write plain, direct sentences. No greetings, no "leveraging", "streamline", "ensure smooth".
+- Give 2 to 4 items. Each must be a specific action tied to a module from the list.
+- Each item is under 15 words.
+- If a module has no data, say it needs setup, in one short item.
+Return only JSON:
+{"items":[{"text":"...","module":"one of the permitted modules"}]}`;
 
-  // Try primary model first, fallback to secondary model on failure
   for (const model of [PRIMARY_MODEL, FALLBACK_MODEL]) {
     try {
       const parsed = await callGemini(model, prompt, apiKey);
-      return {
-        summary: parsed.summary || `Operational metrics for ${roleName} loaded.`,
-        recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : [],
-        generatedAt: new Date().toISOString(),
-        model,
-      };
+      const items = (Array.isArray(parsed.items) ? parsed.items : [])
+        .filter(i => i?.text && accessibleModules.includes(i.module))
+        .slice(0, 4);
+      if (items.length) {
+        return { items, generatedAt: new Date().toISOString(), model };
+      }
     } catch (err) {
       logger.warn(`[GeminiService] Model ${model} failed: ${err.message}`);
     }
   }
+  return buildFallback(roleName, accessibleModules, metrics);
+}
 
-  // Graceful fallback if both models encounter errors
-  return {
-    summary: `Welcome back. Your ${roleName} workspace is active with access to ${accessibleModules.length} assigned module(s).`,
-    recommendations: [
-      'Check assigned module dashboards for recent records.',
-      'Address pending approval requests or urgent updates.'
-    ],
-    generatedAt: new Date().toISOString(),
-    fallback: true,
-  };
+// Deterministic fallback: no AI, built from real numbers
+function buildFallback(roleName, accessibleModules, metrics) {
+  const items = [];
+  // Example: adapt keys to your real metrics object
+  if (accessibleModules.includes('students') && metrics.students?.incompleteRecords > 0) {
+    items.push({ text: `${metrics.students.incompleteRecords} student records are incomplete`, module: 'students' });
+  }
+  if (accessibleModules.includes('hostel') && metrics.hostel?.vacantBeds >= 0) {
+    items.push({ text: `${metrics.hostel.vacantBeds} hostel beds are vacant`, module: 'hostel' });
+  }
+  return { items, generatedAt: new Date().toISOString(), fallback: true };
 }
