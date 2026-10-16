@@ -61,10 +61,15 @@ export const useDepartments = () => {
       return response.data;
     },
     onSuccess: (res) => {
-      const stats = res?.data || {};
-      toast.success(`Imported ${stats.successful || 0} departments successfully!`);
+      const stats = res?.data ?? res ?? {};
+      if (stats.successful > 0) {
+        toast.success(`Imported ${stats.successful} department${stats.successful > 1 ? 's' : ''} successfully!`);
+      }
       if (stats.failed > 0) {
-        toast.error(`${stats.failed} failed.`);
+        const errorList = stats.errors || [];
+        const details = errorList.slice(0, 3).map(e => `Row ${e.row}: ${e.reason}`).join('\n');
+        const more = errorList.length > 3 ? `\n...and ${errorList.length - 3} more` : '';
+        toast.error(`${stats.failed} row(s) failed:\n${details}${more}`, { duration: 6000 });
       }
       queryClient.invalidateQueries({ queryKey: ['departments'] });
     },

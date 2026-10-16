@@ -22,7 +22,8 @@ export function ExcelUploadButton({
   description = 'Upload an Excel (.xlsx, .xls) or CSV file.',
   fields = [],
   showFieldsTable = true,
-  sampleFileName = 'import_template.xlsx'
+  sampleFileName = 'import_template.xlsx',
+  instructionsNote
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -89,7 +90,7 @@ export function ExcelUploadButton({
             'Column Name': '--- RULES & NOTES ---',
             'Requirement': '',
             'Data Type': '',
-            'Description': '1. Do not delete or rename header columns in row 1 of the Template sheet. 2. Fields marked with an asterisk (*) are required. 3. Existing sections with the same name under the same course will update capacity. 4. If the specified course code is not found, it will be automatically created.',
+            'Description': instructionsNote || '1. Do not delete or rename header columns in row 1 of the Template sheet. 2. Fields marked with an asterisk (*) are required. 3. Row 2 is a sample. Delete it before importing.',
             'Example': ''
           }
         ];

@@ -1025,7 +1025,6 @@ export const bulkImportStudents = async (req, res) => {
               where: { id: existingStudent.user.id },
               data: {
                 name: studentName,
-                accountStatus: 'active'
               }
             });
           } else {
@@ -1046,7 +1045,7 @@ export const bulkImportStudents = async (req, res) => {
                     collegeId,
                     role: 'student',
                     passwordHash: defaultHashedPassword,
-                    accountStatus: 'active'
+                    accountStatus: 'pending'
                   }
                 });
               } else if (existingUser.studentProfile && existingUser.studentProfile.deletedAt !== null) {
@@ -1058,7 +1057,7 @@ export const bulkImportStudents = async (req, res) => {
                     collegeId,
                     role: 'student',
                     passwordHash: defaultHashedPassword,
-                    accountStatus: 'active'
+                    accountStatus: 'pending'
                   }
                 });
               } else {
@@ -1066,7 +1065,6 @@ export const bulkImportStudents = async (req, res) => {
                   where: { id: existingUser.id },
                   data: {
                     name: studentName,
-                    accountStatus: 'active'
                   }
                 });
               }
@@ -1078,7 +1076,7 @@ export const bulkImportStudents = async (req, res) => {
                   collegeId,
                   role: 'student',
                   passwordHash: defaultHashedPassword,
-                  accountStatus: 'active'
+                  accountStatus: 'pending'
                 }
               });
             }

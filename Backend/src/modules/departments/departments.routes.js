@@ -101,45 +101,59 @@ router.post('/bulk', adminOnly, async (req, res) => {
     }
 
     const collegeId = req.tenant.collegeId;
-    let successful = 0;
-    let failed = 0;
+    const successful = [];
+    const errors = [];
+    const seenCodes = new Set(); // track codes seen within this file
 
-    for (const row of data) {
+    for (const [index, row] of data.entries()) {
+      const rowNum = index + 2; // row 1 = header, row 2 = first data row
+      const name = (row['Department Name'] || row['Department_Name'] || row['name'])?.toString().trim();
+      const rawCode = (row['Department Code'] || row['Department_Code'] || row['code'])?.toString().trim();
+
+      if (!name) {
+        errors.push({ row: rowNum, reason: 'Department Name is required' });
+        continue;
+      }
+      if (!rawCode) {
+        errors.push({ row: rowNum, reason: 'Department Code is required' });
+        continue;
+      }
+
+      const code = rawCode.toUpperCase();
+
+      // Reject duplicate code within the same uploaded file
+      if (seenCodes.has(code)) {
+        errors.push({ row: rowNum, reason: `Duplicate code "${code}" in this file` });
+        continue;
+      }
+      seenCodes.add(code);
+
+      // Reject if code already exists in the college
+      const existing = await prisma.department.findFirst({
+        where: { collegeId, code: { equals: code, mode: 'insensitive' } }
+      });
+      if (existing) {
+        errors.push({ row: rowNum, reason: `Department code "${code}" already exists in this college` });
+        continue;
+      }
+
       try {
-        const name = (row['Department_Name'] || row['Department Name'] || row['name'])?.toString().trim();
-        const rawCode = (row['Department_Code'] || row['Department Code'] || row['code'])?.toString().trim();
-
-        if (!name || !rawCode) {
-          failed++;
-          continue;
-        }
-
-        const code = rawCode.toUpperCase();
-
-        const existing = await prisma.department.findFirst({
-          where: {
-            collegeId,
-            code: { equals: code, mode: 'insensitive' }
-          }
+        await prisma.department.create({
+          data: { name, code, collegeId }
         });
-
-        if (existing) {
-          await prisma.department.update({
-            where: { id: existing.id },
-            data: { name }
-          });
-        } else {
-          await prisma.department.create({
-            data: { name, code, collegeId }
-          });
-        }
-        successful++;
+        successful.push(code);
       } catch (err) {
-        failed++;
+        errors.push({ row: rowNum, reason: err?.message || 'Database error' });
       }
     }
-    
-    return res.json({ data: { successful, failed } });
+
+    return res.json({
+      data: {
+        successful: successful.length,
+        failed: errors.length,
+        errors, // [{ row: 3, reason: '...' }, ...]
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: { message: formatErrorMessage(error, 'Failed to bulk import departments') } });
   }

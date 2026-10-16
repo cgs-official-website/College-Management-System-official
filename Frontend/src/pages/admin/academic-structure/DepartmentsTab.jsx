@@ -7,13 +7,32 @@ import { Search, Plus, Trash2, Edit2, Building2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
+import { Modal } from '../../../components/ui/Modal';
 import { CustomFieldsSection } from '../../../modules/builder/CustomFieldsSection';
+
+const DEPT_IMPORT_FIELDS = [
+  {
+    name: 'Department Name',
+    required: true,
+    type: 'String',
+    description: 'Full name of the department',
+    example: 'Computer Science',
+  },
+  {
+    name: 'Department Code',
+    required: true,
+    type: 'String',
+    description: 'Short unique code (will be uppercased automatically)',
+    example: 'CSE',
+  },
+];
 
 export default function DepartmentsTab({ onSelect }) {
   const { departments, isLoading, createDepartment, updateDepartment, deleteDepartment, bulkImport } = useDepartments();
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingDept, setEditingDept] = useState(null);
+  const [importSummary, setImportSummary] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const confirm = useConfirm();
@@ -74,6 +93,27 @@ export default function DepartmentsTab({ onSelect }) {
     }
   };
 
+  // Strip trailing asterisks from Excel header keys before sending to backend.
+  // ExcelUploadButton generates headers as "Column Name*" for required fields.
+  // departments.routes.js reads "Department Name" (no asterisk), so we normalise here.
+  // Other modules (Staff, Sections, Library, Hostel) already read BOTH forms
+  // (e.g. row['Staff_Name*'] || row['Staff_Name']), so they are unaffected.
+  const handleBulkImport = async (rows) => {
+    const stripped = rows.map(row => {
+      const clean = {};
+      for (const [k, v] of Object.entries(row)) {
+        clean[k.replace(/\*+$/, '').trim()] = v;
+      }
+      return clean;
+    });
+    const res = await bulkImport.mutateAsync(stripped);
+    const stats = res?.data ?? res;
+    if (stats?.failed > 0) {
+      setImportSummary(stats);
+    }
+    return res;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between gap-4">
@@ -87,7 +127,15 @@ export default function DepartmentsTab({ onSelect }) {
           />
         </div>
         <div className="flex gap-2">
-          <ExcelUploadButton onUpload={bulkImport.mutateAsync} isLoading={bulkImport.isPending} />
+          <ExcelUploadButton
+            onUpload={handleBulkImport}
+            isLoading={bulkImport.isPending}
+            title="Import Departments"
+            description="Upload an Excel (.xlsx) or CSV file. Download the template first."
+            fields={DEPT_IMPORT_FIELDS}
+            instructionsNote="1. Do not delete or rename header columns in row 1 of the Template sheet. 2. Fields marked with an asterisk (*) are required. 3. Row 2 is a sample. Delete it before importing."
+            sampleFileName="departments_import_template.xlsx"
+          />
           <Button onClick={handleOpenAdd}>
             <Plus className="w-4 h-4 mr-2" /> Add Department
           </Button>
@@ -186,6 +234,38 @@ export default function DepartmentsTab({ onSelect }) {
           </div>
         )}
       </div>
+
+      {importSummary && (
+        <Modal
+          isOpen={!!importSummary}
+          onClose={() => setImportSummary(null)}
+          title="Import Results"
+        >
+          <div className="space-y-4">
+            <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 text-sm">
+              <span className="font-semibold text-amber-800 dark:text-amber-300">
+                {importSummary.successful} department(s) imported, {importSummary.failed} failed.
+              </span>
+            </div>
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Failed Rows</h4>
+              <ul className="divide-y divide-slate-100 dark:divide-white/5 text-sm">
+                {(importSummary.errors || []).map((err, idx) => (
+                  <li key={idx} className="py-2 flex items-start gap-2 text-red-600 dark:text-red-400">
+                    <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-red-100 dark:bg-red-900/40 shrink-0">
+                      Row {err.row}
+                    </span>
+                    <span>{err.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex justify-end pt-2">
+              <Button onClick={() => setImportSummary(null)}>Close</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
