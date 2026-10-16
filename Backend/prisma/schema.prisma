@@ -83,6 +83,8 @@ model College {
   ptmSlots                 PtmSlot[]
   ptmMeetings              PtmMeeting[]
   storeCategories          StoreCategory[]
+  drivers                  Driver[]
+  transportAllocations     StudentTransportAllocation[]
 }
 
 model BillingSubscription {
@@ -371,6 +373,7 @@ model Student {
   libraryTransactions  LibraryTransaction[]
   ptmMeetings          PtmMeeting[]
   registerNumber       String?
+  transportAllocation  StudentTransportAllocation?
 
   @@unique([collegeId, admissionNumber])
   @@unique([collegeId, registerNumber])
@@ -709,10 +712,20 @@ model HostelRoom {
 }
 
 model TransportRoute {
-  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId String  @db.Uuid
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId String   @db.Uuid
   name      String
-  college   College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  stops     String[] @default([])
+  status    String   @default("On Time")
+  vehicleId String?  @unique @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  college     College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  vehicle     Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  allocations StudentTransportAllocation[]
+
+  @@index([collegeId])
 }
 
 model InfrastructureAsset {
@@ -1017,20 +1030,22 @@ model Vehicle {
   id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   collegeId           String    @db.Uuid
   vehicleNo           String
-  vehicleType         String?
-  seatingCapacity     Int?
+  vehicleType         String?   @default("Bus")
+  seatingCapacity     Int
   rcNumber            String?
   insuranceExpiryDate DateTime?
   fcExpiryDate        DateTime?
   permitExpiryDate    DateTime?
-  driverName          String?
-  driverLicenseNo     String?
-  driverContact       String?
+  status              String    @default("Active") // Active, Under Maintenance
+  driverId            String?   @unique @db.Uuid
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  college College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  college College         @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  driver  Driver?         @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  route   TransportRoute?
 
+  @@unique([collegeId, vehicleNo])
   @@index([collegeId])
 }
 
@@ -1398,4 +1413,40 @@ model StoreCategory {
 
   @@unique([collegeId, code])
   @@index([collegeId])
+}
+
+model Driver {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId        String    @db.Uuid
+  name             String
+  phone            String
+  alternatePhone   String?
+  licenseNo        String
+  licenseExpiry    DateTime
+  licenseType      String?
+  emergencyContact String?
+  status           String    @default("Active") // Active, On Leave, Inactive
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  college College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  vehicle Vehicle?
+
+  @@unique([collegeId, licenseNo])
+  @@index([collegeId])
+}
+
+model StudentTransportAllocation {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId  String   @db.Uuid
+  studentId  String   @unique @db.Uuid
+  routeId    String   @db.Uuid
+  assignedBy String?  @db.Uuid
+  assignedAt DateTime @default(now())
+
+  college College        @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  route   TransportRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@index([collegeId, routeId])
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
@@ -24,14 +24,15 @@ const getInitialValues = (initialData) => ({
   parentPhone: initialData?.parentPhone || initialData?.parentMobile || '',
   address: initialData?.address || '',
   residenceType: initialData?.residenceType || 'Day Scholar',
+  transportRequired: initialData?.transportRequired === 'Yes' ? 'Yes' : 'No',
   customFields: initialData?.customFields || {}
 });
 
 export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading }) {
   const { userData } = useAuth();
   const { courses } = useCourses();
-  
-  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm({
+
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm({
     defaultValues: getInitialValues(initialData)
   });
 
@@ -42,7 +43,14 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
   }, [isOpen, initialData, reset]);
 
   const selectedCourseId = watch('courseId');
+  const residenceType = watch('residenceType');
   const { sections } = useSections(selectedCourseId);
+
+  useEffect(() => {
+    if (residenceType === 'Hosteller') {
+      setValue('transportRequired', 'No');
+    }
+  }, [residenceType, setValue]);
 
   const onFormSubmit = (data) => {
     // Strip null/undefined values to avoid Zod validation errors
@@ -51,15 +59,16 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
     );
     const finalData = {
       ...sanitized,
+      transportRequired: data.residenceType === 'Hosteller' ? 'No' : (data.transportRequired || 'No'),
       collegeId: userData?.collegeId || 'default_college_id'
     };
     onSubmit(finalData);
   };
 
   return (
-    <Modal 
-      isOpen={isOpen} 
-      onClose={onClose} 
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
       title={initialData ? "Edit Student" : "Add New Student"}
       maxWidth="max-w-4xl"
     >
@@ -70,25 +79,25 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
             Personal Information
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input 
-              label="First Name" 
+            <Input
+              label="First Name"
               {...register('firstName', { required: "First name is required" })}
               error={errors.firstName?.message}
             />
-            <Input 
-              label="Last Name" 
+            <Input
+              label="Last Name"
               {...register('lastName', { required: "Last name is required" })}
               error={errors.lastName?.message}
             />
-            <Input 
-              label="Email Address *" 
+            <Input
+              label="Email Address *"
               type="email"
               placeholder="student@example.com"
-              {...register('email', { 
+              {...register('email', {
                 required: "Email Address is required.",
-                pattern: { 
-                  value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i, 
-                  message: "Invalid email address" 
+                pattern: {
+                  value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                  message: "Invalid email address"
                 }
               })}
               error={errors.email?.message}
@@ -105,8 +114,8 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
               {...register('registerNumber')}
               error={errors.registerNumber?.message}
             />
-            <Input 
-              label="Phone Number" 
+            <Input
+              label="Phone Number"
               type="tel"
               inputMode="numeric"
               placeholder="e.g. 9876543210"
@@ -119,14 +128,14 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
               }}
               error={errors.phone?.message}
             />
-            <Input 
-              label="Date of Birth *" 
+            <Input
+              label="Date of Birth *"
               type="date"
               {...register('dob', { required: "Date of birth is required" })}
               error={errors.dob?.message}
             />
-            <Select 
-              label="Gender" 
+            <Select
+              label="Gender"
               {...register('gender', { required: "Gender is required" })}
               error={errors.gender?.message}
               options={[
@@ -145,15 +154,15 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
             Academic Information
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Select 
-              label="Class / Course" 
+            <Select
+              label="Class / Course"
               {...register('courseId', { required: "Course is required" })}
               error={errors.courseId?.message}
               options={[{ value: '', label: 'Select a course' }, ...courses.map(c => ({ value: c.id, label: c.name }))]}
             />
             <div className="space-y-1">
               <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Section</label>
-              <select 
+              <select
                 {...register('sectionId')}
                 className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white"
                 disabled={!selectedCourseId}
@@ -174,18 +183,18 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
             Parent/Guardian Information
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input 
-              label="Parent/Guardian Name" 
+            <Input
+              label="Parent/Guardian Name"
               {...register('parentName', { required: "Parent name is required" })}
               error={errors.parentName?.message}
             />
-            <Input 
-              label="Parent Phone" 
+            <Input
+              label="Parent Phone"
               type="tel"
               inputMode="numeric"
               placeholder="e.g. 9876543210"
               maxLength={10}
-              {...register('parentPhone', { 
+              {...register('parentPhone', {
                 required: "Parent phone is required",
                 pattern: { value: /^[0-9]{10}$/, message: "Parent phone must be exactly 10 digits." }
               })}
@@ -195,24 +204,33 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
               error={errors.parentPhone?.message}
             />
             <div className="md:col-span-2">
-              <Input 
-                label="Home Address" 
+              <Input
+                label="Home Address"
                 {...register('address')}
               />
             </div>
-            <div className="md:col-span-2">
-              <Select 
-                label="Residence Type" 
-                {...register('residenceType')}
+            <Select
+              label="Residence Type"
+              {...register('residenceType')}
+              options={[
+                { value: 'Day Scholar', label: 'Day Scholar' },
+                { value: 'Hosteller', label: 'Hosteller' }
+              ]}
+            />
+            {residenceType !== 'Hosteller' && (
+              <Select
+                label="Use College Bus?"
+                {...register('transportRequired')}
                 options={[
-                  { value: 'Day Scholar', label: 'Day Scholar' },
-                  { value: 'Hosteller', label: 'Hosteller' }
+                  { value: 'No', label: 'No' },
+                  { value: 'Yes', label: 'Yes' }
                 ]}
               />
-            </div>
+            )}
           </div>
         </div>
-                {/* Custom Fields (Module Builder) */}
+
+        {/* Custom Fields (Module Builder) */}
         <CustomFieldsSection model="Student" register={register} errors={errors} />
 
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-white/10 mt-6">

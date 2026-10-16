@@ -254,10 +254,12 @@ export const useStudentTransport = () => {
   return useQuery({
     queryKey: ['student', 'transport'],
     queryFn: async () => {
-      const response = await api.get('/student/transport');
+      const response = await api.get('/transport/my');
       return response;
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 };
 

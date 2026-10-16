@@ -110,6 +110,7 @@ export const getStudents = async (req, res) => {
       emergencyContact: s.emergencyContact,
       status: (s.user?.accountStatus || 'active').toLowerCase(),
       residenceType: s.residenceType || 'Day Scholar',
+      transportRequired: s.transportRequired === 'Yes' ? 'Yes' : 'No',
       hostelBlock: s.hostelBlock?.name || null,
       hostelBlockId: s.hostelBlockId,
       hostelRoom: s.hostelRoom,
@@ -263,6 +264,7 @@ export const getStudentById = async (req, res) => {
       emergencyContact: student.emergencyContact,
       status: student.user?.accountStatus || 'active',
       residenceType: student.residenceType || 'Day Scholar',
+      transportRequired: student.transportRequired === 'Yes' ? 'Yes' : 'No',
       hostelBlock: student.hostelBlock?.name || null,
       hostelBlockId: student.hostelBlockId,
       hostelRoom: student.hostelRoom,
@@ -460,6 +462,10 @@ export const createStudent = async (req, res) => {
           residenceType: payload.residenceType || 'Day Scholar',
           ...(payload.hostelBlockId ? { hostelBlockId: payload.hostelBlockId } : {}),
           ...(payload.hostelRoom ? { hostelRoom: payload.hostelRoom } : {}),
+          transportRequired:
+            (payload.residenceType || 'Day Scholar') === 'Hosteller'
+              ? 'No'
+              : (payload.transportRequired || 'No'),
           customFields
         },
         include: {
@@ -566,6 +572,14 @@ export const updateStudent = async (req, res) => {
     }
   }
 
+  const effectiveResidence = payload.residenceType ?? student.residenceType;
+  let transportRequired;
+  if (effectiveResidence === 'Hosteller') {
+    transportRequired = 'No';
+  } else if (payload.transportRequired !== undefined) {
+    transportRequired = payload.transportRequired || 'No';
+  }
+
   let updated;
   try {
     updated = await prisma.$transaction(async (tx) => {
@@ -630,6 +644,7 @@ export const updateStudent = async (req, res) => {
           ...(payload.address !== undefined ? { address: payload.address || null } : {}),
           ...(payload.emergencyContact !== undefined ? { emergencyContact: payload.emergencyContact || null } : {}),
           ...(payload.residenceType !== undefined ? { residenceType: payload.residenceType } : {}),
+          ...(transportRequired !== undefined ? { transportRequired } : {}),
           ...(payload.hostelBlockId !== undefined ? { hostelBlockId: payload.hostelBlockId || null } : {}),
           ...(payload.hostelRoom !== undefined ? { hostelRoom: payload.hostelRoom || null } : {}),
           ...(deptId !== undefined ? { departmentId: deptId } : {}),
@@ -645,6 +660,9 @@ export const updateStudent = async (req, res) => {
         }
       });
 
+      if (transportRequired === 'No') {
+        await tx.studentTransportAllocation.deleteMany({ where: { studentId: id, collegeId: student.collegeId } });
+      }
       return s;
     });
   } catch (error) {
@@ -680,6 +698,7 @@ export const deleteStudent = async (req, res) => {
   }
 
   await prisma.$transaction(async (tx) => {
+    await tx.studentTransportAllocation.deleteMany({ where: { studentId: student.id } });
     await deleteStudentProfile(tx, student);
   }, { maxWait: 15000, timeout: 30000 });
 
@@ -916,6 +935,10 @@ export const bulkImportStudents = async (req, res) => {
       const bloodGroup = getVal(row, 'Blood_Group', 'Blood Group', 'bloodGroup');
       const batchYear = getVal(row, 'Year_of_Study*', 'Year_of_Study', 'Year of Study', 'Batch_Year', 'Batch Year', 'batchYear', 'yearOfStudy') || `${new Date().getFullYear()}`;
       const residenceType = getVal(row, 'Residence_Type', 'Residence Type', 'residenceType', 'Hostel_Required').toLowerCase().includes('hostel') || getVal(row, 'Hostel_Required').toLowerCase() === 'yes' ? 'Hosteller' : 'Day Scholar';
+      const rawTransport = getVal(row, 'Transport_Required', 'Transport Required', 'Use_College_Bus', 'College_Bus', 'transportRequired');
+      let transportRequired = null; 
+      if (residenceType === 'Hosteller') transportRequired = 'No';
+      else if (rawTransport) transportRequired = /^(yes|y|true|1)$/i.test(rawTransport) ? 'Yes' : 'No';
 
       processedRows.push({
         index,
@@ -939,6 +962,7 @@ export const bulkImportStudents = async (req, res) => {
         bloodGroup,
         batchYear,
         residenceType,
+        transportRequired,
         rollNo,
         registerNumber,
         deptId,
@@ -1002,7 +1026,7 @@ export const bulkImportStudents = async (req, res) => {
     const batch = deduplicatedRows.slice(i, i + BATCH_SIZE);
 
     await Promise.all(batch.map(async (row) => {
-      const { index, admissionNo, studentName, fName, lName, cleanEmail, dobFormatted, dateOfAdmission, studentMobile, parentMobile, parentName, motherName, gender, address, city, district, state, pincode, bloodGroup, batchYear, residenceType, rollNo, registerNumber, deptId, courseId, sectionId } = row;
+      const { index, admissionNo, studentName, fName, lName, cleanEmail, dobFormatted, dateOfAdmission, studentMobile, parentMobile, parentName, motherName, gender, address, city, district, state, pincode, bloodGroup, batchYear, residenceType, transportRequired, rollNo, registerNumber, deptId, courseId, sectionId } = row;
 
       try {
         await prisma.$transaction(async (tx) => {
@@ -1124,6 +1148,7 @@ export const bulkImportStudents = async (req, res) => {
             bloodGroup: bloodGroup || null,
             emergencyContact: parentMobile || studentMobile || '',
             residenceType,
+            ...(transportRequired ? { transportRequired } : {}),
             fatherName: parentName || null,
             motherName: motherName || null,
             parentMobile: parentMobile || null,
@@ -1152,6 +1177,10 @@ export const bulkImportStudents = async (req, res) => {
               }
             });
           }
+          if (existingStudent && transportRequired === 'No') {
+            await tx.studentTransportAllocation.deleteMany({ where: { studentId: existingStudent.id, collegeId } });
+          }
+
         }, { maxWait: 15000, timeout: 30000 });
 
         results.successful++;
