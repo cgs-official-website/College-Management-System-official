@@ -54,6 +54,7 @@ export const createStudentSchema = z.object({
   dob: z.string().nullish(),
   dateOfBirth: z.string().nullish(),
   residenceType: z.string().nullish(),
+  transportRequired: z.enum(['Yes', 'No']).nullish(),
   hostelRoom: z.string().nullish(),
   collegeId: z.string().nullish(),
   customFields: z.record(z.any()).nullish(),

@@ -79,13 +79,16 @@ export const useStudentLeaveRequests = () => {
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: ['student', 'leave-requests'],
-    queryFn: async () => {
-      const response = await api.get('/student/leave-requests');
-      return response;
-    },
-    staleTime: 2 * 60 * 1000,
-  });
+  queryKey: ['student', 'leave-requests'],
+  queryFn: async () => {
+    const response = await api.get('/student/leave-requests');
+    return response;
+  },
+  staleTime: 0,
+  refetchOnMount: 'always',
+  refetchOnWindowFocus: true,
+  refetchInterval: 15000,
+});
 
   const createLeaveMutation = useMutation({
     mutationFn: async (leaveData) => {
@@ -254,10 +257,12 @@ export const useStudentTransport = () => {
   return useQuery({
     queryKey: ['student', 'transport'],
     queryFn: async () => {
-      const response = await api.get('/student/transport');
+      const response = await api.get('/transport/my');
       return response;
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 };
 

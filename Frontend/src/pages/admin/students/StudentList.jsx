@@ -120,6 +120,13 @@ const STUDENT_IMPORT_FIELDS = [
     example: 'Day Scholar'
   },
   {
+    name: 'Transport_Required',
+    required: false,
+    type: 'String',
+    description: 'Yes if the student uses the college bus (Day Scholars only)',
+    example: 'No'
+  },
+  {
     name: 'Blood_Group',
     required: false,
     type: 'String',
