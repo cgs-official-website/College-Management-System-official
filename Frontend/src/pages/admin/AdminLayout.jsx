@@ -172,7 +172,7 @@ const AdminLayout = () => {
     { name: 'Academic Structure', path: '/admin/academic-structure', icon: BookOpen, moduleKey: 'academic' },
     { name: 'Assignments', path: '/admin/assignments', icon: FileEdit, moduleKey: 'academic' },
     { name: 'Timetable', path: '/admin/timetable', icon: Calendar, moduleKey: 'timetable' },
-    { name: 'Calendar', path: '/admin/calendar', icon: CalendarDays, moduleKey: null, adminOrHodOnly: true },
+    { name: 'Calendar', path: '/admin/calendar', icon: CalendarDays, moduleKey: null },
     { name: 'Attendance', path: '/admin/attendance', icon: Clock, moduleKey: 'attendance' },
     { name: 'Leave Requests', path: '/admin/leave-requests', icon: CalendarOff, moduleKey: isAdmin ? 'attendance' : null, leaveReviewerOnly: true },
     { name: 'Apply for Leave', path: '/admin/my-leaves', icon: CalendarClock, moduleKey: null, staffOnly: true },

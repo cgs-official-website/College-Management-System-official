@@ -67,7 +67,7 @@ export default function Reports() {
       'Email': s.email || 'N/A',
       'Phone': s.phone || 'N/A',
       'Status': s.status || 'Active',
-      'Join Date': s.joinDate || 'N/A'
+      'Join Date': (s.joiningDate || s.joinDate || s.createdAt) ? new Date(s.joiningDate || s.joinDate || s.createdAt).toLocaleDateString() : 'N/A'
     }));
   }, [staff]);
 

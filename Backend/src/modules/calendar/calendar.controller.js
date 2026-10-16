@@ -1,4 +1,5 @@
-import { prisma } from '../../lib/prisma.js';
+import crypto from 'crypto';
+import { prisma, pool } from '../../lib/prisma.js';
 
 let tableInitialized = false;
 
@@ -6,12 +7,24 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 /**
  * Automatically ensures the CalendarEvent table exists in PostgreSQL.
- * Executes DDL statements separately to prevent multi-statement prepared query errors in Postgres.
+ * Uses direct pool queries when available with multi-statement safety, pgcrypto support, and DDL fallbacks.
  */
-async function ensureCalendarTable() {
+export async function ensureCalendarTable() {
   if (tableInitialized) return;
   try {
-    await prisma.$executeRawUnsafe(`
+    // 1. Enable pgcrypto extension for gen_random_uuid() if permissions permit
+    try {
+      if (pool) {
+        await pool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto;');
+      } else {
+        await prisma.$executeRawUnsafe('CREATE EXTENSION IF NOT EXISTS pgcrypto;');
+      }
+    } catch (_) {
+      // Ignore if user lacks superuser permissions or extension already active
+    }
+
+    // 2. Primary DDL: Create CalendarEvent table with UUID default
+    const createTableDDL = `
       CREATE TABLE IF NOT EXISTS "CalendarEvent" (
         "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         "collegeId" UUID NOT NULL,
@@ -30,33 +43,174 @@ async function ensureCalendarTable() {
         "color" VARCHAR(50),
         "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      )
-    `);
+      );
+    `;
+
+    if (pool) {
+      await pool.query(createTableDDL);
+    } else {
+      await prisma.$executeRawUnsafe(createTableDDL);
+    }
 
     try {
-      await prisma.$executeRawUnsafe(`
-        CREATE INDEX IF NOT EXISTS "idx_cal_event_college" ON "CalendarEvent"("collegeId")
-      `);
-      await prisma.$executeRawUnsafe(`
-        CREATE INDEX IF NOT EXISTS "idx_cal_event_date" ON "CalendarEvent"("startDate")
-      `);
+      if (pool) {
+        await pool.query('CREATE INDEX IF NOT EXISTS "idx_cal_event_college" ON "CalendarEvent"("collegeId");');
+        await pool.query('CREATE INDEX IF NOT EXISTS "idx_cal_event_date" ON "CalendarEvent"("startDate");');
+      } else {
+        await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "idx_cal_event_college" ON "CalendarEvent"("collegeId");');
+        await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "idx_cal_event_date" ON "CalendarEvent"("startDate");');
+      }
     } catch (_) {
       // Index creation can be safely skipped if already created or on concurrency
     }
 
     tableInitialized = true;
+    console.log('[Calendar] ✅ CalendarEvent table verified/created successfully');
   } catch (err) {
-    console.error('[Calendar] Error ensuring CalendarEvent table:', err.message);
+    console.warn('[Calendar] Primary table check failed, applying fallback DDL:', err.message);
+    try {
+      // Fallback DDL without gen_random_uuid() in case DB lacks pgcrypto extension
+      const fallbackDDL = `
+        CREATE TABLE IF NOT EXISTS "CalendarEvent" (
+          "id" UUID PRIMARY KEY,
+          "collegeId" UUID NOT NULL,
+          "title" VARCHAR(255) NOT NULL,
+          "description" TEXT,
+          "type" VARCHAR(50) NOT NULL DEFAULT 'event',
+          "startDate" TIMESTAMP WITH TIME ZONE NOT NULL,
+          "endDate" TIMESTAMP WITH TIME ZONE,
+          "allDay" BOOLEAN DEFAULT false,
+          "location" VARCHAR(255),
+          "targetAudience" VARCHAR(50) DEFAULT 'all',
+          "departmentId" UUID,
+          "createdById" UUID,
+          "createdByName" VARCHAR(255),
+          "createdByRole" VARCHAR(50),
+          "color" VARCHAR(50),
+          "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `;
+      if (pool) {
+        await pool.query(fallbackDDL);
+      } else {
+        await prisma.$executeRawUnsafe(fallbackDDL);
+      }
+      tableInitialized = true;
+      console.log('[Calendar] ✅ CalendarEvent table created via fallback DDL');
+    } catch (fallbackErr) {
+      console.error('[Calendar] Critical error creating CalendarEvent table:', fallbackErr.message);
+    }
   }
 }
 
 /**
  * Role check helper: Only ADMIN and HOD can access / manage calendar.
  */
-export function canManageCalendar(user) {
+export function canManageCalendar(user, isUserHod = false) {
   if (!user) return false;
   const role = String(user.role || '').toLowerCase();
-  return role === 'admin' || role === 'hod' || role === 'superadmin' || Boolean(user.isHod);
+  return role === 'admin' || role === 'hod' || role === 'superadmin' || Boolean(user.isHod) || Boolean(isUserHod);
+}
+
+/**
+ * Resolves user calendar context including role, department, HOD status, and management permissions.
+ */
+export async function resolveUserCalendarContext(user, collegeId) {
+  if (!user || !user.id || !UUID_REGEX.test(String(user.id))) {
+    return {
+      userId: null,
+      role: 'guest',
+      departmentId: null,
+      departmentName: null,
+      isHod: false,
+      canManage: false
+    };
+  }
+
+  const role = String(user.role || '').toLowerCase();
+  let isHod = role === 'hod' || Boolean(user.isHod);
+  let departmentId = user.departmentId || null;
+  let departmentName = null;
+
+  if (role === 'admin' || role === 'superadmin') {
+    return {
+      userId: user.id,
+      role,
+      departmentId: null,
+      departmentName: null,
+      isHod: false,
+      canManage: true
+    };
+  }
+
+  // 1. Check if user is HOD of any department in this college
+  try {
+    const hodDept = await prisma.department.findFirst({
+      where: {
+        collegeId,
+        hodUserId: user.id
+      },
+      select: { id: true, name: true }
+    });
+
+    if (hodDept) {
+      isHod = true;
+      if (!departmentId) departmentId = hodDept.id;
+      departmentName = hodDept.name;
+    }
+  } catch (err) {
+    console.warn('[Calendar] Error checking HOD department:', err.message);
+  }
+
+  // 2. If student, find student department
+  if (!departmentId && role === 'student') {
+    try {
+      const student = await prisma.student.findUnique({
+        where: { userId: user.id },
+        select: {
+          departmentId: true,
+          department: { select: { id: true, name: true } }
+        }
+      });
+      if (student?.departmentId) {
+        departmentId = student.departmentId;
+        departmentName = student.department?.name || null;
+      }
+    } catch (err) {
+      console.warn('[Calendar] Error fetching student department:', err.message);
+    }
+  }
+
+  // 3. If teacher or staff, find teacher profile department
+  if (!departmentId && (role === 'teacher' || role === 'faculty' || role === 'staff')) {
+    try {
+      const teacher = await prisma.teacher.findUnique({
+        where: { userId: user.id },
+        select: {
+          departmentId: true,
+          department: { select: { id: true, name: true } }
+        }
+      });
+      if (teacher?.departmentId) {
+        departmentId = teacher.departmentId;
+        departmentName = teacher.department?.name || null;
+      }
+    } catch (err) {
+      console.warn('[Calendar] Error fetching teacher/staff department:', err.message);
+    }
+  }
+
+  const canManage = isHod || role === 'admin' || role === 'superadmin';
+
+  return {
+    userId: user.id,
+    role,
+    departmentId,
+    departmentName,
+    isHod,
+    canManage
+  };
 }
 
 /**
@@ -180,10 +334,13 @@ export const getCalendarEvents = async (req, res) => {
       success: true,
       count: 0,
       data: [],
-      canManage: canManageCalendar(req.user)
+      canManage: false,
+      userRole: null,
+      userDepartment: null
     });
   }
 
+  const userContext = await resolveUserCalendarContext(req.user, collegeId);
   const { month, year, startDate, endDate, type, search, targetAudience } = req.query;
 
   try {
@@ -191,6 +348,77 @@ export const getCalendarEvents = async (req, res) => {
     let query = `SELECT * FROM "CalendarEvent" WHERE "collegeId" = $1::uuid`;
     const params = [collegeId];
     let paramIndex = 2;
+
+    // Visibility restriction for regular users (Teachers, Students, Staff)
+    // Regular users have View-Only access and can ONLY see events targeted to:
+    // 1) Everyone
+    // 2) Their specific role
+    // 3) Their department
+    if (!userContext.canManage) {
+      const role = String(userContext.role || '').toLowerCase();
+      const userDeptId = userContext.departmentId;
+      const isStudent = role === 'student';
+      const isTeacher = role === 'teacher' || role === 'faculty';
+      const isStaff = role === 'staff';
+
+      const visConditions = [
+        `(LOWER("targetAudience") = 'everyone' OR LOWER("targetAudience") = 'all' OR "targetAudience" IS NULL OR "targetAudience" = '')`
+      ];
+
+      if (isStudent) {
+        if (userDeptId && UUID_REGEX.test(userDeptId)) {
+          visConditions.push(`(LOWER("targetAudience") IN ('student', 'students') AND ("departmentId" IS NULL OR "departmentId" = $${paramIndex}::uuid))`);
+          params.push(userDeptId);
+          paramIndex++;
+        } else {
+          visConditions.push(`(LOWER("targetAudience") IN ('student', 'students') AND "departmentId" IS NULL)`);
+        }
+      } else if (isTeacher) {
+        if (userDeptId && UUID_REGEX.test(userDeptId)) {
+          visConditions.push(`(LOWER("targetAudience") IN ('teacher', 'teachers', 'faculty') AND ("departmentId" IS NULL OR "departmentId" = $${paramIndex}::uuid))`);
+          params.push(userDeptId);
+          paramIndex++;
+        } else {
+          visConditions.push(`(LOWER("targetAudience") IN ('teacher', 'teachers', 'faculty') AND "departmentId" IS NULL)`);
+        }
+      } else if (isStaff) {
+        if (userDeptId && UUID_REGEX.test(userDeptId)) {
+          visConditions.push(`(LOWER("targetAudience") = 'staff' AND ("departmentId" IS NULL OR "departmentId" = $${paramIndex}::uuid))`);
+          params.push(userDeptId);
+          paramIndex++;
+        } else {
+          visConditions.push(`(LOWER("targetAudience") = 'staff' AND "departmentId" IS NULL)`);
+        }
+      } else if (role) {
+        if (userDeptId && UUID_REGEX.test(userDeptId)) {
+          visConditions.push(`(LOWER("targetAudience") = $${paramIndex} AND ("departmentId" IS NULL OR "departmentId" = $${paramIndex + 1}::uuid))`);
+          params.push(role);
+          params.push(userDeptId);
+          paramIndex += 2;
+        } else {
+          visConditions.push(`(LOWER("targetAudience") = $${paramIndex} AND "departmentId" IS NULL)`);
+          params.push(role);
+          paramIndex++;
+        }
+      }
+
+      // Department-specific events
+      if (userDeptId && UUID_REGEX.test(userDeptId)) {
+        visConditions.push(`"departmentId" = $${paramIndex}::uuid`);
+        params.push(userDeptId);
+        paramIndex++;
+
+        visConditions.push(`LOWER("targetAudience") = $${paramIndex}`);
+        params.push(`dept:${userDeptId.toLowerCase()}`);
+        paramIndex++;
+
+        visConditions.push(`LOWER("targetAudience") = $${paramIndex}`);
+        params.push(`department:${userDeptId.toLowerCase()}`);
+        paramIndex++;
+      }
+
+      query += ` AND (${visConditions.join(' OR ')})`;
+    }
 
     if (type && type !== 'all') {
       query += ` AND LOWER("type") = $${paramIndex}`;
@@ -202,12 +430,21 @@ export const getCalendarEvents = async (req, res) => {
       const audLower = targetAudience.toLowerCase().trim();
       if (audLower === 'everyone') {
         query += ` AND (LOWER("targetAudience") = 'everyone' OR LOWER("targetAudience") = 'all')`;
+      } else if (audLower.startsWith('dept:')) {
+        const dId = audLower.split(':')[1];
+        if (dId && UUID_REGEX.test(dId)) {
+          query += ` AND ("departmentId" = $${paramIndex}::uuid OR LOWER("targetAudience") = $${paramIndex + 1})`;
+          params.push(dId, audLower);
+          paramIndex += 2;
+        }
       } else {
         query += ` AND (LOWER("targetAudience") = $${paramIndex} OR LOWER("targetAudience") = 'everyone' OR LOWER("targetAudience") = 'all'`;
         if (audLower === 'teachers' || audLower === 'teacher') {
           query += ` OR LOWER("targetAudience") = 'teacher' OR LOWER("targetAudience") = 'teachers' OR LOWER("targetAudience") = 'faculty'`;
         } else if (audLower === 'students' || audLower === 'student') {
           query += ` OR LOWER("targetAudience") = 'student' OR LOWER("targetAudience") = 'students'`;
+        } else if (audLower === 'staff') {
+          query += ` OR LOWER("targetAudience") = 'staff'`;
         } else if (audLower === 'admin' || audLower === 'admins') {
           query += ` OR LOWER("targetAudience") = 'admin' OR LOWER("targetAudience") = 'admins' OR LOWER("targetAudience") = 'superadmin'`;
         }
@@ -239,8 +476,12 @@ export const getCalendarEvents = async (req, res) => {
 
     query += ` ORDER BY "startDate" ASC`;
 
-    const customEvents = await prisma.$queryRawUnsafe(query, ...params).catch((e) => {
+    const customEvents = await prisma.$queryRawUnsafe(query, ...params).catch(async (e) => {
       console.warn('[Calendar] Query fallback:', e.message);
+      if (e.message && (e.message.includes('42P01') || e.message.includes('CalendarEvent'))) {
+        tableInitialized = false;
+        await ensureCalendarTable().catch(() => {});
+      }
       return [];
     });
 
@@ -248,11 +489,29 @@ export const getCalendarEvents = async (req, res) => {
     let examEvents = [];
     if (!type || type === 'all' || type.toLowerCase() === 'exam') {
       try {
+        const examWhere = { collegeId };
+
+        // For regular users, exams are filtered by department/course
+        if (!userContext.canManage) {
+          if (userContext.role === 'staff') {
+            if (userContext.departmentId) {
+              examWhere.course = { departmentId: userContext.departmentId };
+            } else {
+              examWhere.id = '__none__'; // Non-teaching staff don't see exams unless in department
+            }
+          } else if (userContext.departmentId) {
+            examWhere.OR = [
+              { course: { departmentId: userContext.departmentId } },
+              { course: { departmentId: null } }
+            ];
+          }
+        }
+
         const exams = await prisma.exam.findMany({
-          where: { collegeId },
+          where: examWhere,
           include: {
             course: {
-              select: { name: true, code: true }
+              select: { name: true, code: true, departmentId: true }
             }
           },
           orderBy: { date: 'asc' }
@@ -262,6 +521,7 @@ export const getCalendarEvents = async (req, res) => {
           id: `exam-${exam.id}`,
           originalExamId: exam.id,
           collegeId: exam.collegeId,
+          departmentId: exam.course?.departmentId || null,
           title: `Exam: ${exam.name}`,
           description: exam.course?.name
             ? `Course: ${exam.course.name} (${exam.course.code || 'N/A'})\nMax Marks: ${exam.maxMarks}`
@@ -293,7 +553,9 @@ export const getCalendarEvents = async (req, res) => {
       success: true,
       count: allEvents.length,
       data: allEvents,
-      canManage: canManageCalendar(req.user)
+      canManage: userContext.canManage,
+      userRole: userContext.role,
+      userDepartment: userContext.departmentName
     });
   } catch (err) {
     console.error('[Calendar] Error fetching events:', err);
@@ -301,7 +563,9 @@ export const getCalendarEvents = async (req, res) => {
       success: true,
       count: 0,
       data: [],
-      canManage: canManageCalendar(req.user)
+      canManage: userContext.canManage,
+      userRole: userContext.role,
+      userDepartment: userContext.departmentName
     });
   }
 };
@@ -314,6 +578,8 @@ export const getCalendarEventById = async (req, res) => {
   const { id } = req.params;
   const collegeId = req.tenant?.collegeId || req.user?.collegeId || req.query.collegeId;
 
+  const userContext = await resolveUserCalendarContext(req.user, collegeId);
+
   try {
     if (id.startsWith('exam-')) {
       const realId = id.replace('exam-', '');
@@ -322,6 +588,18 @@ export const getCalendarEventById = async (req, res) => {
         include: { course: true }
       });
       if (!exam) return res.status(404).json({ success: false, error: 'Exam not found' });
+
+      // If regular user, verify visibility
+      if (!userContext.canManage) {
+        if (userContext.role === 'staff') {
+          if (!userContext.departmentId || exam.course?.departmentId !== userContext.departmentId) {
+            return res.status(403).json({ success: false, error: 'Forbidden: You do not have permission to view this exam.' });
+          }
+        } else if (userContext.departmentId && exam.course?.departmentId && exam.course.departmentId !== userContext.departmentId) {
+          return res.status(403).json({ success: false, error: 'Forbidden: You do not have permission to view this exam.' });
+        }
+      }
+
       return res.json({
         success: true,
         data: {
@@ -352,28 +630,63 @@ export const getCalendarEventById = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Calendar event not found' });
     }
 
-    return res.json({ success: true, data: rows[0] });
+    const event = rows[0];
+
+    // Regular users visibility enforcement
+    if (!userContext.canManage) {
+      const aud = String(event.targetAudience || 'everyone').toLowerCase().trim();
+      const role = String(userContext.role || '').toLowerCase();
+      const userDeptId = userContext.departmentId;
+
+      const isEveryone = aud === 'everyone' || aud === 'all' || !event.targetAudience;
+      const isMyRole = (role === 'student' && (aud === 'student' || aud === 'students')) ||
+                       ((role === 'teacher' || role === 'faculty') && (aud === 'teacher' || aud === 'teachers' || aud === 'faculty')) ||
+                       (role === 'staff' && aud === 'staff') ||
+                       (aud === role);
+
+      const isMyDept = userDeptId && (
+        event.departmentId === userDeptId ||
+        aud === `dept:${userDeptId.toLowerCase()}` ||
+        aud === `department:${userDeptId.toLowerCase()}`
+      );
+
+      const hasDeptConflict = event.departmentId && userDeptId && event.departmentId !== userDeptId;
+
+      if (!isEveryone && !isMyDept && (!isMyRole || hasDeptConflict)) {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden: You do not have permission to view this event.'
+        });
+      }
+    }
+
+    return res.json({ success: true, data: event });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
 };
 
+
+/**
+ * POST /api/v1/calendar/events
+ */
 /**
  * POST /api/v1/calendar/events
  */
 export const createCalendarEvent = async (req, res) => {
-  if (!canManageCalendar(req.user)) {
-    return res.status(403).json({
-      success: false,
-      error: 'Forbidden: Only ADMIN and HOD can create calendar events or exams.'
-    });
-  }
-
   await ensureCalendarTable();
 
   const collegeId = req.tenant?.collegeId || req.body.collegeId || req.user?.collegeId;
   if (!collegeId || !UUID_REGEX.test(String(collegeId))) {
     return res.status(400).json({ success: false, error: 'Valid College ID is required' });
+  }
+
+  const userContext = await resolveUserCalendarContext(req.user, collegeId);
+  if (!userContext.canManage) {
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden: Only College Admins and HODs can schedule calendar events or exams. Regular users have View-Only access.'
+    });
   }
 
   const {
@@ -426,22 +739,29 @@ export const createCalendarEvent = async (req, res) => {
       const parsed = targetAudience.split(':')[1];
       if (parsed && UUID_REGEX.test(parsed)) resolvedDeptId = parsed;
     }
+    if (!resolvedDeptId && userContext.isHod && userContext.departmentId) {
+      if (targetAudience === 'department' || targetAudience === 'dept') {
+        resolvedDeptId = userContext.departmentId;
+      }
+    }
 
-    const rows = await prisma.$queryRawUnsafe(
-      `
+    const eventId = crypto.randomUUID();
+    const insertSql = `
       INSERT INTO "CalendarEvent" (
-        "collegeId", "title", "description", "type",
+        "id", "collegeId", "title", "description", "type",
         "startDate", "endDate", "allDay", "location",
         "targetAudience", "departmentId", "createdById",
         "createdByName", "createdByRole", "color"
       ) VALUES (
-        $1::uuid, $2, $3, $4,
-        $5::timestamp, $6::timestamp, $7, $8,
-        $9, $10::uuid, $11::uuid,
-        $12, $13, $14
+        $1::uuid, $2::uuid, $3, $4, $5,
+        $6::timestamp, $7::timestamp, $8, $9,
+        $10, $11::uuid, $12::uuid,
+        $13, $14, $15
       )
       RETURNING *
-      `,
+    `;
+    const insertParams = [
+      eventId,
       collegeId,
       title.trim(),
       description.trim(),
@@ -453,12 +773,40 @@ export const createCalendarEvent = async (req, res) => {
       targetAudience,
       resolvedDeptId,
       req.user?.id && UUID_REGEX.test(req.user.id) ? req.user.id : null,
-      req.user?.name || req.user?.email || 'Admin',
-      req.user?.role || 'admin',
+      req.user?.name || req.user?.email || (userContext.isHod ? 'HOD' : 'Admin'),
+      req.user?.role || (userContext.isHod ? 'hod' : 'admin'),
       assignedColor
-    );
+    ];
 
-    const createdEvent = rows[0];
+    let rows;
+    try {
+      if (pool) {
+        const poolRes = await pool.query(insertSql, insertParams);
+        rows = poolRes.rows;
+      } else {
+        rows = await prisma.$queryRawUnsafe(insertSql, ...insertParams);
+      }
+    } catch (insertErr) {
+      // Auto-recover if table was missing (e.g. 42P01 relation "CalendarEvent" does not exist)
+      if (insertErr.message && (insertErr.message.includes('42P01') || insertErr.message.includes('CalendarEvent'))) {
+        console.warn('[Calendar] CalendarEvent table missing during insert, auto-creating table and retrying...');
+        tableInitialized = false;
+        await ensureCalendarTable();
+        if (pool) {
+          const poolRetry = await pool.query(insertSql, insertParams);
+          rows = poolRetry.rows;
+        } else {
+          rows = await prisma.$queryRawUnsafe(insertSql, ...insertParams);
+        }
+      } else {
+        throw insertErr;
+      }
+    }
+
+    const createdEvent = rows && rows[0] ? rows[0] : null;
+    if (!createdEvent) {
+      throw new Error('Failed to create calendar event record');
+    }
 
     // Send in-app notification to the assigned target role(s)
     sendCalendarNotification({
@@ -482,17 +830,18 @@ export const createCalendarEvent = async (req, res) => {
  * PUT /api/v1/calendar/events/:id
  */
 export const updateCalendarEvent = async (req, res) => {
-  if (!canManageCalendar(req.user)) {
-    return res.status(403).json({
-      success: false,
-      error: 'Forbidden: Only ADMIN and HOD can edit calendar events and exams.'
-    });
-  }
-
   await ensureCalendarTable();
 
   const { id } = req.params;
   const collegeId = req.tenant?.collegeId || req.body.collegeId || req.user?.collegeId;
+
+  const userContext = await resolveUserCalendarContext(req.user, collegeId);
+  if (!userContext.canManage) {
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden: Only ADMIN and HOD can edit calendar events and exams. Regular users have View-Only access.'
+    });
+  }
 
   if (id.startsWith('exam-')) {
     const realId = id.replace('exam-', '');
@@ -617,17 +966,18 @@ export const updateCalendarEvent = async (req, res) => {
  * DELETE /api/v1/calendar/events/:id
  */
 export const deleteCalendarEvent = async (req, res) => {
-  if (!canManageCalendar(req.user)) {
-    return res.status(403).json({
-      success: false,
-      error: 'Forbidden: Only ADMIN and HOD can delete calendar events and exams.'
-    });
-  }
-
   await ensureCalendarTable();
 
   const { id } = req.params;
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+
+  const userContext = await resolveUserCalendarContext(req.user, collegeId);
+  if (!userContext.canManage) {
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden: Only ADMIN and HOD can delete calendar events and exams. Regular users have View-Only access.'
+    });
+  }
 
   try {
     if (id.startsWith('exam-')) {
@@ -673,35 +1023,125 @@ export const getCalendarSummary = async (req, res) => {
         todayCount: 0,
         upcomingExamsCount: 0,
         upcomingEvents: [],
-        canManage: canManageCalendar(req.user)
+        canManage: false
       }
     });
   }
+
+  const userContext = await resolveUserCalendarContext(req.user, collegeId);
 
   try {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
 
-    const todayEvents = await prisma.$queryRawUnsafe(
-      `SELECT COUNT(*)::int as count FROM "CalendarEvent" WHERE "collegeId" = $1::uuid AND "startDate" >= $2::timestamp AND "startDate" <= $3::timestamp`,
-      collegeId,
-      todayStart,
-      todayEnd
-    ).catch(() => [{ count: 0 }]);
+    let todayQuery = `SELECT COUNT(*)::int as count FROM "CalendarEvent" WHERE "collegeId" = $1::uuid AND "startDate" >= $2::timestamp AND "startDate" <= $3::timestamp`;
+    let upcomingQuery = `SELECT * FROM "CalendarEvent" WHERE "collegeId" = $1::uuid AND "startDate" >= $2::timestamp`;
+    const todayParams = [collegeId, todayStart, todayEnd];
+    const upcomingParams = [collegeId, todayStart];
 
-    const upcomingEvents = await prisma.$queryRawUnsafe(
-      `SELECT * FROM "CalendarEvent" WHERE "collegeId" = $1::uuid AND "startDate" >= $2::timestamp ORDER BY "startDate" ASC LIMIT 5`,
-      collegeId,
-      todayStart
-    ).catch(() => []);
+    if (!userContext.canManage) {
+      const role = String(userContext.role || '').toLowerCase();
+      const userDeptId = userContext.departmentId;
+      const isStudent = role === 'student';
+      const isTeacher = role === 'teacher' || role === 'faculty';
+      const isStaff = role === 'staff';
 
-    const examsCount = await prisma.exam.count({
-      where: {
-        collegeId,
-        date: { gte: new Date(todayStart) }
+      let pIdxToday = 4;
+      const visToday = [
+        `(LOWER("targetAudience") = 'everyone' OR LOWER("targetAudience") = 'all' OR "targetAudience" IS NULL OR "targetAudience" = '')`
+      ];
+
+      let pIdxUpcoming = 3;
+      const visUpcoming = [
+        `(LOWER("targetAudience") = 'everyone' OR LOWER("targetAudience") = 'all' OR "targetAudience" IS NULL OR "targetAudience" = '')`
+      ];
+
+      if (isStudent) {
+        if (userDeptId && UUID_REGEX.test(userDeptId)) {
+          visToday.push(`(LOWER("targetAudience") IN ('student', 'students') AND ("departmentId" IS NULL OR "departmentId" = $${pIdxToday}::uuid))`);
+          todayParams.push(userDeptId);
+          pIdxToday++;
+
+          visUpcoming.push(`(LOWER("targetAudience") IN ('student', 'students') AND ("departmentId" IS NULL OR "departmentId" = $${pIdxUpcoming}::uuid))`);
+          upcomingParams.push(userDeptId);
+          pIdxUpcoming++;
+        } else {
+          visToday.push(`(LOWER("targetAudience") IN ('student', 'students') AND "departmentId" IS NULL)`);
+          visUpcoming.push(`(LOWER("targetAudience") IN ('student', 'students') AND "departmentId" IS NULL)`);
+        }
+      } else if (isTeacher) {
+        if (userDeptId && UUID_REGEX.test(userDeptId)) {
+          visToday.push(`(LOWER("targetAudience") IN ('teacher', 'teachers', 'faculty') AND ("departmentId" IS NULL OR "departmentId" = $${pIdxToday}::uuid))`);
+          todayParams.push(userDeptId);
+          pIdxToday++;
+
+          visUpcoming.push(`(LOWER("targetAudience") IN ('teacher', 'teachers', 'faculty') AND ("departmentId" IS NULL OR "departmentId" = $${pIdxUpcoming}::uuid))`);
+          upcomingParams.push(userDeptId);
+          pIdxUpcoming++;
+        } else {
+          visToday.push(`(LOWER("targetAudience") IN ('teacher', 'teachers', 'faculty') AND "departmentId" IS NULL)`);
+          visUpcoming.push(`(LOWER("targetAudience") IN ('teacher', 'teachers', 'faculty') AND "departmentId" IS NULL)`);
+        }
+      } else if (isStaff) {
+        if (userDeptId && UUID_REGEX.test(userDeptId)) {
+          visToday.push(`(LOWER("targetAudience") = 'staff' AND ("departmentId" IS NULL OR "departmentId" = $${pIdxToday}::uuid))`);
+          todayParams.push(userDeptId);
+          pIdxToday++;
+
+          visUpcoming.push(`(LOWER("targetAudience") = 'staff' AND ("departmentId" IS NULL OR "departmentId" = $${pIdxUpcoming}::uuid))`);
+          upcomingParams.push(userDeptId);
+          pIdxUpcoming++;
+        } else {
+          visToday.push(`(LOWER("targetAudience") = 'staff' AND "departmentId" IS NULL)`);
+          visUpcoming.push(`(LOWER("targetAudience") = 'staff' AND "departmentId" IS NULL)`);
+        }
       }
-    }).catch(() => 0);
+
+      if (userDeptId && UUID_REGEX.test(userDeptId)) {
+        visToday.push(`"departmentId" = $${pIdxToday}::uuid`);
+        visToday.push(`LOWER("targetAudience") = $${pIdxToday + 1}`);
+        visToday.push(`LOWER("targetAudience") = $${pIdxToday + 2}`);
+        todayParams.push(userDeptId, `dept:${userDeptId.toLowerCase()}`, `department:${userDeptId.toLowerCase()}`);
+        pIdxToday += 3;
+
+        visUpcoming.push(`"departmentId" = $${pIdxUpcoming}::uuid`);
+        visUpcoming.push(`LOWER("targetAudience") = $${pIdxUpcoming + 1}`);
+        visUpcoming.push(`LOWER("targetAudience") = $${pIdxUpcoming + 2}`);
+        upcomingParams.push(userDeptId, `dept:${userDeptId.toLowerCase()}`, `department:${userDeptId.toLowerCase()}`);
+        pIdxUpcoming += 3;
+      }
+
+      todayQuery += ` AND (${visToday.join(' OR ')})`;
+      upcomingQuery += ` AND (${visUpcoming.join(' OR ')})`;
+    }
+
+    upcomingQuery += ` ORDER BY "startDate" ASC LIMIT 5`;
+
+    const todayEvents = await prisma.$queryRawUnsafe(todayQuery, ...todayParams).catch(() => [{ count: 0 }]);
+    const upcomingEvents = await prisma.$queryRawUnsafe(upcomingQuery, ...upcomingParams).catch(() => []);
+
+    const examWhere = {
+      collegeId,
+      date: { gte: new Date(todayStart) }
+    };
+
+    if (!userContext.canManage) {
+      if (userContext.role === 'staff') {
+        if (userContext.departmentId) {
+          examWhere.course = { departmentId: userContext.departmentId };
+        } else {
+          examWhere.id = '__none__';
+        }
+      } else if (userContext.departmentId) {
+        examWhere.OR = [
+          { course: { departmentId: userContext.departmentId } },
+          { course: { departmentId: null } }
+        ];
+      }
+    }
+
+    const examsCount = await prisma.exam.count({ where: examWhere }).catch(() => 0);
 
     return res.json({
       success: true,
@@ -709,7 +1149,7 @@ export const getCalendarSummary = async (req, res) => {
         todayCount: todayEvents[0]?.count || 0,
         upcomingExamsCount: examsCount,
         upcomingEvents,
-        canManage: canManageCalendar(req.user)
+        canManage: userContext.canManage
       }
     });
   } catch (err) {
@@ -719,7 +1159,7 @@ export const getCalendarSummary = async (req, res) => {
         todayCount: 0,
         upcomingExamsCount: 0,
         upcomingEvents: [],
-        canManage: canManageCalendar(req.user)
+        canManage: false
       }
     });
   }
@@ -731,18 +1171,19 @@ export const getCalendarSummary = async (req, res) => {
  * Rule: 'second_fourth' | 'all_holiday' | 'all_working'
  */
 export const configureSaturdayRule = async (req, res) => {
-  if (!canManageCalendar(req.user)) {
-    return res.status(403).json({
-      success: false,
-      error: 'Forbidden: Only ADMIN and HOD can configure Saturday holidays.'
-    });
-  }
-
   await ensureCalendarTable();
 
   const collegeId = req.tenant?.collegeId || req.body.collegeId || req.user?.collegeId;
   if (!collegeId || !UUID_REGEX.test(String(collegeId))) {
     return res.status(400).json({ success: false, error: 'Valid College ID is required' });
+  }
+
+  const userContext = await resolveUserCalendarContext(req.user, collegeId);
+  if (!userContext.canManage) {
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden: Only ADMIN and HOD can configure Saturday holidays. Regular users have View-Only access.'
+    });
   }
 
   const { year, month, rule } = req.body;
@@ -801,26 +1242,51 @@ export const configureSaturdayRule = async (req, res) => {
       if (isHoliday) {
         const sDate = new Date(Date.UTC(y, m - 1, sat.getDate(), 0, 0, 0)).toISOString();
         const eDate = new Date(Date.UTC(y, m - 1, sat.getDate(), 23, 59, 59, 999)).toISOString();
+        const satId = crypto.randomUUID();
 
-        const created = await prisma.$queryRawUnsafe(
-          `INSERT INTO "CalendarEvent" (
-            "collegeId", "title", "description", "type",
+        const satSql = `INSERT INTO "CalendarEvent" (
+            "id", "collegeId", "title", "description", "type",
             "startDate", "endDate", "allDay", "location",
             "targetAudience", "createdById", "createdByName", "createdByRole", "color"
           ) VALUES (
-            $1::uuid, $2, $3, 'holiday',
-            $4::timestamp, $5::timestamp, true, 'Campus-wide',
-            'all', $6::uuid, $7, $8, '#10b981'
-          ) RETURNING *`,
+            $1::uuid, $2::uuid, $3, $4, 'holiday',
+            $5::timestamp, $6::timestamp, true, 'Campus-wide',
+            'all', $7::uuid, $8, $9, '#10b981'
+          ) RETURNING *`;
+        const satParams = [
+          satId,
           collegeId,
           label,
           `Official Saturday holiday (${label}) configured by Admin/HOD.`,
           sDate,
           eDate,
           req.user?.id && UUID_REGEX.test(req.user.id) ? req.user.id : null,
-          req.user?.name || req.user?.email || 'Admin',
-          req.user?.role || 'admin'
-        );
+          req.user?.name || req.user?.email || (userContext.isHod ? 'HOD' : 'Admin'),
+          req.user?.role || (userContext.isHod ? 'hod' : 'admin')
+        ];
+
+        let created;
+        try {
+          if (pool) {
+            const pRes = await pool.query(satSql, satParams);
+            created = pRes.rows;
+          } else {
+            created = await prisma.$queryRawUnsafe(satSql, ...satParams);
+          }
+        } catch (satErr) {
+          if (satErr.message && (satErr.message.includes('42P01') || satErr.message.includes('CalendarEvent'))) {
+            tableInitialized = false;
+            await ensureCalendarTable();
+            if (pool) {
+              const pRes = await pool.query(satSql, satParams);
+              created = pRes.rows;
+            } else {
+              created = await prisma.$queryRawUnsafe(satSql, ...satParams);
+            }
+          } else {
+            throw satErr;
+          }
+        }
         if (created && created[0]) createdHolidays.push(created[0]);
       }
     }
@@ -835,4 +1301,5 @@ export const configureSaturdayRule = async (req, res) => {
     return res.status(500).json({ success: false, error: err.message });
   }
 };
+
 

@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Mail, Phone, MoreVertical, Edit, Trash2, Building, Shield, Eye, Link2, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Search, Filter, Mail, Phone, MoreVertical, Edit, Trash2, Building, Shield, Eye, Link2, Loader2, Calendar, X, RotateCcw } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useStaff } from '../../../hooks/useStaff';
+import { useDepartments } from '../../../hooks/useDepartments';
+import { useRoles } from '../../../hooks/useRoles';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { StaffFormModal } from './StaffFormModal';
@@ -11,13 +14,36 @@ import toast from 'react-hot-toast';
 import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
 import { api } from '../../../services/apiClient';
 
+const formatJoiningDate = (dateVal) => {
+  if (!dateVal) return 'N/A';
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return 'N/A';
+    return d.toLocaleDateString('en-US', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  } catch (_) {
+    return 'N/A';
+  }
+};
+
 export default function HRManagement() {
   const confirm = useConfirm();
   const { userData } = useAuth();
   const collegeId = userData?.collegeId || 'default_college_id';
   const { staff, isLoading, addStaff, updateStaff, deleteStaff, isAdding, isUpdating, isImporting, bulkImport } = useStaff(collegeId);
+  const { departments = [] } = useDepartments();
+  const { roles = [] } = useRoles();
   
   const [searchTerm, setSearchTerm] = useState('');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [selectedRole, setSelectedRole] = useState('all');
+  const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedStaffType, setSelectedStaffType] = useState('all');
+
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
   const [viewingStaff, setViewingStaff] = useState(null);
@@ -131,15 +157,98 @@ export default function HRManagement() {
     }
   };
 
-  const filteredStaff = staff.filter(member => {
-    const fullName = `${member.firstName || ''} ${member.lastName || ''} ${member.name || ''}`.toLowerCase();
-    const dept = (member.department || '').toLowerCase();
-    const email = (member.email || '').toLowerCase();
-    const tid = (member.teacherId || '').toLowerCase();
-    const search = (searchTerm || '').toLowerCase();
-    
-    return fullName.includes(search) || dept.includes(search) || email.includes(search) || tid.includes(search);
-  });
+  const departmentOptions = useMemo(() => {
+    const deptSet = new Set();
+    if (departments && Array.isArray(departments)) {
+      departments.forEach(d => {
+        if (d?.name) deptSet.add(d.name);
+      });
+    }
+    if (staff && Array.isArray(staff)) {
+      staff.forEach(s => {
+        if (s?.department && s.department !== 'N/A') deptSet.add(s.department);
+      });
+    }
+    return Array.from(deptSet).sort((a, b) => a.localeCompare(b));
+  }, [departments, staff]);
+
+  const customRoleOptions = useMemo(() => {
+    if (!roles || !Array.isArray(roles)) return [];
+    return roles.filter(r => !r.isSystemRole);
+  }, [roles]);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (selectedRole !== 'all') count++;
+    if (selectedDepartment !== 'all') count++;
+    if (selectedStatus !== 'all') count++;
+    if (selectedStaffType !== 'all') count++;
+    return count;
+  }, [selectedRole, selectedDepartment, selectedStatus, selectedStaffType]);
+
+  const handleResetFilters = () => {
+    setSelectedRole('all');
+    setSelectedDepartment('all');
+    setSelectedStatus('all');
+    setSelectedStaffType('all');
+  };
+
+  const filteredStaff = useMemo(() => {
+    return staff.filter(member => {
+      // 1. Search filter
+      const fullName = `${member.firstName || ''} ${member.lastName || ''} ${member.name || ''}`.toLowerCase();
+      const dept = (member.department || '').toLowerCase();
+      const email = (member.email || '').toLowerCase();
+      const tid = (member.teacherId || '').toLowerCase();
+      const desig = (member.designation || '').toLowerCase();
+      const search = (searchTerm || '').toLowerCase().trim();
+
+      const matchesSearch = !search || fullName.includes(search) || dept.includes(search) || email.includes(search) || tid.includes(search) || desig.includes(search);
+      if (!matchesSearch) return false;
+
+      // 2. Staff Role Filter
+      if (selectedRole !== 'all') {
+        const memberRole = String(member.role || '').toLowerCase();
+        const memberCustomRoleId = member.customRoleId;
+        const memberCustomRoleName = String(member.customRole || '').toLowerCase();
+        const isCustomRoleMatch = memberCustomRoleId === selectedRole || memberCustomRoleName === selectedRole.toLowerCase();
+        const isStandardRoleMatch = memberRole === selectedRole.toLowerCase();
+        if (!isStandardRoleMatch && !isCustomRoleMatch) return false;
+      }
+
+      // 3. Department Filter
+      if (selectedDepartment !== 'all') {
+        const memberDept = String(member.department || '').toLowerCase();
+        const targetDept = selectedDepartment.toLowerCase();
+        if (memberDept !== targetDept && member.departmentId !== selectedDepartment) {
+          return false;
+        }
+      }
+
+      // 4. Status Filter
+      if (selectedStatus !== 'all') {
+        const memberStatus = String(member.status || member.accountStatus || 'active').toLowerCase();
+        if (selectedStatus === 'active') {
+          if (memberStatus !== 'active') return false;
+        } else if (selectedStatus === 'pending_setup') {
+          if (memberStatus !== 'pending_setup' && memberStatus !== 'pending') return false;
+        } else if (selectedStatus === 'on_leave') {
+          if (memberStatus !== 'on_leave') return false;
+        } else if (selectedStatus === 'resigned') {
+          if (memberStatus !== 'resigned' && memberStatus !== 'inactive') return false;
+        }
+      }
+
+      // 5. Staff Category / Type Filter
+      if (selectedStaffType !== 'all') {
+        const isTeaching = ['teacher', 'hod', 'faculty'].includes(String(member.role || '').toLowerCase()) || member.staffType === 'teaching';
+        if (selectedStaffType === 'teaching' && !isTeaching) return false;
+        if (selectedStaffType === 'non-teaching' && isTeaching) return false;
+      }
+
+      return true;
+    });
+  }, [staff, searchTerm, selectedRole, selectedDepartment, selectedStatus, selectedStaffType]);
 
   const handleOpenAdd = () => {
     setEditingStaff(null);
@@ -209,24 +318,216 @@ export default function HRManagement() {
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between bg-white dark:bg-[#0A0F1C] p-4 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm">
-        <div className="relative flex-1 max-w-md">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-slate-400" />
+      {/* Toolbar & Filter Drawer */}
+      <div className="bg-white dark:bg-[#0A0F1C] rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm overflow-hidden transition-all">
+        <div className="p-4 flex flex-col sm:flex-row gap-4 justify-between items-stretch sm:items-center">
+          <div className="relative flex-1 max-w-md">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-slate-400" />
+            </div>
+            <Input 
+              placeholder="Search by name, email, department, or staff ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-10 mb-0"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
-          <Input 
-            placeholder="Search by name, email, or department..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 mb-0"
-          />
+
+          <div className="flex items-center gap-2">
+            {activeFilterCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleResetFilters}
+                className="text-xs text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400"
+              >
+                <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                Reset
+              </Button>
+            )}
+            <Button
+              variant={isFilterOpen || activeFilterCount > 0 ? "primary" : "secondary"}
+              onClick={() => setIsFilterOpen(prev => !prev)}
+              className={`px-4 relative transition-all ${
+                isFilterOpen || activeFilterCount > 0
+                  ? 'ring-2 ring-primary-500/20 shadow-sm'
+                  : ''
+              }`}
+            >
+              <Filter className="w-4 h-4 mr-2" />
+              <span>Filter</span>
+              {activeFilterCount > 0 && (
+                <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-white text-primary-600 dark:bg-black dark:text-primary-300 rounded-full">
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" className="px-4">
-            <Filter className="w-4 h-4 mr-2" /> Filter
-          </Button>
-        </div>
+
+        {/* Expandable Filter Options Drawer */}
+        <AnimatePresence>
+          {isFilterOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="border-t border-slate-100 dark:border-white/5 bg-slate-50/70 dark:bg-white/[0.02] p-4 sm:p-5"
+            >
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                    Filter Staff By:
+                  </span>
+                  <span className="text-xs font-medium text-slate-400 dark:text-slate-500">
+                    ({filteredStaff.length} of {staff.length} staff members shown)
+                  </span>
+                </div>
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={handleResetFilters}
+                    className="text-xs font-semibold text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-1"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Clear all filters
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* 1. Staff Role */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                    Staff Role
+                  </label>
+                  <select
+                    value={selectedRole}
+                    onChange={(e) => setSelectedRole(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all cursor-pointer"
+                  >
+                    <option value="all">All Roles</option>
+                    <optgroup label="Standard Roles">
+                      <option value="teacher">Teacher</option>
+                      <option value="hod">Head of Department (HOD)</option>
+                      <option value="faculty">Faculty</option>
+                      <option value="staff">Non-Teaching Staff</option>
+                      <option value="admin">Admin</option>
+                    </optgroup>
+                    {customRoleOptions.length > 0 && (
+                      <optgroup label="Custom Roles">
+                        {customRoleOptions.map((r) => (
+                          <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                </div>
+
+                {/* 2. Department */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                    Department
+                  </label>
+                  <select
+                    value={selectedDepartment}
+                    onChange={(e) => setSelectedDepartment(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all cursor-pointer"
+                  >
+                    <option value="all">All Departments</option>
+                    {departmentOptions.map((dept) => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 3. Status */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                    Status
+                  </label>
+                  <select
+                    value={selectedStatus}
+                    onChange={(e) => setSelectedStatus(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all cursor-pointer"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="pending_setup">Pending Setup</option>
+                    <option value="on_leave">On Leave</option>
+                    <option value="resigned">Resigned / Inactive</option>
+                  </select>
+                </div>
+
+                {/* 4. Staff Category */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                    Staff Category
+                  </label>
+                  <select
+                    value={selectedStaffType}
+                    onChange={(e) => setSelectedStaffType(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all cursor-pointer"
+                  >
+                    <option value="all">All Categories</option>
+                    <option value="teaching">Teaching Staff</option>
+                    <option value="non-teaching">Non-Teaching Staff</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Active Filter Chips */}
+              {activeFilterCount > 0 && (
+                <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-200/60 dark:border-white/5 flex-wrap">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">
+                    Active Filters:
+                  </span>
+                  {selectedRole !== 'all' && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-primary-50 text-primary-700 dark:bg-primary-500/20 dark:text-primary-300 border border-primary-200 dark:border-primary-500/30">
+                      Role: {customRoleOptions.find(r => r.id === selectedRole)?.name || selectedRole}
+                      <button onClick={() => setSelectedRole('all')} className="hover:text-primary-900 dark:hover:text-white">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )}
+                  {selectedDepartment !== 'all' && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30">
+                      Dept: {selectedDepartment}
+                      <button onClick={() => setSelectedDepartment('all')} className="hover:text-emerald-900 dark:hover:text-white">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )}
+                  {selectedStatus !== 'all' && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30">
+                      Status: {selectedStatus.replace('_', ' ')}
+                      <button onClick={() => setSelectedStatus('all')} className="hover:text-amber-900 dark:hover:text-white">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )}
+                  {selectedStaffType !== 'all' && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-purple-50 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30">
+                      Category: {selectedStaffType === 'teaching' ? 'Teaching' : 'Non-Teaching'}
+                      <button onClick={() => setSelectedStaffType('all')} className="hover:text-purple-900 dark:hover:text-white">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Data Table */}
@@ -257,8 +558,23 @@ export default function HRManagement() {
                 ))
               ) : filteredStaff.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="p-8 text-center text-slate-500 dark:text-slate-400">
-                    No staff members found matching your search.
+                  <td colSpan="6" className="p-12 text-center text-slate-500 dark:text-slate-400">
+                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
+                      <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center mb-3 text-slate-400">
+                        <Filter className="w-6 h-6" />
+                      </div>
+                      <p className="font-bold text-slate-800 dark:text-white text-base mb-1">No matching staff members found</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                        {activeFilterCount > 0 || searchTerm
+                          ? 'Try adjusting your search criteria or resetting your active filters.'
+                          : 'No staff members have been added to the directory yet.'}
+                      </p>
+                      {(activeFilterCount > 0 || searchTerm) && (
+                        <Button variant="secondary" size="sm" onClick={() => { handleResetFilters(); setSearchTerm(''); }}>
+                          <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reset Filters
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -271,7 +587,18 @@ export default function HRManagement() {
                         </div>
                         <div>
                           <p className="font-bold text-slate-900 dark:text-white text-sm">{member.firstName || member.name} {member.lastName || ''}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Joined: {member.joinDate || 'N/A'}</p>
+                          <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex-wrap">
+                            {member.designation && member.designation !== 'Teacher' && member.designation !== 'Staff' && (
+                              <>
+                                <span className="font-medium text-slate-700 dark:text-slate-300">{member.designation}</span>
+                                <span className="text-slate-300 dark:text-slate-600">•</span>
+                              </>
+                            )}
+                            <span className="inline-flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                              Joined: {formatJoiningDate(member.joiningDate || member.joinDate || member.createdAt)}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </td>

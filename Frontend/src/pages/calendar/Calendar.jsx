@@ -68,12 +68,12 @@ const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // Standard system roles shown in the Target Audience dropdown
 const SYSTEM_AUDIENCE_ROLES = [
-  { value: 'everyone', label: 'Everyone' },
-  { value: 'students', label: 'Students' },
-  { value: 'teachers', label: 'Teachers' },
-  { value: 'hod', label: 'HOD' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'staff', label: 'Staff' },
+  { value: 'everyone', label: 'Everyone (Students, Teachers, Staff)', group: 'broad' },
+  { value: 'students', label: 'Students Only', group: 'broad' },
+  { value: 'teachers', label: 'Teachers / Faculty Only', group: 'broad' },
+  { value: 'staff', label: 'Staff Only', group: 'broad' },
+  { value: 'hod', label: 'HODs Only', group: 'admin' },
+  { value: 'admin', label: 'Administrators Only', group: 'admin' },
 ];
 
 export default function Calendar() {
@@ -114,6 +114,7 @@ export default function Calendar() {
     isSubmitting,
     canManage,
     userRole,
+    userDepartment,
     addEvent,
     updateEvent,
     deleteEvent,
@@ -125,13 +126,12 @@ export default function Calendar() {
   });
 
   useEffect(() => {
-    if (!canManage) return;
     let isMounted = true;
 
-    // Load dynamic custom roles and departments for Target Audience dropdown
+    // Load dynamic custom roles and departments for Target Audience dropdown & labels
     Promise.allSettled([
-      api.get('/roles'),
-      api.get('/departments')
+      api.get('/roles').catch(() => ({ data: [] })),
+      api.get('/departments').catch(() => ({ data: [] }))
     ]).then(([rolesRes, deptsRes]) => {
       if (!isMounted) return;
 
@@ -151,7 +151,8 @@ export default function Calendar() {
               existingValues.add(slug);
               dynamicRoles.push({
                 value: slug,
-                label: roleName.charAt(0).toUpperCase() + roleName.slice(1)
+                label: roleName.charAt(0).toUpperCase() + roleName.slice(1),
+                group: 'custom'
               });
             }
           });
@@ -170,6 +171,7 @@ export default function Calendar() {
                 value: val,
                 label: `Department: ${d.name}`,
                 type: 'department',
+                group: 'department',
                 departmentId: d.id,
                 name: d.name
               });
@@ -188,18 +190,28 @@ export default function Calendar() {
     return () => {
       isMounted = false;
     };
-  }, [canManage]);
+  }, []);
 
-  const formatAudienceLabel = (aud) => {
+  const formatAudienceLabel = (aud, deptId) => {
     if (!aud || aud === 'all' || aud === 'everyone') return 'Everyone';
-    const match = availableRoles.find((r) => r.value.toLowerCase() === aud.toLowerCase());
+    const audLower = aud.toLowerCase().trim();
+    if (audLower === 'teacher' || audLower === 'teachers' || audLower === 'faculty') return 'Teachers';
+    if (audLower === 'student' || audLower === 'students') return 'Students';
+    if (audLower === 'staff') return 'Staff';
+    if (audLower === 'admin' || audLower === 'admins' || audLower === 'superadmin') return 'Admin';
+    if (audLower === 'hod') return 'HOD';
+
+    if (audLower.startsWith('dept:') || audLower.startsWith('department:') || deptId) {
+      const rawId = deptId || audLower.split(':')[1];
+      const matchDept = availableRoles.find(
+        (r) => r.departmentId === rawId || r.value === `dept:${rawId}`
+      );
+      if (matchDept) return matchDept.name ? `${matchDept.name} Dept` : matchDept.label;
+      return userDepartment ? `${userDepartment} Dept` : 'Department';
+    }
+
+    const match = availableRoles.find((r) => r.value.toLowerCase() === audLower);
     if (match) return match.label;
-    if (aud.startsWith('dept:') || aud.startsWith('department:')) return 'Department';
-    if (aud.toLowerCase() === 'teacher' || aud.toLowerCase() === 'teachers') return 'Teachers';
-    if (aud.toLowerCase() === 'student' || aud.toLowerCase() === 'students') return 'Students';
-    if (aud.toLowerCase() === 'admin' || aud.toLowerCase() === 'admins' || aud.toLowerCase() === 'superadmin') return 'Admin';
-    if (aud.toLowerCase() === 'staff') return 'Staff';
-    if (aud.toLowerCase() === 'hod') return 'HOD';
     return aud.charAt(0).toUpperCase() + aud.slice(1);
   };
 
@@ -243,36 +255,27 @@ export default function Calendar() {
   const filteredEvents = useMemo(() => {
     return events.filter((ev) => {
       const matchType = activeTypeFilter === 'all' || ev.type?.toLowerCase() === activeTypeFilter.toLowerCase();
-      const aud = String(ev.targetAudience || 'everyone').toLowerCase();
+      const aud = String(ev.targetAudience || 'everyone').toLowerCase().trim();
       let matchAudience = true;
       if (activeAudienceFilter !== 'all') {
-        if (activeAudienceFilter === 'everyone') {
+        const filterLower = activeAudienceFilter.toLowerCase().trim();
+        if (filterLower === 'everyone' || filterLower === 'all') {
           matchAudience = aud === 'everyone' || aud === 'all';
-        } else if (activeAudienceFilter === 'teachers' || activeAudienceFilter === 'teacher') {
-          matchAudience =
-            aud === 'teachers' ||
-            aud === 'teacher' ||
-            aud === 'faculty' ||
-            aud === 'everyone' ||
-            aud === 'all';
-        } else if (activeAudienceFilter === 'students' || activeAudienceFilter === 'student') {
-          matchAudience =
-            aud === 'students' ||
-            aud === 'student' ||
-            aud === 'everyone' ||
-            aud === 'all';
-        } else if (activeAudienceFilter === 'admin' || activeAudienceFilter === 'admins') {
-          matchAudience =
-            aud === 'admin' ||
-            aud === 'admins' ||
-            aud === 'superadmin' ||
-            aud === 'everyone' ||
-            aud === 'all';
+        } else if (filterLower === 'teachers' || filterLower === 'teacher') {
+          matchAudience = aud === 'teachers' || aud === 'teacher' || aud === 'faculty';
+        } else if (filterLower === 'students' || filterLower === 'student') {
+          matchAudience = aud === 'students' || aud === 'student';
+        } else if (filterLower === 'staff') {
+          matchAudience = aud === 'staff';
+        } else if (filterLower === 'admin' || filterLower === 'admins') {
+          matchAudience = aud === 'admin' || aud === 'admins' || aud === 'superadmin';
+        } else if (filterLower === 'hod') {
+          matchAudience = aud === 'hod';
+        } else if (filterLower.startsWith('dept:')) {
+          const dId = filterLower.split(':')[1];
+          matchAudience = ev.departmentId === dId || aud === filterLower;
         } else {
-          matchAudience =
-            aud === activeAudienceFilter.toLowerCase() ||
-            aud === 'everyone' ||
-            aud === 'all';
+          matchAudience = aud === filterLower;
         }
       }
 
@@ -544,11 +547,11 @@ export default function Calendar() {
             </>
           ) : (
             <span
-              title="You have read-only access. Only Admin and HOD roles can create or modify calendar entries."
+              title="You have View-Only access. You can only see events targeted to Everyone, your role, or your department. Only Admins and HODs can schedule or modify events."
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10"
             >
               <Eye className="w-4 h-4 text-slate-400" />
-              Read-Only Mode ({userRole || 'Viewer'})
+              View-Only ({userRole ? userRole.charAt(0).toUpperCase() + userRole.slice(1) : 'Regular User'}{userDepartment ? ` • ${userDepartment}` : ''})
             </span>
           )}
         </div>
@@ -646,12 +649,37 @@ export default function Calendar() {
               className="px-3 py-1.5 text-xs font-semibold bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-700 dark:text-slate-300 cursor-pointer"
               title="Filter by Target Audience"
             >
-              <option value="all">All Roles</option>
-              {availableRoles.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
+              <option value="all">{canManage ? 'All Audiences' : 'All My Events'}</option>
+              <option value="everyone">Everyone</option>
+              {canManage ? (
+                <>
+                  <option value="students">Students</option>
+                  <option value="teachers">Teachers</option>
+                  <option value="staff">Staff</option>
+                  <option value="hod">HODs</option>
+                  <option value="admin">Administrators</option>
+                  {availableRoles
+                    .filter((r) => r.type === 'department')
+                    .map((r) => (
+                      <option key={r.value} value={r.value}>
+                        Dept: {r.name || r.label.replace(/^Department:\s*/, '')}
+                      </option>
+                    ))}
+                </>
+              ) : (
+                <>
+                  {userRole === 'student' && <option value="students">Students Only</option>}
+                  {(userRole === 'teacher' || userRole === 'faculty') && <option value="teachers">Teachers Only</option>}
+                  {userRole === 'staff' && <option value="staff">Staff Only</option>}
+                  {availableRoles
+                    .filter((r) => r.type === 'department' && userDepartment && (r.name === userDepartment || r.label.includes(userDepartment)))
+                    .map((r) => (
+                      <option key={r.value} value={r.value}>
+                        My Department ({r.name || userDepartment})
+                      </option>
+                    ))}
+                </>
+              )}
             </select>
           </div>
 
@@ -987,7 +1015,7 @@ export default function Calendar() {
                         {item.targetAudience && (
                           <span className="flex items-center gap-1">
                             <Users className="w-3 h-3 text-slate-400" />
-                            {formatAudienceLabel(item.targetAudience)}
+                            {formatAudienceLabel(item.targetAudience, item.departmentId)}
                           </span>
                         )}
                       </div>
@@ -1064,7 +1092,7 @@ export default function Calendar() {
                           </span>
                           <span className="flex items-center gap-1">
                             <Users className="w-3 h-3" />
-                            {formatAudienceLabel(item.targetAudience)}
+                            {formatAudienceLabel(item.targetAudience, item.departmentId)}
                           </span>
                         </div>
                       </div>
@@ -1147,19 +1175,43 @@ export default function Calendar() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase text-slate-700 dark:text-slate-300 mb-1.5">
-                    Target Audience
+                  <label className="block text-xs font-bold uppercase text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                    <span>Target Audience *</span>
+                    <span className="text-[10px] lowercase text-slate-400 font-normal">who can view this event</span>
                   </label>
                   <select
                     value={formTargetAudience}
                     onChange={(e) => setFormTargetAudience(e.target.value)}
                     className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 dark:text-white"
                   >
-                    {availableRoles.map((r) => (
-                      <option key={r.value} value={r.value}>
-                        {r.label}
-                      </option>
-                    ))}
+                    <optgroup label="Broad Audience">
+                      <option value="everyone">Everyone (All Students, Teachers, Staff)</option>
+                      <option value="students">Students Only</option>
+                      <option value="teachers">Teachers / Faculty Only</option>
+                      <option value="staff">Staff Only</option>
+                    </optgroup>
+                    {availableRoles.some((r) => r.type === 'department') && (
+                      <optgroup label="Specific Departments">
+                        {availableRoles
+                          .filter((r) => r.type === 'department')
+                          .map((r) => (
+                            <option key={r.value} value={r.value}>
+                              Department: {r.name || r.label.replace(/^Department:\s*/, '')}
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="Administrative">
+                      <option value="hod">HODs Only</option>
+                      <option value="admin">Administrators Only</option>
+                    </optgroup>
+                    {availableRoles
+                      .filter((r) => r.group === 'custom')
+                      .map((r) => (
+                        <option key={r.value} value={r.value}>
+                          {r.label}
+                        </option>
+                      ))}
                     {!availableRoles.some(
                       (r) => r.value.toLowerCase() === formTargetAudience.toLowerCase()
                     ) && (
@@ -1168,6 +1220,9 @@ export default function Calendar() {
                       </option>
                     )}
                   </select>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    Regular users (Teachers, Students, Staff) have View-Only access and can only see events targeted to Everyone, their specific role, or their department.
+                  </p>
                 </div>
               </div>
 

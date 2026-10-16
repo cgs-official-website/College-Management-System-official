@@ -1450,3 +1450,26 @@ model StudentTransportAllocation {
 
   @@index([collegeId, routeId])
 }
+
+model CalendarEvent {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId      String    @db.Uuid
+  title          String    @db.VarChar(255)
+  description    String?   @db.Text
+  type           String    @default("event") @db.VarChar(50)
+  startDate      DateTime  @db.Timestamptz
+  endDate        DateTime? @db.Timestamptz
+  allDay         Boolean   @default(false)
+  location       String?   @db.VarChar(255)
+  targetAudience String?   @default("all") @db.VarChar(50)
+  departmentId   String?   @db.Uuid
+  createdById    String?   @db.Uuid
+  createdByName  String?   @db.VarChar(255)
+  createdByRole  String?   @db.VarChar(50)
+  color          String?   @db.VarChar(50)
+  createdAt      DateTime  @default(now()) @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @updatedAt @db.Timestamptz
+
+  @@index([collegeId], map: "idx_cal_event_college")
+  @@index([startDate], map: "idx_cal_event_date")
+}

@@ -87,7 +87,8 @@ export const getStaff = async (req, res) => {
       department: t.department?.name || 'General',
       departmentId: t.departmentId,
       designation: t.designation,
-      joiningDate: t.joiningDate,
+      joiningDate: t.joiningDate || t.createdAt,
+      joinDate: t.joiningDate || t.createdAt,
       salaryGrade: t.salaryGrade || 'Grade A',
       userId: t.userId,
       role: t.user?.role || 'teacher',
@@ -249,7 +250,7 @@ export const createStaff = async (req, res) => {
         userId: user.id,
         departmentId: deptId,
         designation: payload.designation,
-        joiningDate: payload.joiningDate ? new Date(payload.joiningDate) : new Date(),
+        joiningDate: (payload.joiningDate || payload.joinDate) ? new Date(payload.joiningDate || payload.joinDate) : new Date(),
         salaryGrade: payload.salaryGrade || 'Grade A',
         mobileNumber: payload.phone || null,
         // emailId stores the admin-provided email (if any) — updated to teacher's real email after registration
@@ -384,7 +385,7 @@ export const updateStaff = async (req, res) => {
         data: {
           ...(payload.designation ? { designation: payload.designation } : {}),
           ...(payload.salaryGrade ? { salaryGrade: payload.salaryGrade } : {}),
-          ...(payload.joiningDate ? { joiningDate: new Date(payload.joiningDate) } : {}),
+          ...((payload.joiningDate || payload.joinDate) ? { joiningDate: new Date(payload.joiningDate || payload.joinDate) } : {}),
           ...(targetDepartmentId ? { departmentId: targetDepartmentId } : {}),
           ...(payload.phone !== undefined ? { mobileNumber: payload.phone || null } : {}),
           ...(normalizedEmail ? { emailId: normalizedEmail } : {}),

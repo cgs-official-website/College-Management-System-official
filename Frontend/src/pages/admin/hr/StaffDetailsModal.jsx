@@ -64,7 +64,9 @@ export function StaffDetailsModal({ isOpen, onClose, staff }) {
               <Calendar className="w-4 h-4" /> Joined Date
             </div>
             <p className="font-medium text-slate-900 dark:text-white">
-              {staff.joinDate || staff.createdAt ? new Date(staff.joinDate || staff.createdAt).toLocaleDateString() : 'N/A'}
+              {staff.joiningDate || staff.joinDate || staff.createdAt
+                ? new Date(staff.joiningDate || staff.joinDate || staff.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+                : 'N/A'}
             </p>
           </div>
 

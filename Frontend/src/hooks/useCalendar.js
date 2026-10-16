@@ -15,9 +15,13 @@ export function useCalendar(initialFilters = {}) {
 
   // Role Rule check: Strictly College Admins and HODs
   const normalizedRole = String(userRole || userData?.role || '').toLowerCase();
-  const isHod = normalizedRole === 'hod' || Boolean(userData?.isHod);
+  const isHod = normalizedRole === 'hod' || Boolean(userData?.isHod) || Boolean(userData?.isHOD);
   const isAdmin = normalizedRole === 'admin' || normalizedRole === 'superadmin';
-  const canManage = isAdmin || isHod;
+  const initialCanManage = isAdmin || isHod;
+
+  const [backendCanManage, setBackendCanManage] = useState(null);
+  const [userDepartment, setUserDepartment] = useState(null);
+  const canManage = backendCanManage !== null ? backendCanManage : initialCanManage;
 
   const fetchEvents = useCallback(async (customFilters) => {
     setIsLoading(true);
@@ -37,6 +41,14 @@ export function useCalendar(initialFilters = {}) {
 
       const qs = params.toString();
       const response = await api.get(qs ? `/calendar/events?${qs}` : '/calendar/events');
+
+      const raw = response?.data || response;
+      if (raw?.canManage !== undefined) {
+        setBackendCanManage(Boolean(raw.canManage));
+      }
+      if (raw?.userDepartment) {
+        setUserDepartment(raw.userDepartment);
+      }
 
       let list = [];
       if (Array.isArray(response)) {
@@ -187,6 +199,7 @@ export function useCalendar(initialFilters = {}) {
     isAdmin,
     isHod,
     userRole: normalizedRole,
+    userDepartment,
     filters,
     setFilters,
     fetchEvents,

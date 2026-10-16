@@ -12,16 +12,35 @@ import { authenticate } from '../../middleware/authenticate.js';
 import { resolveTenant } from '../../middleware/resolveTenant.js';
 import { catchAsync } from '../../lib/catchAsync.js';
 
+import { prisma } from '../../lib/prisma.js';
+
 const router = Router();
 
-// Middleware: Calendar module access strictly for College Admins and HODs
-const adminOrHodOnly = (req, res, next) => {
+// Middleware: Calendar module modifications strictly for College Admins and HODs
+const adminOrHodOnly = async (req, res, next) => {
   const role = String(req.user?.role || '').toLowerCase();
-  const isAllowed = role === 'admin' || role === 'hod' || role === 'superadmin' || Boolean(req.user?.isHod);
+  let isAllowed = role === 'admin' || role === 'hod' || role === 'superadmin' || Boolean(req.user?.isHod);
+
+  if (!isAllowed && req.user?.id) {
+    try {
+      const dept = await prisma.department.findFirst({
+        where: {
+          collegeId: req.user.collegeId,
+          hodUserId: req.user.id
+        },
+        select: { id: true }
+      });
+      if (dept) {
+        req.user.isHod = true;
+        isAllowed = true;
+      }
+    } catch (_) {}
+  }
+
   if (!isAllowed) {
     return res.status(403).json({
       success: false,
-      error: 'Forbidden: Calendar module is only accessible to College Admins and HODs.'
+      error: 'Forbidden: Calendar modifications are strictly restricted to College Admins and HODs. Regular users have View-Only access.'
     });
   }
   next();

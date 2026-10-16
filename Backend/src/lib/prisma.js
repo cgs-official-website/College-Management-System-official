@@ -45,6 +45,7 @@ basePrisma.$transaction = function (arg, options = {}) {
 };
 
 export const prisma = basePrisma;
+export { pool };
 
 /**
  * Warm up the DB connection with retries.

@@ -132,6 +132,7 @@ import usersRoutes from './modules/users/users.routes.js';
 import examsRoutes from './modules/exams/exams.routes.js';
 import timetableRoutes from './modules/timetable/timetable.routes.js';
 import calendarRoutes from './modules/calendar/calendar.routes.js';
+import { ensureCalendarTable } from './modules/calendar/calendar.controller.js';
 import staffRoutes from './modules/staff/staff.routes.js';
 import studentsRoutes from './modules/students/students.routes.js';
 import rolesRoutes from './modules/roles/roles.routes.js';
@@ -241,12 +242,16 @@ import { ensureCollegeCodeSequence } from './lib/collegeCodeGenerator.js';
 import { ensureEmailTemplates } from './services/email/templateSeeder.js';
 import { connectWithRetry } from './lib/prisma.js';
 import { startSubscriptionReminderJob } from './jobs/subscriptionReminder.job.js';
+import { execSync } from 'child_process';
 
-const startServer = (retries = 5, delay = 600) => {
+const startServer = (retries = 8, delay = 1000) => {
   const server = app.listen(PORT, () => {
     logger.info(`[info] Zuna ERP Backend running on port ${PORT}`);
     // Connect to DB with retries first, then run startup tasks
     connectWithRetry(5, 3000).then(() => {
+      ensureCalendarTable().catch(err => {
+        logger.warn(`[warn] Failed to initialize CalendarEvent table: ${err.message}`);
+      });
       ensureCollegeCodeSequence().catch(err => {
         logger.warn(`[warn] Failed to initialize college sequence: ${err.message}`);
       });
@@ -258,14 +263,36 @@ const startServer = (retries = 5, delay = 600) => {
   });
 
   server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE' && retries > 0) {
-      logger.warn(`[warn] Port ${PORT} in use, retrying in ${delay}ms... (${retries} retries left)`);
-      setTimeout(() => {
-        startServer(retries - 1, delay);
-      }, delay);
-    } else if (err.code === 'EADDRINUSE') {
-      logger.error(`[fatal] Port ${PORT} is already in use by another process. Exiting.`);
-      process.exit(1);
+    if (err.code === 'EADDRINUSE') {
+      // Attempt to automatically release the occupied port on Windows
+      if (process.platform === 'win32') {
+        try {
+          const sysRoot = process.env.SystemRoot || 'C:\\Windows';
+          const netstat = `${sysRoot}\\System32\\netstat.exe`;
+          const findstr = `${sysRoot}\\System32\\findstr.exe`;
+          const taskkill = `${sysRoot}\\System32\\taskkill.exe`;
+          const stdout = execSync(`"${netstat}" -ano | "${findstr}" :${PORT}`).toString();
+          const lines = stdout.split('\n').filter(l => l.includes('LISTENING'));
+          for (const line of lines) {
+            const parts = line.trim().split(/\s+/);
+            const pid = parts[parts.length - 1];
+            if (pid && pid !== String(process.pid) && parseInt(pid, 10) > 0) {
+              logger.warn(`[warn] Port ${PORT} occupied by stale process PID ${pid}. Terminating process...`);
+              execSync(`"${taskkill}" /F /PID ${pid}`);
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (retries > 0) {
+        logger.warn(`[warn] Port ${PORT} in use, retrying in ${delay}ms... (${retries} retries left)`);
+        setTimeout(() => {
+          startServer(retries - 1, delay);
+        }, delay);
+      } else {
+        logger.error(`[fatal] Port ${PORT} is already in use by another process. Exiting.`);
+        process.exit(1);
+      }
     } else {
       logger.error(`[fatal] Server error: ${err.message}`);
       process.exit(1);

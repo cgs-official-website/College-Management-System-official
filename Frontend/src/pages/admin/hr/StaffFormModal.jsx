@@ -47,16 +47,31 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
     }
   }, [staffType, roles]);
 
+  const formatToDateInput = (val) => {
+    if (!val) return new Date().toISOString().split('T')[0];
+    try {
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return new Date().toISOString().split('T')[0];
+      return d.toISOString().split('T')[0];
+    } catch (_) {
+      return new Date().toISOString().split('T')[0];
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       refetchRoles();
       const isNonTeaching = initialData?.staffType === 'non-teaching' || initialData?.role === 'staff';
+      const rawDate = initialData?.joiningDate || initialData?.joinDate || initialData?.createdAt;
+      const formattedJoinDate = formatToDateInput(rawDate);
       reset(initialData ? {
         ...initialData,
         teacherId: initialData.teacherId || '',
         customRoleId: initialData.customRoleId || '',
         staffType: isNonTeaching ? 'non-teaching' : 'teaching',
         departmentId: initialData.departmentId || '',
+        joinDate: formattedJoinDate,
+        joiningDate: formattedJoinDate,
         customFields: initialData.customFields || {},
       } : {
         firstName: '',
@@ -69,6 +84,7 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
         staffType: 'teaching',
         departmentId: '',
         joinDate: new Date().toISOString().split('T')[0],
+        joiningDate: new Date().toISOString().split('T')[0],
         status: 'active',
         customFields: {}
       });
@@ -83,6 +99,8 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
     const TEACHING_ROLES = ['teacher', 'hod', 'faculty'];
     const keepExisting = initialData && TEACHING_ROLES.includes(initialData.role);
 
+    const effectiveJoinDate = data.joinDate || data.joiningDate || new Date().toISOString().split('T')[0];
+
     const payload = {
       ...data,
       staffType: isNonTeaching ? 'non-teaching' : 'teaching',
@@ -91,6 +109,8 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
       designation: designation,
       customRoleId: data.customRoleId || null,
       teacherId: (data.teacherId || '').trim(),
+      joiningDate: effectiveJoinDate,
+      joinDate: effectiveJoinDate,
     };
 
     onSubmit(payload);

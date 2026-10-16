@@ -14,6 +14,7 @@ const staffBaseSchema = z.object({
   departmentId: z.string().uuid('Please select a valid department.').optional(),
   designation: z.string().min(1, 'Designation is required'),
   joiningDate: z.string().or(z.date()).optional(),
+  joinDate: z.string().or(z.date()).optional(),
   salaryGrade: z.string().optional(),
   role: z.enum(['teacher', 'hod', 'faculty', 'staff']).optional(),
   staffType: z.enum(['teaching', 'non-teaching']).optional().default('teaching'),
