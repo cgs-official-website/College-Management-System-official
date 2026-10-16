@@ -86,11 +86,10 @@ import InventoryDashboard from './inventory/InventoryDashboard';
 import PayrollDashboard from './payroll/PayrollDashboard';
 import MyPayslip from '../teacher/PayrollDashboard';
 import TeacherMyLeaves from '../teacher/TeacherMyLeaves';
-// TEMP DISABLED: Custom module
-// import CustomDashboard from '../../modules/custom/CustomDashboard';
-// import ModuleBuilder from '../../modules/builder/ModuleBuilder';
-// import DynamicDashboard from '../../modules/dynamic/DynamicDashboard';
-// import { useGetEntities } from '../../modules/builder/useBuilder';
+import CustomDashboard from '../../modules/custom/CustomDashboard';
+import ModuleBuilder from '../../modules/builder/ModuleBuilder';
+import DynamicDashboard from '../../modules/dynamic/DynamicDashboard';
+import { useGetEntities } from '../../modules/builder/useBuilder';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { NotificationBell } from '../../components/ui/NotificationBell';
 import StoreDashboard from '../shared/StoreDashboard';
@@ -106,9 +105,9 @@ const AdminLayout = () => {
   const { logout, userData, userRole, permissions } = useAuth();
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
   // TEMP DISABLED: Custom module
-  // const { data: customEntitiesData } = useGetEntities({
-  //   enabled: userRole === 'admin' || userRole === 'superadmin',
-  // });
+  const { data: customEntitiesData } = useGetEntities({
+    enabled: userRole === 'admin' || userRole === 'superadmin',
+  });
   const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
@@ -194,15 +193,15 @@ const AdminLayout = () => {
     { name: 'Payslip', path: '/admin/my-payslip', icon: IndianRupee, moduleKey: null, staffOnly: true },
     { name: 'API Integrations', path: '/admin/api-integrations', icon: Zap, moduleKey: 'api_integration' },
     // TEMP DISABLED: Custom module
-    // { name: 'Module Builder', path: '/admin/builder', icon: Settings2, moduleKey: 'custom' },
+    { name: 'Module Builder', path: '/admin/builder', icon: Settings2, moduleKey: 'custom' },
     { name: 'Profile', path: '/admin/my-settings', icon: User, moduleKey: null, staffOnly: true },
     // TEMP DISABLED: Custom module
-    // ...(customEntitiesData?.map(ent => ({
-    //   name: ent.name,
-    //   path: `/admin/dynamic/${ent.slug}`,
-    //   icon: FileText,
-    //   moduleKey: 'custom'
-    // })) || []),
+    ... (customEntitiesData?.map(ent => ({
+    name: ent.name,
+    path: `/admin/dynamic/${ent.slug}`,
+    icon: FileText,
+    moduleKey: 'custom'
+    })) || []),
     { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon, moduleKey: 'settings' },
     { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck, moduleKey: 'roles' },
   ]
@@ -554,10 +553,9 @@ const AdminLayout = () => {
                 path="/my-payslip/*"
                 element={!isAdmin && planAllows('payroll') ? <MyPayslip /> : <Navigate to="/admin/payroll" replace />}
               />
-              {/* TEMP DISABLED: Custom module */}
-              {/* <Route path="/builder/*" element={hasAccess('custom') ? <ModuleBuilder /> : <Navigate to="/404" replace />} /> */}
-              {/* <Route path="/dynamic/:entitySlug/*" element={hasAccess('custom') ? <DynamicDashboard /> : <Navigate to="/404" replace />} /> */}
-              {/* <Route path="/custom/*" element={hasAccess('custom') ? <CustomDashboard /> : <Navigate to="/404" replace />} /> */}
+              <Route path="/builder/*" element={hasAccess('custom') ? <ModuleBuilder /> : <Navigate to="/404" replace />} />
+              <Route path="/dynamic/:entitySlug/*" element={hasAccess('custom') ? <DynamicDashboard /> : <Navigate to="/404" replace />} />
+              <Route path="/custom/*" element={hasAccess('custom') ? <CustomDashboard /> : <Navigate to="/404" replace />} />
               {/* TEMP DISABLED: PTM module (PTM is active in Teacher/Student/Parent portals; not mounted in Admin) */}
               {/* <Route path="/ptm/*" element={<Navigate to="/404" replace />} /> */}
               <Route path="/settings/*" element={hasAccess('settings') ? <Settings /> : <Navigate to="/404" replace />} />

@@ -1,4 +1,5 @@
-import { prisma, logger } from '../../server.js';
+import { prisma } from '../../lib/prisma.js';
+import { logger } from '../../lib/logger.js';
 import { createExamSchema, updateExamSchema, enterMarksSchema, batchEnterMarksSchema } from './exams.schema.js';
 import { notify } from '../notifications/notify.service.js';
 
@@ -598,4 +599,4 @@ export const getExamResults = async (req, res) => {
   }));
 
   res.json({ success: true, data: formatted });
-};
+};

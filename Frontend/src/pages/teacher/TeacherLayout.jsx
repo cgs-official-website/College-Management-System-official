@@ -44,8 +44,8 @@ import TeacherSchedule from './TeacherSchedule';
 import StaffSettings from '../shared/StaffSettings';
 import TeacherGrades from './TeacherGrades';
 import TeacherMyLeaves from './TeacherMyLeaves';
-// TEMP DISABLED: PTM module
-// import TeacherPtm from './TeacherPtm';
+
+import TeacherPtm from './TeacherPtm';
 import Timetable from '../admin/timetable/Timetable';
 import LeaveRequestsDashboard from '../admin/leaves/LeaveRequestsDashboard';
 import NoticeBoard from '../admin/notices/NoticeBoard';
@@ -83,8 +83,8 @@ const TeacherLayout = () => {
     { name: 'Payslip', path: '/teacher/payroll', icon: Banknote },
     { name: 'Apply for Leave', path: '/teacher/my-leaves', icon: CalendarClock },
     { name: 'Student Leaves', path: '/teacher/student-leaves', icon: CalendarOff },
-    // TEMP DISABLED: PTM module
-    // { name: 'PTM Meetings', path: '/teacher/ptm', icon: Video },
+
+    { name: 'PTM Meetings', path: '/teacher/ptm', icon: Video },
     { name: 'Profile', path: '/teacher/settings', icon: SettingsIcon },
   ];
 
@@ -273,8 +273,8 @@ const TeacherLayout = () => {
               <Route path="/payroll" element={<PayrollDashboard />} />
               <Route path="/my-leaves" element={<TeacherMyLeaves />} />
               <Route path="/student-leaves" element={<LeaveRequestsDashboard />} />
-              {/* TEMP DISABLED: PTM module */}
-              {/* <Route path="/ptm" element={<TeacherPtm />} /> */}
+
+              <Route path="/ptm" element={<TeacherPtm />} />
               <Route path="/settings" element={<StaffSettings />} />
               {canViewNotices && <Route path="/notices" element={<NoticeBoard />} />}
               {canUseFacilities && <Route path="/facility-requests" element={<HODFacilityRequests />} />}
