@@ -131,63 +131,88 @@ router.post('/', adminOnly, async (req, res) => {
 router.post('/bulk', adminOnly, async (req, res) => {
   try {
     const { data } = req.body;
-    if (!Array.isArray(data)) {
-      return res.status(400).json({ error: { message: 'Data must be an array' } });
+    if (!Array.isArray(data) || data.length === 0) {
+      return res.status(400).json({ error: { message: 'No data provided for import' } });
     }
 
     const collegeId = req.tenant.collegeId;
-    let successful = 0;
-    let failed = 0;
+    const results = { successful: 0, failed: 0, errors: [] };
+    const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cell = (row, ...names) => {
+      const keys = Object.keys(row || {});
+      for (const n of names) {
+        const key = keys.find((k) => norm(k) === norm(n));
+        if (key !== undefined && row[key] !== null && row[key] !== undefined && String(row[key]).trim() !== '') {
+          return String(row[key]).trim();
+        }
+      }
+      return '';
+    };
 
-    for (const row of data) {
+    const departments = await prisma.department.findMany({ where: { collegeId }, select: { id: true, name: true, code: true } });
+    const deptLookup = new Map();
+    for (const d of departments) {
+      deptLookup.set(d.name.toLowerCase(), d.id);
+      deptLookup.set(d.code.toLowerCase(), d.id);
+    }
+
+    const seenCodes = new Set();
+
+    for (const [index, row] of data.entries()) {
+      const rowNo = index + 2;
+      const fail = (msg) => { results.failed++; results.errors.push(`Row ${rowNo}: ${msg}`); };
+
       try {
-        const name = row['Course_Name']?.toString().trim();
-        const code = row['Course_Code']?.toString().trim();
-        const semester = parseInt(row['Semester']) || 1;
-        const credits = parseInt(row['Credits']) || 0;
-        const departmentCode = row['Department_Code']?.toString().trim();
+        if (!Object.values(row || {}).some((v) => String(v ?? '').trim() !== '')) continue;
 
-        if (!name || !code || !departmentCode) {
-          failed++;
-          continue;
+        const name = cell(row, 'Program_Name', 'Course_Name');
+        const code = cell(row, 'Program_Code', 'Course_Code');
+        const semRaw = cell(row, 'Total_Semesters', 'Semesters', 'Semester');
+        const deptRaw = cell(row, 'Department', 'Department_Name', 'Department_Code');
+
+        const missing = [];
+        if (!name) missing.push('Program_Name');
+        if (!code) missing.push('Program_Code');
+        if (!semRaw) missing.push('Total_Semesters');
+        if (!deptRaw) missing.push('Department');
+        if (missing.length) return fail(`Missing required: ${missing.join(', ')}`);
+
+        if (name.length < 2) return fail('Program_Name must be at least 2 characters');
+        if (code.length < 2) return fail('Program_Code must be at least 2 characters');
+
+        const semester = Number(semRaw);
+        if (!Number.isInteger(semester) || semester < 1) {
+          return fail(`Total_Semesters must be a whole number of 1 or more (got "${semRaw}")`);
         }
 
-        // Find or create department
-        let department = await prisma.department.findFirst({
-          where: { collegeId, code: departmentCode }
-        });
+        const codeKey = code.toLowerCase();
+        if (seenCodes.has(codeKey)) return fail(`Program_Code ${code} appears twice in the file`);
+        seenCodes.add(codeKey);
 
-        if (!department) {
-          department = await prisma.department.create({
-            data: {
-              name: departmentCode, // use code as name temporarily if not present
-              code: departmentCode,
-              collegeId
-            }
-          });
-        }
+        const departmentId = deptLookup.get(deptRaw.toLowerCase());
+        if (!departmentId) return fail(`Department "${deptRaw}" not found. Create it first or fix the spelling`);
 
         const existing = await prisma.course.findFirst({
-          where: { collegeId, code }
+          where: { collegeId, code: { equals: code, mode: 'insensitive' } },
         });
 
         if (existing) {
           await prisma.course.update({
             where: { id: existing.id },
-            data: { name, semester, credits, departmentId: department.id }
+            data: { name, semester, departmentId },
           });
         } else {
           await prisma.course.create({
-            data: { name, code, semester, credits, departmentId: department.id, collegeId }
+            data: { name, code, semester, credits: 0, departmentId, collegeId },
           });
         }
-        successful++;
+        results.successful++;
       } catch (err) {
-        failed++;
+        fail(err.message);
       }
     }
-    
-    return res.json({ data: { successful, failed } });
+
+    return res.json({ data: results });
   } catch (error) {
     res.status(500).json({ error: { message: error.message } });
   }

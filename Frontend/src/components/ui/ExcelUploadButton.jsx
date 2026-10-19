@@ -21,6 +21,7 @@ export function ExcelUploadButton({
   title = 'Import Excel Data',
   description = 'Upload an Excel (.xlsx, .xls) or CSV file.',
   fields = [],
+  notes,
   showFieldsTable = true,
   sampleFileName = 'import_template.xlsx',
   instructionsNote
@@ -90,7 +91,7 @@ export function ExcelUploadButton({
             'Column Name': '--- RULES & NOTES ---',
             'Requirement': '',
             'Data Type': '',
-            'Description': instructionsNote || '1. Do not delete or rename header columns in row 1 of the Template sheet. 2. Fields marked with an asterisk (*) are required. 3. Row 2 is a sample. Delete it before importing.',
+            'Description': notes || '1. Do not delete or rename header columns in row 1 of the Template sheet. 2. Fields marked with an asterisk (*) are required.',
             'Example': ''
           }
         ];

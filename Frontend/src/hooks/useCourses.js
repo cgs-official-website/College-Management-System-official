@@ -50,15 +50,27 @@ export const useCourses = (departmentId = null) => {
       return response.data;
     },
     onSuccess: (res) => {
-      const stats = res?.data || {};
-      toast.success(`Imported ${stats.successful || 0} courses successfully!`);
-      if (stats.failed > 0) {
-        toast.error(`${stats.failed} failed.`);
+      const stats = res?.successful !== undefined ? res : (res?.data || {});
+      const successful = stats.successful || 0;
+      const failed = stats.failed || 0;
+      const errors = Array.isArray(stats.errors) ? stats.errors : [];
+
+      if (successful > 0) {
+        toast.success(`Imported ${successful} program${successful === 1 ? '' : 's'} successfully!`);
+      }
+      if (failed > 0) {
+        const preview = errors.slice(0, 5).join('\n');
+        const more = errors.length > 5 ? `\n...and ${errors.length - 5} more (see console)` : '';
+        toast.error(`${failed} row${failed === 1 ? '' : 's'} failed:\n${preview}${more}`, { duration: 10000 });
+        console.error('Program import errors:', errors);
+      }
+      if (successful === 0 && failed === 0) {
+        toast.error('No rows were imported. Check that the file has data.');
       }
       queryClient.invalidateQueries({ queryKey: ['courses'] });
     },
     onError: (err) => {
-      toast.error(err.message || 'Failed to bulk import courses');
+      toast.error(err.response?.data?.error?.message || err.message || 'Failed to bulk import programs');
     }
   });
 

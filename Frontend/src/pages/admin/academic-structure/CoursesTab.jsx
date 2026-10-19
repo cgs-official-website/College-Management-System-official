@@ -9,6 +9,21 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useDepartments } from '../../../hooks/useDepartments';
 import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
 import { CustomFieldsSection } from '../../../modules/builder/CustomFieldsSection';
+
+const PROGRAM_IMPORT_FIELDS = [
+  { name: 'Program_Name', required: true, type: 'String', description: 'Name of the program (min 2 characters)', example: 'B.Tech Computer Science' },
+  { name: 'Program_Code', required: true, type: 'String', description: 'Unique program code (min 2 characters)', example: 'BTECH-CSE' },
+  { name: 'Total_Semesters', required: true, type: 'Number', description: 'Total semesters / years, whole number of 1 or more', example: '8' },
+  { name: 'Department', required: true, type: 'String', description: 'Name or code of an existing department', example: 'Computer Science & Engineering' },
+];
+
+const PROGRAM_IMPORT_NOTES =
+  '1. Do not rename or delete header columns in row 1 of the Template sheet. ' +
+  '2. Columns marked with * are required. ' +
+  '3. Department must match an existing department by name or code; unknown departments are reported as errors and not created. ' +
+  '4. If a Program_Code already exists, that program is updated (name, semesters, department). ' +
+  '5. Each Program_Code can appear only once in the file.';
+
 export default function CoursesTab({ departmentId, departmentName, onSelect, onClearFilter }) {
   const { courses, isLoading, createCourse, updateCourse, deleteCourse, bulkImport } = useCourses(departmentId);
   const { departments } = useDepartments(); // needed for the dropdown when adding/editing if no department is selected
@@ -92,7 +107,15 @@ export default function CoursesTab({ departmentId, departmentName, onSelect, onC
           />
         </div>
         <div className="flex gap-2">
-          <ExcelUploadButton onUpload={bulkImport.mutateAsync} isLoading={bulkImport.isPending} />
+          <ExcelUploadButton
+            onUpload={bulkImport.mutateAsync}
+            isLoading={bulkImport.isPending}
+            title="Import Programs"
+            description="Upload an Excel (.xlsx, .xls) or CSV file. Required: program name, code, total semesters and department."
+            fields={PROGRAM_IMPORT_FIELDS}
+            notes={PROGRAM_IMPORT_NOTES}
+            sampleFileName="programs_import_template.xlsx"
+          />
           <Button onClick={handleOpenAdd}>
             <Plus className="w-4 h-4 mr-2" /> Add Program
           </Button>

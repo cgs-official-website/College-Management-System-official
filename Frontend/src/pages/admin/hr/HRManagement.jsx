@@ -29,6 +29,36 @@ const formatJoiningDate = (dateVal) => {
   }
 };
 
+const STAFF_IMPORT_FIELDS = [
+  { name: 'Employee_ID', required: true, type: 'String', description: 'Unique staff / teacher ID', example: 'TCH001' },
+  { name: 'Staff_Name', required: true, type: 'String', description: 'Full name of the staff member', example: 'Kalaivaani P' },
+  { name: 'Email_ID', required: true, type: 'String', description: 'Valid email, used for the account setup link (must be unique)', example: 'kalaivaani.p@example.com' },
+  { name: 'Department', required: true, type: 'String', description: 'Department name (created if it does not exist)', example: 'Computer Science & Engineering' },
+  { name: 'Designation', required: true, type: 'String', description: 'Job title', example: 'Assistant Professor' },
+  { name: 'Date_of_Joining', required: true, type: 'Date', description: 'YYYY-MM-DD or DD-MM-YYYY', example: '2024-06-10' },
+  { name: 'Mobile_Number', required: false, type: 'String', description: '10-digit mobile number', example: '9876543210' },
+  { name: 'Gender', required: false, type: 'String', description: 'Male / Female / Other', example: 'Female' },
+  { name: 'Date_of_Birth', required: false, type: 'Date', description: 'YYYY-MM-DD or DD-MM-YYYY', example: '1990-03-21' },
+  { name: 'Employment_Type', required: false, type: 'String', description: 'Full-time, Part-time or Contract', example: 'Full-time' },
+  { name: 'Qualification', required: false, type: 'String', description: 'Highest qualification', example: 'M.E., Ph.D.' },
+  { name: 'Experience_Years', required: false, type: 'Number', description: 'Total years of experience', example: '8' },
+  { name: 'Blood_Group', required: false, type: 'String', description: 'e.g. O+', example: 'O+' },
+  { name: 'Address', required: false, type: 'String', description: 'Residential address', example: '12 Gandhiji Road' },
+  { name: 'City', required: false, type: 'String', description: 'City', example: 'Erode' },
+  { name: 'District', required: false, type: 'String', description: 'District', example: 'Erode' },
+  { name: 'State', required: false, type: 'String', description: 'State', example: 'Tamil Nadu' },
+  { name: 'Pincode', required: false, type: 'String', description: '6-digit pincode', example: '638001' },
+  { name: 'Emergency_Contact_Name', required: false, type: 'String', description: 'Emergency contact person', example: 'Raman K' },
+  { name: 'Emergency_Contact_Number', required: false, type: 'String', description: 'Emergency contact phone', example: '9876543211' },
+];
+
+const STAFF_IMPORT_NOTES =
+  '1. Do not rename or delete header columns in row 1 of the Template sheet. ' +
+  '2. Columns marked with * are required. ' +
+  '3. Employee_ID and Email_ID must be unique; duplicate rows are reported with their row number. ' +
+  '4. Dates can be YYYY-MM-DD or DD-MM-YYYY. ' +
+  '5. Imported staff are created as teaching staff with status "pending setup"; send each one the setup link from the staff list.';
+
 export default function HRManagement() {
   const confirm = useConfirm();
   const { userData } = useAuth();
@@ -307,9 +337,14 @@ export default function HRManagement() {
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage all college employees and faculty.</p>
         </div>
         <div className="flex gap-2">
-          <ExcelUploadButton 
-            onUpload={bulkImport} 
-            isLoading={isImporting} 
+          <ExcelUploadButton
+            onUpload={bulkImport}
+            isLoading={isImporting}
+            title="Import Staff"
+            description="Upload an Excel (.xlsx, .xls) or CSV file. Required: Employee ID, name, email, department, designation and joining date."
+            fields={STAFF_IMPORT_FIELDS}
+            notes={STAFF_IMPORT_NOTES}
+            sampleFileName="staff_import_template.xlsx"
           />
           <Button onClick={handleOpenAdd}>
             <Plus className="w-4 h-4 mr-2" />

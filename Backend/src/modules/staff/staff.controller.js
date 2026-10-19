@@ -458,129 +458,166 @@ export const bulkImportStaff = async (req, res) => {
   if (!collegeId) {
     return res.status(400).json({ success: false, error: { message: 'College ID is required' } });
   }
-  
   if (!Array.isArray(data) || data.length === 0) {
     return res.status(400).json({ success: false, error: { message: 'No data provided for import' } });
   }
+  const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const cell = (row, ...names) => {
+    const keys = Object.keys(row || {});
+    for (const n of names) {
+      const key = keys.find((k) => norm(k) === norm(n));
+      if (key !== undefined && row[key] !== null && row[key] !== undefined && String(row[key]).trim() !== '') {
+        return String(row[key]).trim();
+      }
+    }
+    return '';
+  };
+
+  const parseDate = (raw) => {
+    if (!raw) return { value: null };
+    const s = String(raw).trim();
+    if (/^\d{5}$/.test(s)) {
+      const d = new Date(Math.round((Number(s) - 25569) * 86400 * 1000));
+      return isNaN(d) ? { error: true } : { value: d };
+    }
+    let m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+    if (m) {
+      const d = new Date(Date.UTC(+m[3], +m[2] - 1, +m[1]));
+      return d.getUTCMonth() === +m[2] - 1 ? { value: d } : { error: true };
+    }
+    m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+    if (m) {
+      const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+      return d.getUTCMonth() === +m[2] - 1 ? { value: d } : { error: true };
+    }
+    const d = new Date(s);
+    return isNaN(d) ? { error: true } : { value: d };
+  };
 
   const results = { successful: 0, failed: 0, errors: [] };
   const departmentsCache = {};
-  
+  const seenIds = new Set();
+  const seenEmails = new Set();
+
   for (const [index, row] of data.entries()) {
+    const rowNo = index + 2;
     try {
-      const employeeId = String(row['Employee_ID*'] || row['Employee_ID'] || '').trim();
-      const staffName = String(row['Staff_Name*'] || row['Staff_Name'] || '').trim();
-      const departmentName = String(row['Department*'] || row['Department'] || 'General').trim();
+      if (!Object.values(row || {}).some((v) => String(v ?? '').trim() !== '')) continue;
 
-      if (!employeeId || !staffName) {
-        throw new Error('Employee_ID and Staff_Name are required');
-      }
+      const employeeId = cell(row, 'Employee_ID');
+      const staffName = cell(row, 'Staff_Name');
+      const departmentName = cell(row, 'Department');
+      const designation = cell(row, 'Designation');
+      const setupEmail = cell(row, 'Email_ID');
 
-      // Department lookup or creation
-      let deptId = departmentsCache[departmentName];
+      const missing = [];
+      if (!employeeId) missing.push('Employee_ID');
+      if (!staffName) missing.push('Staff_Name');
+      if (!setupEmail) missing.push('Email_ID');
+      if (!departmentName) missing.push('Department');
+      if (!designation) missing.push('Designation');
+      if (!cell(row, 'Date_of_Joining')) missing.push('Date_of_Joining');
+      if (missing.length) throw new Error(`Missing required: ${missing.join(', ')}`);
+
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(setupEmail)) throw new Error('Email_ID is not a valid email');
+      const email = setupEmail.toLowerCase();
+
+      if (seenIds.has(employeeId.toLowerCase())) throw new Error(`Employee_ID ${employeeId} appears twice in the file`);
+      if (seenEmails.has(email)) throw new Error(`Email ${email} appears twice in the file`);
+
+      const joining = parseDate(cell(row, 'Date_of_Joining'));
+      const dob = parseDate(cell(row, 'Date_of_Birth'));
+      if (joining.error) throw new Error('Date_of_Joining is invalid (use YYYY-MM-DD or DD-MM-YYYY)');
+      if (dob.error) throw new Error('Date_of_Birth is invalid (use YYYY-MM-DD or DD-MM-YYYY)');
+
+      const expRaw = cell(row, 'Experience_Years');
+      const experienceYears = expRaw ? parseInt(expRaw, 10) : null;
+      if (expRaw && isNaN(experienceYears)) throw new Error('Experience_Years must be a number');
+
+      let deptId = departmentsCache[departmentName.toLowerCase()];
       if (!deptId) {
         let dept = await prisma.department.findFirst({
-          where: { collegeId, name: { equals: departmentName, mode: 'insensitive' } }
+          where: { collegeId, name: { equals: departmentName, mode: 'insensitive' } },
         });
         if (!dept) {
           dept = await prisma.department.create({
             data: {
               name: departmentName,
-              code: departmentName.substring(0, 3).toUpperCase(),
-              collegeId
-            }
+              code: departmentName.substring(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, '') || 'DEP',
+              collegeId,
+            },
           });
         }
-        departmentsCache[departmentName] = dept.id;
+        departmentsCache[departmentName.toLowerCase()] = dept.id;
         deptId = dept.id;
       }
-
-      const setupEmail = String(row['Email_ID'] || '').trim();
-      if (!setupEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(setupEmail)) {
-        throw new Error('A valid Email_ID is required for teacher setup');
-      }
-      const email = setupEmail.toLowerCase();
 
       await prisma.$transaction(async (tx) => {
         const staleTeachers = await tx.teacher.findMany({
           where: {
             collegeId,
             deletedAt: { not: null },
-            OR: [
-              { teacherId: employeeId },
-              { user: { is: { email } } },
-            ],
+            OR: [{ teacherId: employeeId }, { user: { is: { email } } }],
           },
           select: { id: true, userId: true },
         });
-        for (const stale of staleTeachers) {
-          await deleteTeacherProfile(tx, stale);
-        }
+        for (const stale of staleTeachers) await deleteTeacherProfile(tx, stale);
 
-        let user = await tx.user.findFirst({
-          where: { email, collegeId }
+        const duplicateId = await tx.teacher.findFirst({
+          where: { collegeId, teacherId: employeeId, deletedAt: null },
+          select: { id: true },
         });
+        if (duplicateId) throw new Error(`Employee_ID ${employeeId} already exists`);
+
+        let user = await tx.user.findFirst({ where: { email, collegeId }, include: { teacherProfile: true } });
+        if (user?.teacherProfile) throw new Error(`Email ${email} already belongs to a staff member`);
 
         if (!user) {
           user = await tx.user.create({
-            data: {
-              email,
-              name: staffName,
-              collegeId,
-              role: 'teacher',
-              passwordHash: null,
-              accountStatus: 'pending_setup'
-            }
+            data: { email, name: staffName, collegeId, role: 'teacher', passwordHash: null, accountStatus: 'pending_setup' },
           });
         }
 
-        const joiningDate = row['Date_of_Joining*'] || row['Date_of_Joining'] ? new Date(row['Date_of_Joining*'] || row['Date_of_Joining']) : new Date();
-        const dateOfBirth = row['Date_of_Birth'] ? new Date(row['Date_of_Birth']) : null;
-        
-        const createdTeacher = await tx.teacher.create({
+        await tx.teacher.create({
           data: {
             collegeId,
             userId: user.id,
             departmentId: deptId,
             teacherId: employeeId,
-            designation: String(row['Designation*'] || row['Designation'] || 'Staff'),
-            joiningDate: isNaN(joiningDate) ? new Date() : joiningDate,
+            designation,
+            joiningDate: joining.value,
             salaryGrade: 'Grade A',
-            
-            // New fields mapped from Excel
-            gender: row['Gender*'] || row['Gender'] ? String(row['Gender*'] || row['Gender']) : null,
-            dateOfBirth: dateOfBirth && !isNaN(dateOfBirth) ? dateOfBirth : null,
-            employmentType: row['Employment_Type*'] || row['Employment_Type'] ? String(row['Employment_Type*'] || row['Employment_Type']) : null,
-            qualification: row['Qualification'] ? String(row['Qualification']) : null,
-            experienceYears: row['Experience_Years'] ? parseInt(row['Experience_Years'], 10) : null,
-            mobileNumber: row['Mobile_Number*'] || row['Mobile_Number'] ? String(row['Mobile_Number*'] || row['Mobile_Number']) : null,
+            gender: cell(row, 'Gender') || null,
+            dateOfBirth: dob.value,
+            employmentType: cell(row, 'Employment_Type') || null,
+            qualification: cell(row, 'Qualification') || null,
+            experienceYears,
+            mobileNumber: cell(row, 'Mobile_Number') || null,
             emailId: setupEmail,
-            aadhaarNumber: row['Aadhaar_Number'] ? String(row['Aadhaar_Number']) : null,
-            panNumber: row['PAN_Number'] ? String(row['PAN_Number']) : null,
-            bloodGroup: row['Blood_Group'] ? String(row['Blood_Group']) : null,
-            address: row['Address'] ? String(row['Address']) : null,
-            city: row['City'] ? String(row['City']) : null,
-            district: row['District'] ? String(row['District']) : null,
-            state: row['State'] ? String(row['State']) : null,
-            pincode: row['Pincode'] ? String(row['Pincode']) : null,
-            emergencyContactName: row['Emergency_Contact_Name'] ? String(row['Emergency_Contact_Name']) : null,
-            emergencyContactNumber: row['Emergency_Contact_Number'] ? String(row['Emergency_Contact_Number']) : null,
-          },
-          include: {
-            user: true,
-            department: true,
-            college: { select: { name: true } },
+            aadhaarNumber: cell(row, 'Aadhaar_Number') || null,
+            panNumber: cell(row, 'PAN_Number') || null,
+            bloodGroup: cell(row, 'Blood_Group') || null,
+            address: cell(row, 'Address') || null,
+            city: cell(row, 'City') || null,
+            district: cell(row, 'District') || null,
+            state: cell(row, 'State') || null,
+            pincode: cell(row, 'Pincode') || null,
+            emergencyContactName: cell(row, 'Emergency_Contact_Name') || null,
+            emergencyContactNumber: cell(row, 'Emergency_Contact_Number') || null,
           },
         });
-
       }, { maxWait: 15000, timeout: 30000 });
 
+      seenIds.add(employeeId.toLowerCase());
+      seenEmails.add(email);
       results.successful++;
     } catch (error) {
       results.failed++;
-      results.errors.push(`Row ${index + 2}: ${error.message}`);
+      results.errors.push(`Row ${rowNo}: ${error.message}`);
     }
   }
+
+  await invalidateStaffCache(collegeId);
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} actor=${actorId} Bulk imported staff: ${results.successful} success, ${results.failed} failed`);
   res.json({ success: true, data: results });
