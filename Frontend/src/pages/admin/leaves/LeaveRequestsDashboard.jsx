@@ -20,6 +20,7 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { Pagination } from '../../../components/ui/Pagination';
 import toast from 'react-hot-toast';
+import { subscribeToSync } from '../../../utils/syncChannel';
 
 const TYPE_TABS = [
   { value: 'employee', label: 'Employee Leaves', icon: Briefcase },
@@ -67,8 +68,21 @@ export default function LeaveRequestsDashboard() {
       const res = await api.get('/leaves');
       const raw = res?.data ?? res;
       return Array.isArray(raw) ? raw : [];
-    }
+    },
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    refetchInterval: 15000,
   });
+
+  useEffect(() => {
+    const unsubscribe = subscribeToSync((moduleName) => {
+      if (moduleName === 'leaves' || moduleName === 'leave-requests' || !moduleName) {
+        queryClient.invalidateQueries({ queryKey: ['admin-leaves'] });
+      }
+    });
+    return () => unsubscribe();
+  }, [queryClient]);
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }) => {

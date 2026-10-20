@@ -10,7 +10,7 @@ export default function TeacherAttendance() {
   const { userData } = useAuth();
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [students, setStudents] = useState([]);
   const [attendanceState, setAttendanceState] = useState({});
   const [loading, setLoading] = useState(true);

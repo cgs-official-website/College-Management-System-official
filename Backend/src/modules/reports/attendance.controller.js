@@ -23,11 +23,8 @@ export const getAttendanceReport = async (req, res) => {
     }
 
     const { startDate, endDate, departmentId, classId, groupBy } = validationResult.data;
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
+    const start = new Date(`${startDate}T00:00:00.000Z`);
+    const end = new Date(`${endDate}T23:59:59.999Z`);
 
     // Build base where clause scoped to collegeId and date range
     const whereClause = {

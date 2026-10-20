@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
+import { broadcastSync } from '../utils/syncChannel';
 
 export const useStudentProfile = () => {
   return useQuery({
@@ -71,7 +72,10 @@ export const useStudentAttendance = () => {
       const response = await api.get('/student/attendance');
       return response;
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    refetchInterval: 15000,
   });
 };
 
@@ -97,6 +101,7 @@ export const useStudentLeaveRequests = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['student', 'leave-requests'] });
+      broadcastSync('leaves');
     }
   });
 

@@ -7,9 +7,24 @@ const submitSchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   email: z.preprocess(
-    (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
-    z.string().trim().email('Invalid email address').nullish()
-  ).transform(val => (val ? val.toLowerCase() : null)),
+    (val) => (typeof val === 'string' ? val.trim() : val),
+    z.any().superRefine((val, ctx) => {
+      if (typeof val !== 'string' || val.trim() === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Email address is required.'
+        });
+        return;
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(val)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Enter a valid email address.'
+        });
+      }
+    })
+  ).transform(val => (typeof val === 'string' ? val.toLowerCase() : val)),
   phone: z.preprocess(
     (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
     z.string().trim().nullish()

@@ -269,6 +269,7 @@ export const getStudentAttendance = async (req, res) => {
     const student = req.student;
     const attendance = await prisma.attendance.findMany({
       where: {
+        collegeId: student.collegeId,
         studentId: student.id
       },
       include: {

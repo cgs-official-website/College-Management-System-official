@@ -69,12 +69,11 @@ export const markAttendance = async (req, res) => {
     }
   }
 
-  const attendanceDate = new Date(date);
-  attendanceDate.setHours(0, 0, 0, 0);
+  const attendanceDate = new Date(`${date}T00:00:00.000Z`);
 
   // Check existing attendance for this student on this day
   const nextDate = new Date(attendanceDate);
-  nextDate.setDate(nextDate.getDate() + 1);
+  nextDate.setUTCDate(nextDate.getUTCDate() + 1);
 
   const existing = await prisma.attendance.findFirst({
     where: {
@@ -208,10 +207,9 @@ export const batchMarkAttendance = async (req, res) => {
     });
   }
 
-  const attendanceDate = new Date(date);
-  attendanceDate.setHours(0, 0, 0, 0);
+  const attendanceDate = new Date(`${date}T00:00:00.000Z`);
   const nextDate = new Date(attendanceDate);
-  nextDate.setDate(nextDate.getDate() + 1);
+  nextDate.setUTCDate(nextDate.getUTCDate() + 1);
 
   const results = [];
 
@@ -287,10 +285,9 @@ export const getDailyAttendance = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const dateStr = req.query.date || req.params.date || new Date().toISOString().split('T')[0];
 
-  const searchDate = new Date(dateStr);
-  searchDate.setHours(0, 0, 0, 0);
+  const searchDate = new Date(`${dateStr}T00:00:00.000Z`);
   const nextDate = new Date(searchDate);
-  nextDate.setDate(searchDate.getDate() + 1);
+  nextDate.setUTCDate(nextDate.getUTCDate() + 1);
 
   const records = await prisma.attendance.findMany({
     where: {

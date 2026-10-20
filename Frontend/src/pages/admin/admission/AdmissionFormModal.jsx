@@ -86,7 +86,24 @@ export function AdmissionFormModal({ isOpen, onClose, onSubmit, initialData = nu
             label="Email Address" 
             type="email"
             placeholder="john.doe@example.com"
-            {...register('email')}
+            {...register('email', {
+              required: !initialData ? "Email address is required." : false,
+              validate: (val) => {
+                const trimmed = typeof val === 'string' ? val.trim() : '';
+                if (!trimmed) {
+                  if (!initialData) {
+                    return "Email address is required.";
+                  }
+                  return true;
+                }
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(trimmed)) {
+                  return "Enter a valid email address.";
+                }
+                return true;
+              }
+            })}
+            error={errors.email?.message}
           />
           <Input 
             label="Phone Number" 
