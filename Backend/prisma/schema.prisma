@@ -483,6 +483,9 @@ model Exam {
   updatedAt DateTime @updatedAt
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   courseId  String   @db.Uuid
+  room      String?  @default("Main Hall") @db.VarChar
+  startTime String?  @db.VarChar(10)
+  endTime   String?  @db.VarChar(10)
   college   College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   course    Course   @relation(fields: [courseId], references: [id])
   marks     Mark[]

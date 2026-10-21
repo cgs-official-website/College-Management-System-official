@@ -62,7 +62,24 @@ const StudentLayout = () => {
   const { theme, toggleTheme } = useTheme();
   const { data: profileData } = useStudentProfile();
 
-  const profile = profileData?.data;
+  const profile = profileData?.data ?? profileData;
+
+  const studentFullName = 
+    profile?.name?.trim() || 
+    `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 
+    userData?.name?.trim() || 
+    `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() || 
+    'Student';
+
+  const studentInitials = (() => {
+    const parts = studentFullName.trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return 'ST';
+    if (parts.length === 1) {
+      return parts[0].slice(0, 2).toUpperCase();
+    }
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  })();
+
   const residenceType = (profile?.residenceType || userData?.residenceType || 'Day Scholar').toLowerCase();
   const isHosteller = residenceType.includes('hostel');
   const isDayScholar = !isHosteller;
@@ -196,14 +213,11 @@ const StudentLayout = () => {
                  {profile?.hasProfileImage ? (
                    <img src="/api/v1/student/profile/image" alt="Avatar" className="w-full h-full object-cover" />
                  ) : (
-                   <>
-                     {userData?.firstName?.charAt(0) || 'S'}
-                     {userData?.lastName?.charAt(0) || 'T'}
-                   </>
+                   studentInitials
                  )}
                </div>
                <div className="truncate">
-                 <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate">{userData?.firstName || 'Student'} {userData?.lastName || ''}</p>
+                 <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate">{studentFullName}</p>
                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">STUDENT PORTAL</p>
                </div>
              </div>
@@ -252,14 +266,14 @@ const StudentLayout = () => {
               className="flex items-center gap-3 pl-2 pr-1 py-1 rounded-full hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
             >
               <div className="hidden md:block text-right">
-                <p className="text-sm font-bold text-slate-900 dark:text-white leading-none">{userData?.firstName || 'Student'}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white leading-none">{studentFullName}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Verified Student</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold shadow-md overflow-hidden">
                 {profile?.hasProfileImage ? (
                   <img src="/api/v1/student/profile/image" alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
-                  userData?.firstName?.charAt(0) || 'S'
+                  studentInitials
                 )}
               </div>
             </button>
@@ -272,8 +286,8 @@ const StudentLayout = () => {
           
           <div className="max-w-7xl mx-auto relative">
             <Routes>
-              <Route path="/" element={<StudentDashboardHome isHosteller={isHosteller} isDayScholar={isDayScholar} />} />
-              <Route path="/dashboard" element={<StudentDashboardHome isHosteller={isHosteller} isDayScholar={isDayScholar} />} />
+              <Route path="/" element={<StudentDashboardHome isHosteller={isHosteller} isDayScholar={isDayScholar} studentFullName={studentFullName} />} />
+              <Route path="/dashboard" element={<StudentDashboardHome isHosteller={isHosteller} isDayScholar={isDayScholar} studentFullName={studentFullName} />} />
               <Route path="/courses" element={<StudentCoursesDashboard />} />
               <Route path="/assignments" element={<StudentAssignmentsDashboard />} />
               <Route path="/attendance" element={<StudentAttendanceDashboard />} />
@@ -300,7 +314,7 @@ const StudentLayout = () => {
   );
 };
 
-const StudentDashboardHome = ({ isHosteller, isDayScholar }) => {
+const StudentDashboardHome = ({ isHosteller, isDayScholar, studentFullName: propStudentFullName }) => {
   const { data: dashboardData, isLoading } = useStudentDashboard();
   const { data: profileData } = useStudentProfile();
   const { userData } = useAuth();
@@ -311,10 +325,12 @@ const StudentDashboardHome = ({ isHosteller, isDayScholar }) => {
   const notices = (dashboardData?.data?.recentNotices ?? dashboardData?.recentNotices) || [];
 
   const studentFullName = 
-    profile?.name || 
+    propStudentFullName ||
+    profile?.name?.trim() || 
     `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 
     dashboardData?.data?.student?.name ||
-    userData?.name || 
+    userData?.name?.trim() || 
+    `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() || 
     'Student';
 
   const studentResidenceType = profile?.residenceType || (isHosteller ? 'Hosteller' : 'Day Scholar');

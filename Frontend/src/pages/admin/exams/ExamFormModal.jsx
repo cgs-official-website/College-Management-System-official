@@ -34,7 +34,21 @@ export const normalizeExamType = (type) => {
   return 'Midterm';
 };
 
-export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading }) {
+export const normalizeHall = (rawHall) => {
+  if (!rawHall) return '';
+  let h = String(rawHall).trim().toLowerCase();
+  h = h.replace(/^(?:hall|room)\s*(?:no\.?|number|-|:)?\s*/i, '').trim();
+  return h;
+};
+
+export const normalizeTime = (t) => {
+  if (!t || typeof t !== 'string') return null;
+  const match = t.trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  return `${match[1].padStart(2, '0')}:${match[2]}`;
+};
+
+export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading, existingExams = [] }) {
   const { departments, isLoading: isDepartmentsLoading } = useDepartments();
   const { courses = [], isLoading: isCoursesLoading, error: coursesError } = useCourses();
   
@@ -54,6 +68,51 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
   });
 
   const selectedDeptId = watch('departmentId');
+  const watchedRoom = watch('room');
+  const watchedDate = watch('examDate');
+  const watchedStartTime = watch('startTime');
+  const watchedEndTime = watch('endTime');
+
+  const hallConflictMessage = React.useMemo(() => {
+    if (!watchedRoom || !watchedRoom.trim() || !watchedDate) return null;
+    const normWatchedHall = normalizeHall(watchedRoom);
+    if (!normWatchedHall) return null;
+
+    const normWatchedStart = normalizeTime(watchedStartTime);
+    const normWatchedEnd = normalizeTime(watchedEndTime);
+
+    const targetDateStr = String(watchedDate).split('T')[0];
+
+    const conflict = existingExams.find((ex) => {
+      if (initialData?.id && ex.id === initialData.id) return false;
+      if (ex.status?.toLowerCase() === 'cancelled') return false;
+
+      const exDateStr = (ex.date || ex.examDate || '').split('T')[0];
+      if (exDateStr !== targetDateStr) return false;
+
+      const exNormHall = normalizeHall(ex.room);
+      if (!exNormHall || exNormHall !== normWatchedHall) return false;
+
+      const exStart = normalizeTime(ex.startTime);
+      const exEnd = normalizeTime(ex.endTime);
+
+      if (!normWatchedStart || !normWatchedEnd || !exStart || !exEnd) {
+        return true;
+      }
+
+      return normWatchedStart < exEnd && normWatchedEnd > exStart;
+    });
+
+    if (!conflict) return null;
+
+    const exStart = normalizeTime(conflict.startTime);
+    const exEnd = normalizeTime(conflict.endTime);
+    const timeStr = exStart && exEnd ? ` from ${exStart} to ${exEnd}` : '';
+    const conflictName = conflict.title || conflict.name || 'another exam';
+    const rawTrimmed = String(watchedRoom).trim();
+    const hallDisplay = /hall/i.test(rawTrimmed) ? rawTrimmed : `Hall ${rawTrimmed}`;
+    return `${hallDisplay} is already booked${timeStr} for ${conflictName}.`;
+  }, [watchedRoom, watchedDate, watchedStartTime, watchedEndTime, existingExams, initialData]);
 
   useEffect(() => {
     if (isOpen) {
@@ -102,6 +161,9 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
       ...data,
       name: data.title,
       date: data.examDate,
+      startTime: data.startTime || null,
+      endTime: data.endTime || null,
+      room: data.room ? data.room.trim() : 'Main Hall',
       maxMarks: Number(data.totalMarks) || 100,
       totalMarks: Number(data.totalMarks) || 100,
       type: examType,
@@ -207,11 +269,19 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
         </div>
 
         <div className="grid grid-cols-1 gap-4">
-          <Input 
-            label="Room / Examination Hall" 
-            placeholder="e.g. Main Auditorium Hall 2"
-            {...register('room')}
-          />
+          <div>
+            <Input 
+              label="Room / Examination Hall" 
+              placeholder="e.g. Main Auditorium Hall 2"
+              {...register('room')}
+            />
+            {hallConflictMessage && (
+              <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1.5 bg-rose-50 dark:bg-rose-500/10 p-2 rounded-lg border border-rose-200 dark:border-rose-500/20">
+                <span>⚠️</span>
+                <span>{hallConflictMessage}</span>
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-white/10 mt-6">

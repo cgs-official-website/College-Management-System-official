@@ -53,6 +53,88 @@ async function ensureDefaultCourse(collegeId, courseName, departmentId = null) {
   return course.id;
 }
 
+export const normalizeHall = (rawHall) => {
+  if (!rawHall) return '';
+  let h = String(rawHall).trim().toLowerCase();
+  h = h.replace(/^(?:hall|room)\s*(?:no\.?|number|-|:)?\s*/i, '').trim();
+  return h;
+};
+
+export const normalizeTime = (t) => {
+  if (!t || typeof t !== 'string') return null;
+  const match = t.trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  return `${match[1].padStart(2, '0')}:${match[2]}`;
+};
+
+export const formatDateDisplay = (d) => {
+  try {
+    const dt = new Date(d);
+    return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch {
+    return String(d);
+  }
+};
+
+export async function checkHallConflict(collegeId, { date, room, startTime, endTime, excludeId = null }) {
+  if (!room || !String(room).trim()) return null;
+
+  const targetNormHall = normalizeHall(room);
+  if (!targetNormHall) return null;
+
+  const targetDateObj = new Date(date);
+  if (isNaN(targetDateObj.getTime())) return null;
+  const targetDateStr = targetDateObj.toISOString().split('T')[0];
+
+  const newStart = normalizeTime(startTime);
+  const newEnd = normalizeTime(endTime);
+
+  const existingExams = await prisma.exam.findMany({
+    where: {
+      collegeId,
+      ...(excludeId ? { id: { not: excludeId } } : {})
+    },
+    select: {
+      id: true,
+      name: true,
+      date: true,
+      room: true,
+      startTime: true,
+      endTime: true,
+      status: true,
+    }
+  });
+
+  for (const ex of existingExams) {
+    if (ex.status?.toLowerCase() === 'cancelled') continue;
+
+    const exDateStr = ex.date ? new Date(ex.date).toISOString().split('T')[0] : '';
+    if (exDateStr !== targetDateStr) continue;
+
+    const exNormHall = normalizeHall(ex.room);
+    if (!exNormHall || exNormHall !== targetNormHall) continue;
+
+    const exStart = normalizeTime(ex.startTime);
+    const exEnd = normalizeTime(ex.endTime);
+
+    let isConflict = false;
+    if (!newStart || !newEnd || !exStart || !exEnd) {
+      isConflict = true;
+    } else if (newStart < exEnd && newEnd > exStart) {
+      isConflict = true;
+    }
+
+    if (isConflict) {
+      const timePart = exStart && exEnd ? ` from ${exStart} to ${exEnd}` : '';
+      const rawTrimmed = String(room).trim();
+      const hallDisplay = /hall/i.test(rawTrimmed) ? rawTrimmed : `Hall ${rawTrimmed}`;
+      return `${hallDisplay} is already booked on ${formatDateDisplay(ex.date)}${timePart} for ${ex.name}. Choose another hall or time.`;
+    }
+  }
+
+  return null;
+}
+
 export const getExams = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const { courseId } = req.query;
@@ -100,6 +182,9 @@ export const getExams = async (req, res) => {
       maxMarks: exam.maxMarks,
       type: exam.type || 'Midterm',
       status: exam.status || 'active',
+      room: exam.room || 'Main Hall',
+      startTime: exam.startTime || null,
+      endTime: exam.endTime || null,
       totalStudentsAppeared,
       averageScore: avgScore,
       marks: exam.marks.map(m => ({
@@ -123,6 +208,23 @@ export const createExam = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const actorId = req.user?.id || req.user?.userId;
   const payload = createExamSchema.parse(req.body);
+
+  const hallConflict = await checkHallConflict(collegeId, {
+    date: payload.date || new Date(),
+    room: payload.room,
+    startTime: payload.startTime,
+    endTime: payload.endTime
+  });
+
+  if (hallConflict) {
+    return res.status(409).json({
+      success: false,
+      error: {
+        code: 'HALL_CONFLICT',
+        message: hallConflict
+      }
+    });
+  }
 
   let targetCourseId = null;
   if (payload.courseId) {
@@ -156,7 +258,10 @@ export const createExam = async (req, res) => {
       date: payload.date ? new Date(payload.date) : new Date(),
       maxMarks: Number(payload.maxMarks) || 100,
       type: payload.type || 'Midterm',
-      status: payload.status || 'pending'
+      status: payload.status || 'pending',
+      room: payload.room ? String(payload.room).trim() : 'Main Hall',
+      startTime: payload.startTime || null,
+      endTime: payload.endTime || null,
     },
     include: { 
       course: {
@@ -228,7 +333,10 @@ export const createExam = async (req, res) => {
       date: exam.date.toISOString().split('T')[0],
       maxMarks: exam.maxMarks,
       type: exam.type,
-      status: exam.status
+      status: exam.status,
+      room: exam.room || payload.room || 'Main Hall',
+      startTime: exam.startTime || payload.startTime || null,
+      endTime: exam.endTime || payload.endTime || null,
     }
   });
 };
@@ -250,6 +358,29 @@ export const updateExam = async (req, res) => {
 
   if (!existing) {
     return res.status(404).json({ success: false, error: { code: 'EXAM_NOT_FOUND', message: 'Exam not found' } });
+  }
+
+  const effectiveDate = payload.date !== undefined ? payload.date : existing.date;
+  const effectiveRoom = payload.room !== undefined ? payload.room : existing.room;
+  const effectiveStartTime = payload.startTime !== undefined ? payload.startTime : existing.startTime;
+  const effectiveEndTime = payload.endTime !== undefined ? payload.endTime : existing.endTime;
+
+  const hallConflict = await checkHallConflict(collegeId, {
+    date: effectiveDate,
+    room: effectiveRoom,
+    startTime: effectiveStartTime,
+    endTime: effectiveEndTime,
+    excludeId: id,
+  });
+
+  if (hallConflict) {
+    return res.status(409).json({
+      success: false,
+      error: {
+        code: 'HALL_CONFLICT',
+        message: hallConflict
+      }
+    });
   }
 
   const oldDateStr = existing.date ? new Date(existing.date).toISOString().split('T')[0] : null;
@@ -285,6 +416,9 @@ export const updateExam = async (req, res) => {
   if (payload.type) updateData.type = payload.type;
   if (payload.status) updateData.status = payload.status;
   if (payload.date) updateData.date = new Date(payload.date);
+  if (payload.room !== undefined) updateData.room = payload.room ? String(payload.room).trim() : 'Main Hall';
+  if (payload.startTime !== undefined) updateData.startTime = payload.startTime || null;
+  if (payload.endTime !== undefined) updateData.endTime = payload.endTime || null;
 
   const updated = await prisma.exam.update({
     where: { id },
@@ -379,7 +513,10 @@ export const updateExam = async (req, res) => {
       date: updated.date ? new Date(updated.date).toISOString().split('T')[0] : null,
       maxMarks: updated.maxMarks,
       type: updated.type,
-      status: updated.status
+      status: updated.status,
+      room: updated.room,
+      startTime: updated.startTime,
+      endTime: updated.endTime,
     }
   });
 };

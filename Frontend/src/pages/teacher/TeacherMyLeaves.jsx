@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { api } from '../../services/api';
 import { Loader2, Send, Clock, Paperclip } from 'lucide-react';
+import { subscribeToSync, broadcastSync } from '../../utils/syncChannel';
 
 const LEAVE_TYPES = ['Sick Leave', 'Other'];
 
@@ -17,14 +18,29 @@ export default function TeacherMyLeaves() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState(emptyForm);
   const [proofFile, setProofFile] = useState(null);
+
   const { data: myLeaves = [], isLoading: leavesLoading } = useQuery({
     queryKey: ['staff-my-leaves'],
     queryFn: async () => {
       const res = await api.get('/leaves/my');
       const raw = res?.data ?? [];
       return Array.isArray(raw) ? raw : [];
-    }
+    },
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    refetchInterval: () => (typeof document !== 'undefined' && document.hidden ? false : 8000),
+    refetchIntervalInBackground: false,
   });
+
+  useEffect(() => {
+    const unsubscribe = subscribeToSync((moduleName) => {
+      if (moduleName === 'leaves' || moduleName === 'leave-requests' || !moduleName) {
+        queryClient.invalidateQueries({ queryKey: ['staff-my-leaves'] });
+      }
+    });
+    return () => unsubscribe();
+  }, [queryClient]);
 
   const submitMutation = useMutation({
     mutationFn: async (payload) => {
@@ -33,6 +49,8 @@ export default function TeacherMyLeaves() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['staff-my-leaves'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-leaves'] });
+      broadcastSync('leaves');
       toast.success('Leave application submitted to admin!');
       setForm(emptyForm);
       setProofFile(null);

@@ -20,7 +20,7 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { Pagination } from '../../../components/ui/Pagination';
 import toast from 'react-hot-toast';
-import { subscribeToSync } from '../../../utils/syncChannel';
+import { subscribeToSync, broadcastSync } from '../../../utils/syncChannel';
 
 const TYPE_TABS = [
   { value: 'employee', label: 'Employee Leaves', icon: Briefcase },
@@ -72,7 +72,8 @@ export default function LeaveRequestsDashboard() {
     staleTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
-    refetchInterval: 15000,
+    refetchInterval: () => (typeof document !== 'undefined' && document.hidden ? false : 8000),
+    refetchIntervalInBackground: false,
   });
 
   useEffect(() => {
@@ -91,6 +92,9 @@ export default function LeaveRequestsDashboard() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin-leaves'] });
+      queryClient.invalidateQueries({ queryKey: ['staff-my-leaves'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'leave-requests'] });
+      broadcastSync('leaves');
       toast.success(`Leave request marked as ${variables.status}!`);
     },
     onError: (err) => {

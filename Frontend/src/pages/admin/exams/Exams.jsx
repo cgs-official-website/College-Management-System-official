@@ -67,12 +67,16 @@ export default function Exams() {
   const handleOpenEdit = (exam) => {
     setEditingExam({
       ...exam,
+      id: exam.id,
       title: exam.title || exam.name,
       departmentId: exam.departmentId || '',
       courseId: exam.courseId || '',
       subject: exam.subject || exam.name,
       totalMarks: exam.maxMarks || exam.totalMarks || 100,
       examDate: exam.date || exam.examDate,
+      startTime: exam.startTime || '09:00',
+      endTime: exam.endTime || '12:00',
+      room: exam.room || '',
     });
     setIsFormOpen(true);
   };
@@ -297,12 +301,20 @@ export default function Exams() {
                             <strong className="text-slate-900 dark:text-white font-bold">{exam.maxMarks || exam.totalMarks || 100}</strong>
                           </div>
 
-                          {exam.room && (
-                            <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-                              <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                              <span className="truncate max-w-[120px]">{exam.room}</span>
-                            </div>
-                          )}
+                          <div className="flex items-center gap-2.5">
+                            {exam.startTime && exam.endTime && (
+                              <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                                <Clock className="w-3.5 h-3.5 text-blue-500" />
+                                <span>{exam.startTime} - {exam.endTime}</span>
+                              </div>
+                            )}
+                            {exam.room && (
+                              <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                                <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                                <span className="truncate max-w-[120px]">{exam.room}</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -393,6 +405,7 @@ export default function Exams() {
         onSubmit={handleSubmit}
         initialData={editingExam}
         isLoading={isAdding || isUpdating}
+        existingExams={exams}
       />
     </div>
   );

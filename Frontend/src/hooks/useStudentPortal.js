@@ -101,6 +101,7 @@ export const useStudentLeaveRequests = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['student', 'leave-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-leaves'] });
       broadcastSync('leaves');
     }
   });
