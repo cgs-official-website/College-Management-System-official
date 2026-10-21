@@ -543,7 +543,7 @@ export const getStudentFees = async (req, res) => {
       const effectivePaid = isPaid && (!f.amountPaid || Number(f.amountPaid) === 0)
         ? Number(f.amountDue)
         : Number(f.amountPaid || 0);
-      const resolvedFeeType = f.transactions?.[0]?.gatewayRef || 'Tuition Fee';
+      const resolvedFeeType = f.feeType || 'Tuition Fee';
 
       return {
         ...f,
@@ -602,34 +602,58 @@ export const payStudentFee = async (req, res) => {
 
     const paymentAmount = Number(amount);
     const currentPaid = Number(fee.amountPaid || 0);
-    const newPaid = currentPaid + paymentAmount;
-    const isFullyPaid = newPaid >= Number(fee.amountDue);
-    const newStatus = isFullyPaid ? 'paid' : 'partial';
+    const amountDue = Number(fee.amountDue);
+    const isTransport = fee.feeType === 'Transport Fee';
 
+    if (isTransport) {
+      const remaining = Math.round((amountDue - currentPaid) * 100) / 100;
+      if (fee.status === 'paid' || remaining <= 0) {
+        return res.status(409).json({
+          success: false,
+          error: { message: 'This transport fee is already paid.' }
+        });
+      }
+      if (Math.round(paymentAmount * 100) !== Math.round(remaining * 100)) {
+        return res.status(400).json({
+          success: false,
+          error: { message: `Transport fees must be paid in full (₹${remaining}).` }
+        });
+      }
+    }
+
+    const newPaid = currentPaid + paymentAmount;
+    const isFullyPaid = newPaid >= amountDue;
+    const newStatus = isFullyPaid ? 'paid' : 'partial';
     const transactionRef = `TXN-STU-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const transaction = await prisma.paymentTransaction.create({
-      data: {
-        collegeId: student.collegeId,
-        feeId: fee.id,
-        gateway: paymentMethod,
-        gatewayRef: transactionRef,
-        amount: paymentAmount,
-        status: 'success',
-        paidAt: new Date()
+    const { transaction, updatedFee } = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.fee.updateMany({
+        where: { id: fee.id, amountPaid: fee.amountPaid, ...(isTransport ? { status: { not: 'paid' } } : {}) },
+        data: { amountPaid: newPaid, status: newStatus }
+      });
+      if (claimed.count === 0) {
+        const err = new Error('This fee was just updated. Please refresh and try again.');
+        err.statusCode = 409;
+        throw err;
       }
-    });
 
-    const updatedFee = await prisma.fee.update({
-      where: { id: fee.id },
-      data: {
-        amountPaid: newPaid,
-        status: newStatus
-      },
-      include: {
-        feeStructure: true,
-        transactions: true
-      }
+      const transaction = await tx.paymentTransaction.create({
+        data: {
+          collegeId: student.collegeId,
+          feeId: fee.id,
+          gateway: paymentMethod,
+          gatewayRef: transactionRef,
+          amount: paymentAmount,
+          status: 'success',
+          paidAt: new Date()
+        }
+      });
+
+      const updatedFee = await tx.fee.findUnique({
+        where: { id: fee.id },
+        include: { feeStructure: true, transactions: true }
+      });
+      return { transaction, updatedFee };
     });
 
     res.json({
@@ -642,7 +666,8 @@ export const payStudentFee = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: { message: error.message } });
+    const status = error.statusCode || 500;
+    res.status(status).json({ success: false, error: { message: error.message } });
   }
 };
 

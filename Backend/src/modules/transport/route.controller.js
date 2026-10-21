@@ -1,19 +1,31 @@
 import { prisma, logger } from '../../server.js';
 import { routeSchema, updateRouteSchema } from './transport.schema.js';
+import { releaseTransportFees } from './transportFees.js';
 
 const getCollegeId = (req) => req.tenant?.collegeId || req.user?.collegeId;
+const liveStudents = { student: { deletedAt: null } };
 
 const include = {
   vehicle: { include: { driver: true } },
-  _count: { select: { allocations: { where: { student: { deletedAt: null } } } } },
+  stops: {
+    orderBy: { sequence: 'asc' },
+    include: { _count: { select: { allocations: { where: liveStudents } } } },
+  },
+  _count: { select: { allocations: { where: liveStudents } } },
 };
 
 const shape = (r) => ({
   id: r.id,
   name: r.name,
-  stops: r.stops,
   status: r.status,
   vehicleId: r.vehicleId,
+  stops: r.stops.map((s) => ({
+    id: s.id,
+    name: s.name,
+    sequence: s.sequence,
+    fee: Number(s.fee),
+    studentsCount: s._count.allocations,
+  })),
   vehicle: r.vehicle
     ? {
         id: r.vehicle.id,
@@ -52,6 +64,11 @@ const checkVehicle = async (collegeId, vehicleId, routeId, studentsOnRoute) => {
   return null;
 };
 
+const uniqueMessage = (e) =>
+  String(e.meta?.target || '').includes('vehicleId')
+    ? 'That vehicle is already on another route'
+    : 'Stop names must be unique within a route';
+
 export const getRoutes = async (req, res) => {
   const collegeId = getCollegeId(req);
   if (!collegeId) return fail(res, 400, 'College ID is required');
@@ -77,7 +94,7 @@ export const getRoutes = async (req, res) => {
 
 export const createRoute = async (req, res) => {
   const collegeId = getCollegeId(req);
-  const payload = routeSchema.parse(req.body);
+  const { stops, ...payload } = routeSchema.parse(req.body);
 
   if (payload.vehicleId) {
     const problem = await checkVehicle(collegeId, payload.vehicleId, null, 0);
@@ -86,13 +103,19 @@ export const createRoute = async (req, res) => {
 
   try {
     const route = await prisma.transportRoute.create({
-      data: { ...payload, collegeId },
+      data: {
+        ...payload,
+        collegeId,
+        stops: {
+          create: stops.map((s, i) => ({ collegeId, name: s.name, fee: s.fee, sequence: i + 1 })),
+        },
+      },
       include,
     });
-    logger.info(`[info] college=${collegeId} Created route ${route.name}`);
+    logger.info(`[info] college=${collegeId} Created route ${route.name} with ${stops.length} stops`);
     res.status(201).json({ success: true, data: shape(route) });
   } catch (e) {
-    if (e.code === 'P2002') return fail(res, 409, 'That vehicle is already on another route');
+    if (e.code === 'P2002') return fail(res, 409, uniqueMessage(e));
     throw e;
   }
 };
@@ -100,7 +123,7 @@ export const createRoute = async (req, res) => {
 export const updateRoute = async (req, res) => {
   const collegeId = getCollegeId(req);
   const { id } = req.params;
-  const payload = updateRouteSchema.parse(req.body);
+  const { stops, ...payload } = updateRouteSchema.parse(req.body);
 
   const existing = await prisma.transportRoute.findFirst({ where: { id, collegeId }, include });
   if (!existing) return fail(res, 404, 'Route not found');
@@ -116,11 +139,55 @@ export const updateRoute = async (req, res) => {
     }
   }
 
+  let removedIds = [];
+  if (stops) {
+    const known = new Set(existing.stops.map((s) => s.id));
+    const foreign = stops.find((s) => s.id && !known.has(s.id));
+    if (foreign) return fail(res, 400, `Stop "${foreign.name}" does not belong to this route`);
+
+    const keep = new Set(stops.filter((s) => s.id).map((s) => s.id));
+    const removed = existing.stops.filter((s) => !keep.has(s.id));
+    const blocked = removed.find((s) => s._count.allocations > 0);
+    if (blocked) {
+      return fail(res, 409, `Stop "${blocked.name}" has ${blocked._count.allocations} student(s). Unassign them before removing it.`);
+    }
+    removedIds = removed.map((s) => s.id);
+  }
+
   try {
-    const route = await prisma.transportRoute.update({ where: { id }, data: payload, include });
+    await prisma.$transaction(
+      async (tx) => {
+        if (Object.keys(payload).length) {
+          await tx.transportRoute.update({ where: { id }, data: payload });
+        }
+        if (!stops) return;
+
+        if (removedIds.length) {
+          await tx.studentTransportAllocation.deleteMany({
+            where: { stopId: { in: removedIds }, student: { deletedAt: { not: null } } },
+          });
+          await tx.routeStop.deleteMany({ where: { id: { in: removedIds } } });
+        }
+
+        for (const s of stops.filter((x) => x.id)) {
+          await tx.routeStop.update({ where: { id: s.id }, data: { name: `__tmp_${s.id}` } });
+        }
+        for (const [i, s] of stops.entries()) {
+          if (s.id) {
+            await tx.routeStop.update({ where: { id: s.id }, data: { name: s.name, fee: s.fee, sequence: i + 1 } });
+          } else {
+            await tx.routeStop.create({ data: { collegeId, routeId: id, name: s.name, fee: s.fee, sequence: i + 1 } });
+          }
+        }
+      },
+      { timeout: 30000, maxWait: 10000 }
+    );
+
+    const route = await prisma.transportRoute.findUnique({ where: { id }, include });
     res.json({ success: true, data: shape(route) });
   } catch (e) {
-    if (e.code === 'P2002') return fail(res, 409, 'That vehicle is already on another route');
+    if (e.code === 'P2002') return fail(res, 409, uniqueMessage(e));
+    if (e.code === 'P2003') return fail(res, 409, 'A stop still has students assigned. Refresh and try again.');
     throw e;
   }
 };
@@ -132,7 +199,15 @@ export const deleteRoute = async (req, res) => {
   const existing = await prisma.transportRoute.findFirst({ where: { id, collegeId } });
   if (!existing) return fail(res, 404, 'Route not found');
 
-  await prisma.transportRoute.delete({ where: { id } });
+  await prisma.$transaction(async (tx) => {
+    const allocs = await tx.studentTransportAllocation.findMany({
+      where: { routeId: id },
+      select: { studentId: true },
+    });
+    await releaseTransportFees(tx, collegeId, allocs.map((a) => a.studentId));
+    await tx.transportRoute.delete({ where: { id } });
+  }, { timeout: 30000, maxWait: 10000 });
+
   logger.info(`[info] college=${collegeId} Deleted route ${existing.name}`);
   res.json({ success: true, message: 'Route deleted successfully' });
 };

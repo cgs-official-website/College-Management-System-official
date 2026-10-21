@@ -2,6 +2,10 @@ import { prisma, logger } from '../../server.js';
 import { createFeeSchema, updateFeeSchema } from './fees.schema.js';
 
 // Helper function to format a fee record for frontend & backward compatibility
+
+const TRANSPORT_LOCK_MSG =
+  'Transport fees are managed in the Transport module. Edit or remove the student assignment there.';
+
 const formatFeeRecord = (fee) => {
   const student = fee.student;
   const studentName = student?.user?.name || student?.user?.email || 'Student';
@@ -11,7 +15,7 @@ const formatFeeRecord = (fee) => {
 
   const transaction = fee.transactions?.[0];
   const paymentMethod = transaction?.gateway || '';
-  const feeType = transaction?.gatewayRef || 'Tuition Fee';
+  const feeType = fee.feeType || 'Tuition Fee';
   const dueDateStr = fee.feeStructure?.dueDate
     ? new Date(fee.feeStructure.dueDate).toISOString().split('T')[0]
     : new Date(fee.createdAt).toISOString().split('T')[0];
@@ -74,6 +78,12 @@ export const createFee = async (req, res) => {
   // Validate incoming body against Zod schema
   const payload = createFeeSchema.parse(req.body);
 
+  if (payload.feeType === 'Transport Fee') {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'TRANSPORT_FEE_MANAGED', message: 'Transport fees are created automatically when a student is assigned a bus.' }
+    });
+  }
   const numAmount = payload.amount;
   const isPaid = payload.status === 'paid';
 
@@ -152,7 +162,8 @@ export const createFee = async (req, res) => {
         feeStructureId: targetFeeStructureId,
         status: payload.status,
         amountDue: numAmount,
-        amountPaid: isPaid ? numAmount : 0
+        amountPaid: isPaid ? numAmount : 0,
+        feeType: payload.feeType || 'Tuition Fee'
       },
       include: {
         student: {
@@ -214,6 +225,13 @@ export const updateFee = async (req, res) => {
     return res.status(404).json({ success: false, error: { code: 'FEE_NOT_FOUND', message: 'Fee record not found' } });
   }
 
+  if (existing.feeType === 'Transport Fee') {
+    return res.status(409).json({ success: false, error: { code: 'TRANSPORT_FEE_MANAGED', message: TRANSPORT_LOCK_MSG } });
+  }
+  if (payload.feeType === 'Transport Fee') {
+    return res.status(400).json({ success: false, error: { code: 'TRANSPORT_FEE_MANAGED', message: 'Transport fees are created automatically when a student is assigned a bus.' } });
+  }
+
   const updatedFee = await prisma.$transaction(async (tx) => {
     const newStatus = payload.status || existing.status;
     const isPaid = newStatus === 'paid';
@@ -228,7 +246,8 @@ export const updateFee = async (req, res) => {
       data: {
         status: newStatus,
         amountDue: newAmountDue,
-        amountPaid: newAmountPaid
+        amountPaid: newAmountPaid,
+        ...(payload.feeType ? { feeType: payload.feeType } : {})
       }
     });
 
@@ -315,6 +334,10 @@ export const deleteFee = async (req, res) => {
 
   if (!existing) {
     return res.status(404).json({ success: false, error: { code: 'FEE_NOT_FOUND', message: 'Fee record not found' } });
+  }
+
+  if (existing.feeType === 'Transport Fee') {
+    return res.status(409).json({ success: false, error: { code: 'TRANSPORT_FEE_MANAGED', message: TRANSPORT_LOCK_MSG } });
   }
 
   await prisma.$transaction(async (tx) => {

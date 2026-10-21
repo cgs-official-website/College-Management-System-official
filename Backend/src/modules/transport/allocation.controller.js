@@ -1,5 +1,6 @@
 import { prisma, logger } from '../../server.js';
-import { assignSchema, unassignSchema } from './transport.schema.js';
+import { assignSchema, unassignSchema, changeStopSchema  } from './transport.schema.js';
+import { releaseTransportFees } from './transportFees.js';
 
 const getCollegeId = (req) => req.tenant?.collegeId || req.user?.collegeId;
 const fail = (res, status, message) => res.status(status).json({ success: false, error: { message } });
@@ -56,7 +57,17 @@ export const getAllocations = async (req, res) => {
   const { routeId } = req.query;
   const rows = await prisma.studentTransportAllocation.findMany({
     where: { collegeId, ...(routeId ? { routeId } : {}), student: { deletedAt: null } },
-    include: { student: { select: studentSelect }, route: { select: { id: true, name: true } } },
+    include: {
+      student: { select: studentSelect },
+      route: { select: { id: true, name: true } },
+      stop: { select: { id: true, name: true, fee: true } },
+      fees: {
+        where: { feeType: 'Transport Fee' },
+        select: { status: true, amountDue: true, term: { select: { label: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
+    },
     orderBy: { assignedAt: 'desc' },
   });
 
@@ -66,6 +77,11 @@ export const getAllocations = async (req, res) => {
       ...shapeStudent(a.student),
       routeId: a.route.id,
       routeName: a.route.name,
+      stopId: a.stop.id,
+      stopName: a.stop.name,
+      stopFee: Number(a.stop.fee),
+      feeStatus: a.fees[0]?.status || null,
+      feeTerm: a.fees[0]?.term?.label || null,
       assignedAt: a.assignedAt,
     })),
   });
@@ -74,7 +90,7 @@ export const getAllocations = async (req, res) => {
 export const assignStudents = async (req, res) => {
   const collegeId = getCollegeId(req);
   const actorId = req.user?.id || req.user?.userId || null;
-  const { routeId, studentIds: rawIds } = assignSchema.parse(req.body);
+  const { routeId, stopId, studentIds: rawIds } = assignSchema.parse(req.body);
   const studentIds = [...new Set(rawIds)];
 
   try {
@@ -94,6 +110,12 @@ export const assignStudents = async (req, res) => {
         if (route.vehicle.status !== 'Active') {
           throw httpError(400, `Bus ${route.vehicle.vehicleNo} is under maintenance`);
         }
+
+        const stop = await tx.routeStop.findFirst({ where: { id: stopId, routeId, collegeId } });
+        if (!stop) throw httpError(400, 'The selected stop does not belong to this route');
+
+        const term = await tx.transportFeeTerm.findFirst({ where: { collegeId, isCurrent: true } });
+        if (!term) throw httpError(400, 'No current fee term is set. Set one in the Fee Term tab first.');
 
         const students = await tx.student.findMany({
           where: { id: { in: studentIds }, collegeId, deletedAt: null },
@@ -124,15 +146,57 @@ export const assignStudents = async (req, res) => {
         }
 
         await tx.studentTransportAllocation.createMany({
-          data: studentIds.map((studentId) => ({ collegeId, studentId, routeId, assignedBy: actorId })),
+          data: studentIds.map((studentId) => ({ collegeId, studentId, routeId, stopId, assignedBy: actorId })),
         });
 
-        return { assigned: studentIds.length, routeName: route.name, seatsLeft: free - studentIds.length };
+        const amount = Number(stop.fee);
+        let feesCreated = 0;
+        if (amount > 0) {
+          const allocs = await tx.studentTransportAllocation.findMany({
+            where: { collegeId, studentId: { in: studentIds } },
+            select: { id: true, studentId: true },
+          });
+
+          let structure = await tx.feeStructure.findFirst({
+            where: { collegeId, semester: term.semester, departmentId: null, totalAmount: amount, dueDate: term.dueDate },
+          });
+          if (!structure) {
+            structure = await tx.feeStructure.create({
+              data: { collegeId, semester: term.semester, departmentId: null, totalAmount: amount, dueDate: term.dueDate },
+            });
+          }
+
+          const created = await tx.fee.createMany({
+            data: allocs.map((a) => ({
+              collegeId,
+              studentId: a.studentId,
+              feeStructureId: structure.id,
+              status: 'pending',
+              amountDue: amount,
+              amountPaid: 0,
+              feeType: 'Transport Fee',
+              termId: term.id,
+              allocationId: a.id,
+            })),
+            skipDuplicates: true,
+          });
+          feesCreated = created.count;
+        }
+
+        return {
+          assigned: studentIds.length,
+          routeName: route.name,
+          stopName: stop.name,
+          feeAmount: amount,
+          feesCreated,
+          termLabel: term.label,
+          seatsLeft: free - studentIds.length,
+        };
       },
       { timeout: 30000, maxWait: 10000 }
     );
 
-    logger.info(`[info] college=${collegeId} actor=${actorId} Assigned ${result.assigned} students to route ${result.routeName}`);
+    logger.info(`[info] college=${collegeId} actor=${actorId} Assigned ${result.assigned} students to ${result.routeName} / ${result.stopName}`);
     res.json({ success: true, data: result });
   } catch (e) {
     if (e.status) return fail(res, e.status, e.message);
@@ -145,12 +209,10 @@ export const unassignStudents = async (req, res) => {
   const collegeId = getCollegeId(req);
   const { studentIds } = unassignSchema.parse(req.body);
 
-  const { count } = await prisma.studentTransportAllocation.deleteMany({
-    where: { collegeId, studentId: { in: studentIds } },
-  });
+  const result = await prisma.$transaction((tx) => releaseTransportFees(tx, collegeId, studentIds));
 
-  logger.info(`[info] college=${collegeId} Unassigned ${count} students from transport`);
-  res.json({ success: true, data: { unassigned: count } });
+  logger.info(`[info] college=${collegeId} Unassigned ${result.count} students (fees removed ${result.feesRemoved}, kept ${result.feesKept})`);
+  res.json({ success: true, data: { unassigned: result.count, feesRemoved: result.feesRemoved, feesKept: result.feesKept } });
 };
 
 export const getMyTransport = async (req, res) => {
@@ -164,11 +226,18 @@ export const getMyTransport = async (req, res) => {
       transportAllocation: {
         select: {
           assignedAt: true,
+          stop: { select: { name: true, fee: true } },
+          fees: {
+            where: { feeType: 'Transport Fee' },
+            select: { id: true, status: true, amountDue: true, amountPaid: true, term: { select: { label: true } } },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
           route: {
             select: {
               id: true,
               name: true,
-              stops: true,
+              stops: { orderBy: { sequence: 'asc' }, select: { name: true } },
               status: true,
               vehicle: {
                 select: {
@@ -199,9 +268,19 @@ export const getMyTransport = async (req, res) => {
       route: alloc
         ? {
             name: alloc.route.name,
-            stops: alloc.route.stops,
+            stops: alloc.route.stops.map((s) => s.name),
             status: alloc.route.status,
             assignedAt: alloc.assignedAt,
+            stop: alloc.stop?.name || null,
+            fee: alloc.fees[0]
+              ? {
+                  id: alloc.fees[0].id,
+                  amount: Number(alloc.fees[0].amountDue),
+                  paid: Number(alloc.fees[0].amountPaid),
+                  status: alloc.fees[0].status,
+                  term: alloc.fees[0].term?.label || null,
+                }
+              : null,
             bus: alloc.route.vehicle
               ? {
                   vehicleNo: alloc.route.vehicle.vehicleNo,
@@ -214,4 +293,64 @@ export const getMyTransport = async (req, res) => {
         : null,
     },
   });
+};
+
+export const changeStop = async (req, res) => {
+  const collegeId = getCollegeId(req);
+  const { studentId, stopId } = changeStopSchema.parse(req.body);
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const alloc = await tx.studentTransportAllocation.findFirst({
+        where: { studentId, collegeId, student: { deletedAt: null } },
+        include: { stop: true },
+      });
+      if (!alloc) throw httpError(404, 'This student is not assigned to a bus');
+      if (alloc.stopId === stopId) throw httpError(400, 'The student is already on this stop');
+
+      const stop = await tx.routeStop.findFirst({ where: { id: stopId, routeId: alloc.routeId, collegeId } });
+      if (!stop) throw httpError(400, 'The new stop must belong to the same route');
+
+      const fee = await tx.fee.findFirst({
+        where: { allocationId: alloc.id, feeType: 'Transport Fee' },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (fee && (fee.status === 'paid' || Number(fee.amountPaid || 0) > 0)) {
+        throw httpError(409, 'The transport fee is already paid, so the stop cannot be changed.');
+      }
+
+      const amount = Number(stop.fee);
+      if (fee) {
+        if (amount > 0) {
+          const term = fee.termId ? await tx.transportFeeTerm.findUnique({ where: { id: fee.termId } }) : null;
+          let structure = term
+            ? await tx.feeStructure.findFirst({
+                where: { collegeId, semester: term.semester, departmentId: null, totalAmount: amount, dueDate: term.dueDate },
+              })
+            : null;
+          if (!structure && term) {
+            structure = await tx.feeStructure.create({
+              data: { collegeId, semester: term.semester, departmentId: null, totalAmount: amount, dueDate: term.dueDate },
+            });
+          }
+          await tx.fee.update({
+            where: { id: fee.id },
+            data: { amountDue: amount, ...(structure ? { feeStructureId: structure.id } : {}) },
+          });
+        } else {
+          await tx.paymentTransaction.deleteMany({ where: { feeId: fee.id } });
+          await tx.fee.delete({ where: { id: fee.id } });
+        }
+      }
+
+      await tx.studentTransportAllocation.update({ where: { id: alloc.id }, data: { stopId } });
+      return { stopName: stop.name, feeAmount: amount };
+    });
+
+    res.json({ success: true, data: result });
+  } catch (e) {
+    if (e.status) return fail(res, e.status, e.message);
+    throw e;
+  }
 };

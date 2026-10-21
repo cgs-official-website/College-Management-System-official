@@ -14,6 +14,7 @@ const useResource = (key, path) => {
     qc.invalidateQueries({ queryKey: ['transport-routes'] });
     qc.invalidateQueries({ queryKey: ['transport-waiting'] });
     qc.invalidateQueries({ queryKey: ['transport-allocated'] });
+    qc.invalidateQueries({ queryKey: ['transport-terms'] });
   };
 
   const query = useQuery({
@@ -74,6 +75,7 @@ export const useAllocations = (routeId) => {
     qc.invalidateQueries({ queryKey: ['transport-waiting'] });
     qc.invalidateQueries({ queryKey: ['transport-allocated'] });
     qc.invalidateQueries({ queryKey: ['transport-routes'] });
+    qc.invalidateQueries({ queryKey: ['transport-terms'] });
   };
 
   const waiting = useQuery({
@@ -91,7 +93,11 @@ export const useAllocations = (routeId) => {
     mutationFn: async (body) => getBody(await api.post('/transport/allocations/assign', body)),
     onSuccess: (res) => {
       const d = res?.data;
-      toast.success(d ? `${d.assigned} student(s) assigned to ${d.routeName}` : 'Assigned');
+      toast.success(
+        d
+          ? `${d.assigned} student(s) assigned to ${d.routeName} (${d.stopName})${d.feesCreated ? `, fee ₹${d.feeAmount} created` : ''}`
+          : 'Assigned'
+      );
       refresh();
     },
     onError: (e) => { toast.error(errMsg(e)); refresh(); },
@@ -100,6 +106,16 @@ export const useAllocations = (routeId) => {
   const unassign = useMutation({
     mutationFn: async (studentIds) => getBody(await api.post('/transport/allocations/unassign', { studentIds })),
     onSuccess: () => { toast.success('Student removed from route'); refresh(); },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+
+    const changeStopMutation = useMutation({
+    mutationFn: async (body) => getBody(await api.post('/transport/allocations/change-stop', body)),
+    onSuccess: (res) => {
+      const d = res?.data;
+      toast.success(d ? `Stop changed to ${d.stopName}` : 'Stop changed');
+      refresh();
+    },
     onError: (e) => toast.error(errMsg(e)),
   });
 
@@ -113,5 +129,47 @@ export const useAllocations = (routeId) => {
     unassign: unassign.mutateAsync,
     isAssigning: assign.isPending,
     isUnassigning: unassign.isPending,
+    changeStop: changeStopMutation.mutateAsync,
+    isChangingStop: changeStopMutation.isPending,
+  };
+};
+
+export const useTerms = () => {
+  const qc = useQueryClient();
+  const base = useResource('transport-terms', '/transport/terms');
+
+  const setCurrent = useMutation({
+    mutationFn: async (id) => getBody(await api.post(`/transport/terms/${id}/current`)),
+    onSuccess: () => {
+      toast.success('Current term updated');
+      qc.invalidateQueries({ queryKey: ['transport-terms'] });
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+
+  const generate = useMutation({
+    mutationFn: async (id) => getBody(await api.post(`/transport/terms/${id}/generate`)),
+    onSuccess: (res) => {
+      const d = res?.data;
+      if (d) {
+        toast.success(
+          d.created > 0
+            ? `${d.created} fee(s) created for ${d.termLabel}`
+            : `No new fees. ${d.alreadyHad} student(s) already billed.`
+        );
+      }
+      qc.invalidateQueries({ queryKey: ['transport-terms'] });
+      qc.invalidateQueries({ queryKey: ['transport-allocated'] });
+      qc.invalidateQueries({ queryKey: ['student', 'fees'] });
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+
+  return {
+    ...base,
+    setCurrent: setCurrent.mutateAsync,
+    isSettingCurrent: setCurrent.isPending,
+    generate: generate.mutateAsync,
+    isGenerating: generate.isPending,
   };
 };

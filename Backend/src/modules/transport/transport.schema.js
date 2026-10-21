@@ -53,17 +53,24 @@ export const driverSchema = z.object({
 
 export const updateDriverSchema = driverSchema.partial();
 
+const stopItem = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().trim().min(1, 'Stop name is required').max(100),
+  fee: z.coerce.number({ invalid_type_error: 'Stop fee must be a number' })
+    .min(0, 'Stop fee cannot be negative')
+    .max(1000000, 'Stop fee is too large'),
+});
+
 const stopsField = z
-  .union([z.array(z.string()), z.string()])
-  .optional()
-  .transform((v) => {
-    const arr = Array.isArray(v) ? v : String(v || '').split(',');
-    return arr.map((s) => String(s).trim()).filter(Boolean);
-  });
+  .array(stopItem)
+  .refine(
+    (arr) => new Set(arr.map((s) => s.name.toLowerCase())).size === arr.length,
+    'Stop names must be unique within a route'
+  );
 
 export const routeSchema = z.object({
   name: z.string().trim().min(1, 'Route name is required'),
-  stops: stopsField,
+  stops: stopsField.default([]),
   status: z.enum(['On Time', 'Delayed', 'Maintenance']).optional().default('On Time'),
   vehicleId: z.string().uuid().optional().nullable().transform((v) => v || null),
 });
@@ -72,9 +79,27 @@ export const updateRouteSchema = routeSchema.partial();
 
 export const assignSchema = z.object({
   routeId: z.string().uuid('Route is required'),
+  stopId: z.string().uuid('Stop is required'),
   studentIds: z.array(z.string().uuid()).min(1, 'Select at least one student').max(500),
 });
 
 export const unassignSchema = z.object({
   studentIds: z.array(z.string().uuid()).min(1, 'Select at least one student').max(500),
+});
+
+export const termSchema = z.object({
+  label: z.string().trim().min(1, 'Term label is required').max(60),
+  semester: z.coerce.number().int().min(1, 'Semester must be 1 or more').max(20),
+  dueDate: z
+    .union([z.string(), z.date()])
+    .transform((v) => new Date(v))
+    .refine((d) => !isNaN(d.getTime()), 'Valid due date is required'),
+  isCurrent: z.boolean().optional().default(false),
+});
+
+export const updateTermSchema = termSchema.omit({ isCurrent: true }).partial();
+
+export const changeStopSchema = z.object({
+  studentId: z.string().uuid(),
+  stopId: z.string().uuid('Stop is required'),
 });
