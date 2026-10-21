@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { Bus, MapPin, Users, UserCheck } from 'lucide-react';
+import { Bus, MapPin, Users, UserCheck, CalendarDays } from 'lucide-react';
 import AssignmentsTab from './AssignmentsTab';
 import VehiclesTab from './VehiclesTab';
 import DriversTab from './DriversTab';
 import RoutesTab from './RoutesTab';
+import FeeTermTab from './FeeTermTab';
 
 const TABS = [
   { key: 'vehicles', label: 'Vehicle Registration', icon: Bus },
   { key: 'drivers', label: 'Driver Registration', icon: Users },
   { key: 'routes', label: 'Routes', icon: MapPin },
+  { key: 'terms', label: 'Fee Term', icon: CalendarDays },
   { key: 'assign', label: 'Student Assignment', icon: UserCheck },
 ];
 
@@ -22,7 +24,7 @@ export default function TransportDashboard() {
           Transport Management
         </h1>
         <p className="text-slate-500 dark:text-slate-400 mt-1">
-          Manage vehicles, drivers, routes and student assignments.
+          Manage vehicles, drivers, routes, fee terms and student assignments.
         </p>
       </div>
 
@@ -45,6 +47,7 @@ export default function TransportDashboard() {
       {tab === 'vehicles' && <VehiclesTab />}
       {tab === 'drivers' && <DriversTab />}
       {tab === 'routes' && <RoutesTab />}
+      {tab === 'terms' && <FeeTermTab />}
       {tab === 'assign' && <AssignmentsTab />}
     </div>
   );

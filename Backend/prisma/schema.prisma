@@ -85,6 +85,8 @@ model College {
   storeCategories          StoreCategory[]
   drivers                  Driver[]
   transportAllocations     StudentTransportAllocation[]
+  routeStops               RouteStop[]
+  transportFeeTerms        TransportFeeTerm[]
 }
 
 model BillingSubscription {
@@ -539,6 +541,15 @@ model Fee {
   feeStructure   FeeStructure         @relation(fields: [feeStructureId], references: [id])
   student        Student              @relation(fields: [studentId], references: [id])
   transactions   PaymentTransaction[]
+  feeType        String   @default("Tuition Fee")
+  termId         String?  @db.Uuid
+  allocationId   String?  @db.Uuid
+
+  term           TransportFeeTerm?           @relation(fields: [termId], references: [id], onDelete: SetNull)
+  allocation     StudentTransportAllocation? @relation(fields: [allocationId], references: [id], onDelete: SetNull)
+
+  @@unique([allocationId, termId])
+  @@index([collegeId, feeType])
 
   @@index([collegeId, status])
   @@index([collegeId, studentId])
@@ -718,7 +729,6 @@ model TransportRoute {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   collegeId String   @db.Uuid
   name      String
-  stops     String[] @default([])
   status    String   @default("On Time")
   vehicleId String?  @unique @db.Uuid
   createdAt DateTime @default(now())
@@ -726,6 +736,7 @@ model TransportRoute {
 
   college     College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   vehicle     Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  stops       RouteStop[]
   allocations StudentTransportAllocation[]
 
   @@index([collegeId])
@@ -1444,14 +1455,18 @@ model StudentTransportAllocation {
   collegeId  String   @db.Uuid
   studentId  String   @unique @db.Uuid
   routeId    String   @db.Uuid
+  stopId     String   @db.Uuid
   assignedBy String?  @db.Uuid
   assignedAt DateTime @default(now())
 
   college College        @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   route   TransportRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  stop    RouteStop      @relation(fields: [stopId], references: [id], onDelete: NoAction)
+  fees    Fee[]
 
   @@index([collegeId, routeId])
+  @@index([stopId])
 }
 
 model CalendarEvent {
@@ -1475,4 +1490,39 @@ model CalendarEvent {
 
   @@index([collegeId], map: "idx_cal_event_college")
   @@index([startDate], map: "idx_cal_event_date")
+}
+
+model RouteStop {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId String   @db.Uuid
+  routeId   String   @db.Uuid
+  name      String
+  sequence  Int
+  fee       Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  college     College        @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  route       TransportRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  allocations StudentTransportAllocation[]
+
+  @@unique([routeId, name])
+  @@index([collegeId, routeId])
+}
+
+model TransportFeeTerm {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId String   @db.Uuid
+  label     String
+  semester  Int
+  dueDate   DateTime
+  isCurrent Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  college College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  fees    Fee[]
+
+  @@unique([collegeId, label])
+  @@index([collegeId, isCurrent])
 }

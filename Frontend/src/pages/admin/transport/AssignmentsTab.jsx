@@ -1,25 +1,42 @@
 import { useState, useMemo } from 'react';
 import { Search, UserPlus, UserMinus, Users } from 'lucide-react';
-import { useRoutes, useAllocations } from '../../../hooks/useTransportAdmin';
+import { useRoutes, useAllocations, useTerms } from '../../../hooks/useTransportAdmin';
 import { Button } from '../../../components/ui/Button';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { StatCard, SelectField } from './transportUi';
 
+const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+
 export default function AssignmentsTab() {
   const confirm = useConfirm();
   const [routeId, setRouteId] = useState('');
+  const [stopId, setStopId] = useState('');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(new Set());
 
   const { items: routes, stats } = useRoutes();
+  const { items: terms } = useTerms();
   const {
     waiting, waitingTotal, allocated, isLoading, isLoadingAllocated,
-    assign, unassign, isAssigning, isUnassigning,
+    assign, unassign, changeStop, isAssigning, isUnassigning, isChangingStop,
   } = useAllocations(routeId);
 
   const route = routes.find((r) => r.id === routeId);
+  const stop = route?.stops?.find((s) => s.id === stopId);
+  const currentTerm = terms.find((t) => t.isCurrent);
   const free = route?.vehicle ? route.seats - route.studentsCount : 0;
   const over = selected.size > free;
+  const total = stop ? stop.fee * selected.size : 0;
+
+  const blocker = !routeId
+    ? ''
+    : !route?.vehicle
+    ? 'This route has no bus yet.'
+    : !route.stops?.length
+    ? 'This route has no stops. Add stops in the Routes tab first.'
+    : !currentTerm
+    ? 'No current fee term. Set one in the Fee Term tab.'
+    : '';
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -46,9 +63,11 @@ export default function AssignmentsTab() {
   };
   const selectFirstFree = () => setSelected(new Set(filtered.slice(0, Math.max(free, 0)).map((s) => s.id)));
 
+  const changeRoute = (id) => { setRouteId(id); setStopId(''); };
+
   const handleAssign = async () => {
     try {
-      await assign({ routeId, studentIds: [...selected] });
+      await assign({ routeId, stopId, studentIds: [...selected] });
       setSelected(new Set());
     } catch {
       // toast shown by the hook
@@ -58,7 +77,7 @@ export default function AssignmentsTab() {
   const handleUnassign = async (s) => {
     const ok = await confirm({
       title: 'Remove from Route',
-      message: `Remove ${s.name} from "${s.routeName}"? They will go back to the "needs bus" list.`,
+      message: `Remove ${s.name} from "${s.routeName}"? An unpaid transport fee will be deleted. A paid fee is kept. They go back to the "needs bus" list.`,
       confirmText: 'Remove',
       variant: 'danger',
     });
@@ -70,13 +89,13 @@ export default function AssignmentsTab() {
   return (
     <div className="space-y-6">
       <p className="text-sm text-slate-500 dark:text-slate-400">
-        Students who chose the college bus appear on the left. Pick a route, select students and assign.
+        Pick a route and a stop, tick the students for that stop, then assign. Repeat for the next stop.
       </p>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Needs Bus" value={isLoading ? '...' : waitingTotal} tone="amber" />
         <StatCard title="Assigned" value={stats.studentsAssigned ?? 0} tone="green" />
-        <StatCard title="Routes With Bus" value={stats.withBus ?? 0} />
+        <StatCard title="Current Term" value={currentTerm?.label || 'None'} tone={currentTerm ? 'green' : 'amber'} />
         <StatCard title="Seats Left (selected route)" value={route?.vehicle ? free : '-'} />
       </div>
 
@@ -134,9 +153,8 @@ export default function AssignmentsTab() {
           </div>
         </div>
 
-        {/* Route + assigned list */}
         <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-5 shadow-sm space-y-4">
-          <SelectField label="Route" value={routeId} onChange={(e) => setRouteId(e.target.value)}>
+          <SelectField label="Route" value={routeId} onChange={(e) => changeRoute(e.target.value)}>
             <option value="">Select a route</option>
             {routes.map((r) => (
               <option key={r.id} value={r.id} disabled={!r.vehicle}>
@@ -146,11 +164,22 @@ export default function AssignmentsTab() {
           </SelectField>
 
           {route && (
+            <SelectField label="Stop (semester fee)" value={stopId} onChange={(e) => setStopId(e.target.value)}>
+              <option value="">Select a stop</option>
+              {(route.stops || []).map((s) => (
+                <option key={s.id} value={s.id}>{s.name} ({inr(s.fee)})</option>
+              ))}
+            </SelectField>
+          )}
+
+          {route && (
             <div className="text-xs rounded-xl bg-slate-50 dark:bg-white/5 px-3 py-2 text-slate-600 dark:text-slate-300 space-y-0.5">
               <p>Bus: <span className="font-mono">{route.vehicle?.vehicleNo}</span> · {route.studentsCount}/{route.seats} seats used</p>
-              {route.stops?.length > 0 && <p>Stops: {route.stops.join(' → ')}</p>}
+              {currentTerm && <p>Fee term: {currentTerm.label}</p>}
             </div>
           )}
+
+          {blocker && <p className="text-xs text-amber-600 font-medium">{blocker}</p>}
 
           {over && route?.vehicle && (
             <p className="text-xs text-rose-600 font-medium">
@@ -160,10 +189,16 @@ export default function AssignmentsTab() {
             </p>
           )}
 
+          {stop && selected.size > 0 && (
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              {selected.size} × {inr(stop.fee)} = <span className="font-bold">{inr(total)}</span> in transport fees will be created.
+            </p>
+          )}
+
           <Button
             onClick={handleAssign}
             isLoading={isAssigning}
-            disabled={!routeId || selected.size === 0 || over || !route?.vehicle}
+            disabled={!routeId || !stopId || selected.size === 0 || over || !!blocker}
             className="w-full flex items-center justify-center gap-2"
           >
             <UserPlus className="w-4 h-4" />
@@ -186,7 +221,20 @@ export default function AssignmentsTab() {
                   <div key={s.id} className="flex items-center justify-between gap-3 py-2">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-slate-900 dark:text-white">{s.name}</p>
-                      <p className="text-xs text-slate-500">{s.admissionNo}{s.class ? ` · ${s.class}` : ''}</p>
+                      <p className="text-xs text-slate-500">
+                        {s.admissionNo}{s.feeStatus ? ` · fee ${s.feeStatus}` : ''}
+                      </p>
+                      <select
+                        value={s.stopId}
+                        disabled={isChangingStop || s.feeStatus === 'paid'}
+                        title={s.feeStatus === 'paid' ? 'Fee is paid, stop cannot be changed' : 'Change stop'}
+                        onChange={(e) => changeStop({ studentId: s.id, stopId: e.target.value }).catch(() => {})}
+                        className="mt-1 text-xs px-2 py-1 bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg disabled:opacity-60"
+                      >
+                        {(route?.stops || []).map((st) => (
+                          <option key={st.id} value={st.id}>{st.name} ({inr(st.fee)})</option>
+                        ))}
+                      </select>
                     </div>
                     <button
                       onClick={() => handleUnassign(s)}

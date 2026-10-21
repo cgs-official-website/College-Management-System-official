@@ -3,6 +3,7 @@ import { prisma, logger } from '../../server.js';
 import bcrypt from 'bcryptjs';
 import { createStudentSchema, updateStudentSchema } from './students.schema.js';
 import { deleteStudentProfile } from '../users/deleteUserRecords.js';
+import { releaseTransportFees } from '../transport/transportFees.js';
 
 export const getStudents = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId || req.query.collegeId;
@@ -661,7 +662,7 @@ export const updateStudent = async (req, res) => {
       });
 
       if (transportRequired === 'No') {
-        await tx.studentTransportAllocation.deleteMany({ where: { studentId: id, collegeId: student.collegeId } });
+        await releaseTransportFees(tx, student.collegeId, [id]);
       }
       return s;
     });

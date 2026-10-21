@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Pencil, Bus, Phone, MapPin, Users, X } from 'lucide-react';
+import { Plus, Trash2, Pencil, Bus, Phone, MapPin, Users, ChevronUp, ChevronDown } from 'lucide-react';
 import { useRoutes, useVehicles } from '../../../hooks/useTransportAdmin';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
@@ -8,12 +8,16 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 import { StatCard, SelectField } from './transportUi';
 
 const EMPTY = { name: '', status: 'On Time', vehicleId: '', stops: [] };
+const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
 const STATUS_STYLE = {
   'On Time': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400',
   Delayed: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400',
   Maintenance: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
 };
+
+const field =
+  'px-3 py-2 bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500';
 
 export default function RoutesTab() {
   const confirm = useConfirm();
@@ -23,38 +27,56 @@ export default function RoutesTab() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
-  const [stopInput, setStopInput] = useState('');
+  const [stopName, setStopName] = useState('');
+  const [stopFee, setStopFee] = useState('');
 
   const busOptions = vehicles.filter(
     (v) => v.status === 'Active' && (!v.route || v.id === editing?.vehicleId)
   );
   const selectedBus = vehicles.find((v) => v.id === form.vehicleId);
 
-  const openAdd = () => { setEditing(null); setForm(EMPTY); setStopInput(''); setOpen(true); };
+  const resetStopInputs = () => { setStopName(''); setStopFee(''); };
+  const openAdd = () => { setEditing(null); setForm(EMPTY); resetStopInputs(); setOpen(true); };
   const openEdit = (r) => {
     setEditing(r);
-    setForm({ name: r.name, status: r.status, vehicleId: r.vehicleId || '', stops: r.stops || [] });
-    setStopInput('');
+    setForm({
+      name: r.name,
+      status: r.status,
+      vehicleId: r.vehicleId || '',
+      stops: (r.stops || []).map((s) => ({ id: s.id, name: s.name, fee: s.fee })),
+    });
+    resetStopInputs();
     setOpen(true);
   };
 
   const addStop = () => {
-    const s = stopInput.trim();
-    if (!s) return;
-    if (!form.stops.some((x) => x.toLowerCase() === s.toLowerCase())) {
-      setForm({ ...form, stops: [...form.stops, s] });
-    }
-    setStopInput('');
+    const name = stopName.trim();
+    if (!name) return;
+    if (form.stops.some((s) => s.name.toLowerCase() === name.toLowerCase())) { resetStopInputs(); return; }
+    setForm({ ...form, stops: [...form.stops, { name, fee: stopFee === '' ? 0 : Number(stopFee) }] });
+    resetStopInputs();
   };
+  const setFee = (i, v) =>
+    setForm({ ...form, stops: form.stops.map((s, idx) => (idx === i ? { ...s, fee: v === '' ? '' : Number(v) } : s)) });
   const removeStop = (i) => setForm({ ...form, stops: form.stops.filter((_, idx) => idx !== i) });
+  const moveStop = (i, dir) => {
+    const j = i + dir;
+    if (j < 0 || j >= form.stops.length) return;
+    const next = [...form.stops];
+    [next[i], next[j]] = [next[j], next[i]];
+    setForm({ ...form, stops: next });
+  };
 
   const submit = async (e) => {
     e.preventDefault();
+    const pending = stopName.trim()
+      ? [{ name: stopName.trim(), fee: stopFee === '' ? 0 : Number(stopFee) }]
+      : [];
     const body = {
       name: form.name.trim(),
       status: form.status,
       vehicleId: form.vehicleId || null,
-      stops: stopInput.trim() ? [...form.stops, stopInput.trim()] : form.stops,
+      stops: [...form.stops, ...pending].map((s) => ({ ...s, fee: Number(s.fee) || 0 })),
     };
     try {
       if (editing) await updateItem({ id: editing.id, ...body });
@@ -84,7 +106,7 @@ export default function RoutesTab() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Create routes and attach one registered bus to each.
+          Create routes, add stops with a semester fee, and attach one registered bus to each.
         </p>
         <Button onClick={openAdd} className="flex items-center gap-2">
           <Plus className="w-4 h-4" /> Add Route
@@ -106,7 +128,7 @@ export default function RoutesTab() {
               <tr className="border-b border-slate-200 dark:border-white/10 text-xs font-bold text-slate-400 uppercase tracking-wider">
                 <th className="py-3 px-4">Route & Bus</th>
                 <th className="py-3 px-4">Driver</th>
-                <th className="py-3 px-4">Stops</th>
+                <th className="py-3 px-4">Stops (semester fee)</th>
                 <th className="py-3 px-4">Students / Seats</th>
                 <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4 text-right">Actions</th>
@@ -149,9 +171,12 @@ export default function RoutesTab() {
                     ) : <span className="text-slate-400">Not assigned</span>}
                   </td>
                   <td className="py-4 px-4 text-xs text-slate-600 dark:text-slate-300 max-w-xs">
-                    {r.stops?.length
-                      ? <span className="flex items-start gap-1"><MapPin className="w-3 h-3 mt-0.5 shrink-0" />{r.stops.join(' → ')}</span>
-                      : <span className="text-slate-400">No stops added</span>}
+                    {r.stops?.length ? (
+                      <span className="flex items-start gap-1">
+                        <MapPin className="w-3 h-3 mt-0.5 shrink-0" />
+                        {r.stops.map((s) => `${s.name} (${inr(s.fee)})`).join(' → ')}
+                      </span>
+                    ) : <span className="text-amber-600">No stops: students can't be assigned</span>}
                   </td>
                   <td className="py-4 px-4 font-medium text-slate-700 dark:text-slate-300">
                     <span className="flex items-center gap-1.5">
@@ -179,7 +204,7 @@ export default function RoutesTab() {
         </div>
       </div>
 
-      <Modal isOpen={open} onClose={() => setOpen(false)} title={editing ? 'Edit Route' : 'Add Route'} maxWidth="max-w-lg">
+      <Modal isOpen={open} onClose={() => setOpen(false)} title={editing ? 'Edit Route' : 'Add Route'} maxWidth="max-w-xl">
         <form onSubmit={submit} className="space-y-4">
           <Input
             label="Route Name *"
@@ -192,30 +217,57 @@ export default function RoutesTab() {
 
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-              Stops (in order)
+              Stops in order, with semester fee (₹)
             </label>
             <div className="flex gap-2">
               <input
-                value={stopInput}
-                onChange={(e) => setStopInput(e.target.value)}
+                value={stopName}
+                onChange={(e) => setStopName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addStop(); } }}
-                placeholder="Type a stop and press Enter"
-                className="flex-1 px-3 py-2 bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="Stop name"
+                className={`flex-1 ${field}`}
+              />
+              <input
+                type="number"
+                min="0"
+                value={stopFee}
+                onChange={(e) => setStopFee(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addStop(); } }}
+                placeholder="Fee"
+                className={`w-28 ${field}`}
               />
               <Button type="button" variant="secondary" onClick={addStop}>Add</Button>
             </div>
+
             {form.stops.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
+              <div className="mt-2 divide-y divide-slate-100 dark:divide-white/5 border border-slate-100 dark:border-white/5 rounded-xl">
                 {form.stops.map((s, i) => (
-                  <span key={`${s}-${i}`} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-200">
-                    {i + 1}. {s}
-                    <button type="button" onClick={() => removeStop(i)} className="hover:text-red-600">
-                      <X className="w-3 h-3" />
+                  <div key={s.id || `${s.name}-${i}`} className="flex items-center gap-2 px-3 py-2">
+                    <span className="text-xs text-slate-400 w-5">{i + 1}.</span>
+                    <span className="flex-1 text-sm text-slate-800 dark:text-slate-200 truncate">{s.name}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={s.fee}
+                      onChange={(e) => setFee(i, e.target.value)}
+                      className={`w-24 ${field} py-1`}
+                    />
+                    <button type="button" onClick={() => moveStop(i, -1)} className="p-1 text-slate-400 hover:text-slate-700" title="Move up">
+                      <ChevronUp className="w-4 h-4" />
                     </button>
-                  </span>
+                    <button type="button" onClick={() => moveStop(i, 1)} className="p-1 text-slate-400 hover:text-slate-700" title="Move down">
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                    <button type="button" onClick={() => removeStop(i)} className="p-1 text-slate-400 hover:text-red-600" title="Remove">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
+            <p className="text-xs text-slate-400 mt-1.5">
+              A fee change applies to new fees only. A stop with students can't be removed.
+            </p>
           </div>
 
           <SelectField label="Bus" value={form.vehicleId} onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}>
@@ -225,9 +277,7 @@ export default function RoutesTab() {
             ))}
           </SelectField>
           {busOptions.length === 0 && (
-            <p className="text-xs text-amber-600 -mt-2">
-              No free buses. Register a bus in Vehicle Registration first.
-            </p>
+            <p className="text-xs text-amber-600 -mt-2">No free buses. Register a bus in Vehicle Registration first.</p>
           )}
 
           {selectedBus && (

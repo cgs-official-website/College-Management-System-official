@@ -49,6 +49,15 @@ const StudentTransport = () => {
             </div>
             <div className="divide-y divide-slate-100 dark:divide-white/5 text-sm">
               <Row label="Route">{route.name}</Row>
+              {route.stop && <Row label="Your stop">{route.stop}</Row>}
+              {route.fee && (
+                <Row label={`Transport fee${route.fee.term ? ` (${route.fee.term})` : ''}`}>
+                  ₹{route.fee.amount.toLocaleString('en-IN')}{' '}
+                  <span className={route.fee.status === 'paid' ? 'text-emerald-600' : 'text-amber-600'}>
+                    · {route.fee.status === 'paid' ? 'Paid' : 'Pending'}
+                  </span>
+                </Row>
+              )}
               <Row label="Bus number">
                 {route.bus ? <span className="font-mono">{route.bus.vehicleNo}</span> : 'Not assigned yet'}
               </Row>

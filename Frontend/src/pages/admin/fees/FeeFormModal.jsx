@@ -92,7 +92,6 @@ export function FeeFormModal({ isOpen, onClose, onSubmit, initialData = null, is
             options={[
               { value: 'Tuition Fee', label: 'Tuition Fee' },
               { value: 'Hostel Fee', label: 'Hostel Fee' },
-              { value: 'Transport Fee', label: 'Transport Fee' },
               { value: 'Library Fee', label: 'Library Fee' },
               { value: 'Exam Fee', label: 'Exam Fee' },
               { value: 'Miscellaneous', label: 'Miscellaneous' }

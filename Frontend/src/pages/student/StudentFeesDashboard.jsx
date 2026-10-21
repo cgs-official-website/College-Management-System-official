@@ -82,6 +82,8 @@ const StudentFeesDashboard = () => {
     );
   }
 
+  const isTransportInvoice = selectedInvoice?.feeType === 'Transport Fee';
+
   return (
     <div className="space-y-6">
       <div>
@@ -281,9 +283,13 @@ const StudentFeesDashboard = () => {
                     min="1"
                     value={paymentAmount}
                     onChange={(e) => setPaymentAmount(e.target.value)}
+                    readOnly={isTransportInvoice}
                     required
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-primary-500 outline-none"
+                    className={`w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-primary-500 outline-none ${isTransportInvoice ? 'opacity-70 cursor-not-allowed' : ''}`}
                   />
+                  {isTransportInvoice && (
+                    <p className="text-[11px] text-slate-400 mt-1">Transport fees are paid in full.</p>
+                  )}
                 </div>
 
                 <div>
