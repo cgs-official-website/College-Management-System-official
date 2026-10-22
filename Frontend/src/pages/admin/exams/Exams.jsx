@@ -34,7 +34,7 @@ export default function Exams() {
   const [selectedDeptFilter, setSelectedDeptFilter] = useState('ALL');
   const { courses = [], isLoading: isCoursesLoading } = useCourses();
   const { departments = [] } = useDepartments();
-  const { exams, isLoading, addExam, updateExam, deleteExam, isAdding, isUpdating } = useExams(collegeId, { courseId: selectedCourse });
+  const { exams, examTypes, isLoading, addExam, updateExam, deleteExam, isAdding, isUpdating } = useExams(collegeId, { courseId: selectedCourse });
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -400,13 +400,14 @@ export default function Exams() {
       )}
 
       {/* Schedule Exam Modal */}
-      <ExamFormModal 
+      <ExamFormModal
         isOpen={isFormOpen}
         onClose={() => setIsFormOpen(false)}
         onSubmit={handleSubmit}
         initialData={editingExam}
         isLoading={isAdding || isUpdating}
         existingExams={exams}
+        examTypes={examTypes}
       />
     </div>
   );

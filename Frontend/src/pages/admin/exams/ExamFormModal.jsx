@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
@@ -88,11 +88,21 @@ export const normalizeTime = (t) => {
   return `${match[1].padStart(2, '0')}:${match[2]}`;
 };
 
-export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading, existingExams = [] }) {
-  const { departments, isLoading: isDepartmentsLoading } = useDepartments();
-  const { courses = [], isLoading: isCoursesLoading, error: coursesError } = useCourses();
-  
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm({
+const NO_TYPES = [];
+
+export function ExamFormModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  initialData = null,
+  isLoading,
+  existingExams = [],
+  examTypes = NO_TYPES
+}) {
+  const { departments = [], isLoading: isDepartmentsLoading } = useDepartments();
+  const { courses = [] } = useCourses();
+
+  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm({
     defaultValues: {
       title: '',
       departmentId: '',
@@ -108,7 +118,20 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
     }
   });
 
+  // Keep the latest type list in a ref so a background refetch never resets the form mid-edit
+  const examTypesRef = useRef(examTypes);
+  useEffect(() => {
+    examTypesRef.current = examTypes;
+  }, [examTypes]);
+
+  // Exam type dropdown: shared list from the server (defaults + custom types) + "Custom" option
+  const typeOptions = [
+    ...(examTypes.length ? examTypes : PRESET_EXAM_TYPES.map(p => p.value)).map(t => ({ value: t, label: t })),
+    { value: 'CUSTOM', label: '+ Custom (Type / Create Exam)...' },
+  ];
+
   const selectedDeptId = watch('departmentId');
+  const selectedType = watch('type');
   const watchedRoom = watch('room');
   const watchedDate = watch('examDate');
   const watchedStartTime = watch('startTime');
@@ -158,7 +181,13 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
-        const typeInfo = parseExamType(initialData.type);
+        // Prefer an exact match from the shared type list, then fall back to legacy mapping
+        const storedType = String(initialData.type || '').trim().toLowerCase();
+        const inList = examTypesRef.current.find(t => String(t).trim().toLowerCase() === storedType);
+        const typeInfo = inList
+          ? { value: inList, custom: '' }
+          : parseExamType(initialData.type);
+
         let dateStr = new Date().toISOString().split('T')[0];
         if (initialData.date || initialData.examDate) {
           try {
@@ -223,7 +252,6 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
       date: data.examDate,
       startTime: data.startTime || null,
       endTime: data.endTime || null,
-      room: data.room ? data.room.trim() : 'Main Hall',
       maxMarks: Number(data.totalMarks) || 100,
       totalMarks: Number(data.totalMarks) || 100,
       type: resolvedType,
@@ -300,7 +328,7 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
             <Select
               label="Exam Type *"
               {...register('type', { required: "Exam type is required" })}
-              options={EXAM_TYPE_OPTIONS}
+              options={typeOptions}
             />
           </div>
 
