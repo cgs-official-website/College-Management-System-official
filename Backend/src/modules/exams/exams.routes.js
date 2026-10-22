@@ -6,7 +6,8 @@ import {
   deleteExam, 
   enterMarks, 
   getExamResults,
-  batchEnterMarks
+  batchEnterMarks,
+  getExamTypes
 } from './exams.controller.js';
 import { authenticate } from '../../middleware/authenticate.js';
 import { authorize } from '../../middleware/authorize.js';
@@ -20,6 +21,7 @@ router.use(authenticate, resolveTenant);
 // Only staff roles can use the exams/marks APIs (students use the student portal routes)
 const staffOnly = authorize('admin', 'superadmin', 'teacher', 'hod', 'faculty');
 
+router.get('/types', staffOnly, catchAsync(getExamTypes));
 router.get('/', staffOnly, catchAsync(getExams));
 router.post('/', staffOnly, catchAsync(createExam));
 router.put('/:id', staffOnly, catchAsync(updateExam));

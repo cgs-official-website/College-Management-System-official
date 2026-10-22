@@ -217,7 +217,7 @@ export const getExams = async (req, res) => {
       id: exam.id,
       title: exam.name,
       name: exam.name,
-      subject: exam.course?.name || exam.name,
+      subject: exam.subject || exam.course?.name || exam.name,  
       courseName: exam.course?.name || 'General Program',
       courseCode: exam.course?.code || null,
       courseId: exam.courseId,
@@ -228,14 +228,11 @@ export const getExams = async (req, res) => {
       maxMarks: exam.maxMarks,
       type: exam.type || 'Midterm',
       status: exam.status || 'active',
-<<<<<<< HEAD
       room: exam.room || 'Main Hall',
       startTime: exam.startTime || null,
       endTime: exam.endTime || null,
-=======
       room: roomVal,
       hall: roomVal,
->>>>>>> c52d622 (calender module  updated & bugs fixed)
       totalStudentsAppeared,
       averageScore: avgScore,
       marks: exam.marks.map(m => ({
@@ -308,6 +305,7 @@ export const createExam = async (req, res) => {
       collegeId,
       courseId: targetCourseId,
       name: payload.name || payload.subject || 'Examination',
+      subject: payload.subject || null,
       date: payload.date ? new Date(payload.date) : new Date(),
       maxMarks: Number(payload.maxMarks) || 100,
       type: payload.type || 'Midterm',
@@ -388,7 +386,7 @@ export const createExam = async (req, res) => {
       id: exam.id,
       title: exam.name,
       name: exam.name,
-      subject: exam.course?.name || exam.name,
+      subject: exam.subject || exam.course?.name || exam.name,
       courseName: exam.course?.name || 'General Program',
       courseId: exam.courseId,
       departmentName: exam.course?.department?.name || 'General',
@@ -397,14 +395,11 @@ export const createExam = async (req, res) => {
       maxMarks: exam.maxMarks,
       type: exam.type,
       status: exam.status,
-<<<<<<< HEAD
       room: exam.room || payload.room || 'Main Hall',
       startTime: exam.startTime || payload.startTime || null,
       endTime: exam.endTime || payload.endTime || null,
-=======
       room: roomValue,
       hall: roomValue
->>>>>>> c52d622 (calender module  updated & bugs fixed)
     }
   });
 };
@@ -488,7 +483,7 @@ export const updateExam = async (req, res) => {
   if (payload.room !== undefined) updateData.room = payload.room ? String(payload.room).trim() : 'Main Hall';
   if (payload.startTime !== undefined) updateData.startTime = payload.startTime || null;
   if (payload.endTime !== undefined) updateData.endTime = payload.endTime || null;
-
+  if (payload.subject !== undefined) updateData.subject = payload.subject?.trim() || null;
   const updated = await prisma.exam.update({
     where: { id },
     data: updateData,
@@ -599,21 +594,18 @@ export const updateExam = async (req, res) => {
       id: updated.id,
       title: updated.name,
       name: updated.name,
-      subject: updated.course?.name || updated.name,
+      subject: updated.subject || updated.course?.name || updated.name, 
       courseName: updated.course?.name || 'General Program',
       courseId: updated.courseId,
       date: updated.date ? new Date(updated.date).toISOString().split('T')[0] : null,
       maxMarks: updated.maxMarks,
       type: updated.type,
       status: updated.status,
-<<<<<<< HEAD
       room: updated.room,
       startTime: updated.startTime,
       endTime: updated.endTime,
-=======
       room: currentRoom ?? 'Main Hall',
       hall: currentRoom ?? 'Main Hall'
->>>>>>> c52d622 (calender module  updated & bugs fixed)
     }
   });
 };
@@ -855,4 +847,37 @@ export const getExamResults = async (req, res) => {
   }));
 
   res.json({ success: true, data: formatted });
-};
+};
+
+export const DEFAULT_EXAM_TYPES = [
+  'Midterm Exam',
+  'Internal Assessment 1',
+  'Internal Assessment 2',
+  'Semester Exam',
+  'Final Exam / End Semester',
+  'Unit Test',
+  'Model Examination',
+  'Practical / Lab Exam',
+  'Quiz / Class Test',
+  'Viva Voce',
+];
+
+export const getExamTypes = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const rows = await prisma.exam.findMany({
+    where: { collegeId },
+    distinct: ['type'],
+    select: { type: true },
+  });
+
+  const seen = new Set();
+  const types = [];
+  for (const t of [...DEFAULT_EXAM_TYPES, ...rows.map(r => r.type)]) {
+    const v = String(t || '').trim();
+    if (v && !seen.has(v.toLowerCase())) {
+      seen.add(v.toLowerCase());
+      types.push(v);
+    }
+  }
+  res.json({ success: true, data: types });
+};

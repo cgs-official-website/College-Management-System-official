@@ -482,7 +482,6 @@ model Exam {
   createdAt DateTime @default(now())
   status    String   @default("pending")
   type      String
-  room      String?  @default("Main Hall")
   updatedAt DateTime @updatedAt
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   courseId  String   @db.Uuid
@@ -492,6 +491,7 @@ model Exam {
   college   College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   course    Course   @relation(fields: [courseId], references: [id])
   marks     Mark[]
+  subject   String?
 
   @@index([collegeId, courseId])
 }
