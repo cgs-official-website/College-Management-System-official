@@ -74,9 +74,14 @@ export default function Exams() {
       subject: exam.subject || exam.name,
       totalMarks: exam.maxMarks || exam.totalMarks || 100,
       examDate: exam.date || exam.examDate,
+<<<<<<< HEAD
       startTime: exam.startTime || '09:00',
       endTime: exam.endTime || '12:00',
       room: exam.room || '',
+=======
+      room: exam.room || exam.hall || '',
+      hall: exam.hall || exam.room || '',
+>>>>>>> c52d622 (calender module  updated & bugs fixed)
     });
     setIsFormOpen(true);
   };

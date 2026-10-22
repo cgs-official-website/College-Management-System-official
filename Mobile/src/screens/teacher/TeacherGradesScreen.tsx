@@ -20,11 +20,19 @@ import { fontSize, fontWeight } from '../../theme/typography';
 import { radius } from '../../theme/spacing';
 
 const EXAM_TYPES = [
+  { value: 'Internal Assessment 1', label: 'Internal Assessment 1' },
+  { value: 'Internal Assessment 2', label: 'Internal Assessment 2' },
+  { value: 'Unit Test', label: 'Unit Test' },
+  { value: 'Model Examination', label: 'Model Examination' },
+  { value: 'Midterm Examination', label: 'Midterm Examination' },
+  { value: 'Semester Examination', label: 'Semester Examination' },
+  { value: 'Final Examination', label: 'Final Examination' },
+  { value: 'Practical / Lab Exam', label: 'Practical / Lab Exam' },
+  { value: 'Quiz / Class Test', label: 'Quiz / Class Test' },
+  { value: 'Viva Voce', label: 'Viva Voce' },
   { value: 'Assignment 1', label: 'Assignment 1' },
   { value: 'Assignment 2', label: 'Assignment 2' },
-  { value: 'Midterm', label: 'Midterm Examination' },
-  { value: 'Final', label: 'Final Examination' },
-  { value: 'Practical', label: 'Practical / Lab' },
+  { value: 'CUSTOM', label: '+ Custom Examination Type...' },
 ];
 
 /** Web: pages/teacher/TeacherGrades.jsx (GET /courses/my-classes, GET /students?sectionId=, POST /exams/batch-marks) */
@@ -35,7 +43,8 @@ export default function TeacherGradesScreen() {
 
   const [courses, setCourses] = useState<any[]>([]);
   const [selectedCourse, setSelectedCourse] = useState('');
-  const [examType, setExamType] = useState('Midterm');
+  const [examType, setExamType] = useState('Internal Assessment 1');
+  const [customType, setCustomType] = useState('');
   const [maxMarks, setMaxMarks] = useState('100');
 
   const [students, setStudents] = useState<any[]>([]);
@@ -126,12 +135,17 @@ export default function TeacherGradesScreen() {
 
     if (records.length === 0) return toast.error('No marks entered to save');
 
+    const resolvedType = examType === 'CUSTOM' ? customType.trim() : examType;
+    if (examType === 'CUSTOM' && !resolvedType) {
+      return toast.error('Please enter a custom examination name');
+    }
+
     setSaving(true);
     try {
       const selectedClass = courses.find((c) => String(c.id) === selectedCourse);
       await api.post('/exams/batch-marks', {
         courseId: selectedClass?.courseId,
-        examType,
+        examType: resolvedType,
         maxMarks: max,
         records,
       });
@@ -173,6 +187,14 @@ export default function TeacherGradesScreen() {
           placeholder="-- Choose a Class --"
         />
         <Select label="Examination Type" icon={FileBarChart} value={examType} options={EXAM_TYPES} onChange={setExamType} />
+        {examType === 'CUSTOM' && (
+          <Input
+            label="Custom Examination Name"
+            placeholder="e.g. Surprise Test, CAT-1"
+            value={customType}
+            onChangeText={setCustomType}
+          />
+        )}
         <Input
           label="Maximum Marks"
           keyboardType="numeric"

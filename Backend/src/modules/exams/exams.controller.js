@@ -1,7 +1,24 @@
-import { prisma } from '../../lib/prisma.js';
+import { prisma, pool } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 import { createExamSchema, updateExamSchema, enterMarksSchema, batchEnterMarksSchema } from './exams.schema.js';
 import { notify } from '../notifications/notify.service.js';
+// Reloaded to support flexible exam types (Internal Assessments, Unit Test, Viva, Custom)
+
+let roomColumnEnsured = false;
+async function ensureExamRoomColumn() {
+  if (roomColumnEnsured) return;
+  try {
+    const ddl = `ALTER TABLE "Exam" ADD COLUMN IF NOT EXISTS "room" VARCHAR(255) DEFAULT 'Main Hall';`;
+    if (pool) {
+      await pool.query(ddl);
+    } else {
+      await prisma.$executeRawUnsafe(ddl);
+    }
+    roomColumnEnsured = true;
+  } catch (err) {
+    logger.warn(`[Exams] Column ensure error for "room": ${err.message}`);
+  }
+}
 
 // Helper to ensure dummy/default course if needed
 async function ensureDefaultCourse(collegeId, courseName, departmentId = null) {
@@ -136,6 +153,7 @@ export async function checkHallConflict(collegeId, { date, room, startTime, endT
 }
 
 export const getExams = async (req, res) => {
+  await ensureExamRoomColumn();
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const { courseId } = req.query;
 
@@ -161,11 +179,39 @@ export const getExams = async (req, res) => {
     orderBy: { date: 'desc' }
   });
 
+  const examIds = exams.map(e => e.id);
+  const roomMap = {};
+  if (examIds.length > 0) {
+    try {
+      if (pool) {
+        const { rows } = await pool.query(
+          `SELECT "id", "room" FROM "Exam" WHERE "id" = ANY($1::uuid[])`,
+          [examIds]
+        );
+        for (const row of rows) {
+          roomMap[row.id] = row.room;
+        }
+      } else {
+        const rows = await prisma.$queryRawUnsafe(
+          `SELECT "id", "room" FROM "Exam" WHERE "id"::text = ANY($1)`,
+          examIds
+        );
+        for (const row of rows) {
+          roomMap[row.id] = row.room;
+        }
+      }
+    } catch (err) {
+      logger.warn(`[Exams] Could not fetch room details: ${err.message}`);
+    }
+  }
+
   const formatted = exams.map(exam => {
     const totalStudentsAppeared = exam.marks.length;
     const avgScore = totalStudentsAppeared > 0
       ? (exam.marks.reduce((acc, m) => acc + m.obtainedMarks, 0) / totalStudentsAppeared).toFixed(1)
       : '0.0';
+
+    const roomVal = roomMap[exam.id] ?? exam.room ?? 'Main Hall';
 
     return {
       id: exam.id,
@@ -182,9 +228,14 @@ export const getExams = async (req, res) => {
       maxMarks: exam.maxMarks,
       type: exam.type || 'Midterm',
       status: exam.status || 'active',
+<<<<<<< HEAD
       room: exam.room || 'Main Hall',
       startTime: exam.startTime || null,
       endTime: exam.endTime || null,
+=======
+      room: roomVal,
+      hall: roomVal,
+>>>>>>> c52d622 (calender module  updated & bugs fixed)
       totalStudentsAppeared,
       averageScore: avgScore,
       marks: exam.marks.map(m => ({
@@ -205,9 +256,11 @@ export const getExams = async (req, res) => {
 };
 
 export const createExam = async (req, res) => {
+  await ensureExamRoomColumn();
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const actorId = req.user?.id || req.user?.userId;
   const payload = createExamSchema.parse(req.body);
+  const roomValue = (payload.room || payload.hall || 'Main Hall').trim();
 
   const hallConflict = await checkHallConflict(collegeId, {
     date: payload.date || new Date(),
@@ -269,6 +322,16 @@ export const createExam = async (req, res) => {
       } 
     }
   });
+
+  try {
+    if (pool) {
+      await pool.query(`UPDATE "Exam" SET "room" = $1 WHERE "id" = $2;`, [roomValue, exam.id]);
+    } else {
+      await prisma.$executeRawUnsafe(`UPDATE "Exam" SET "room" = $1 WHERE "id" = $2::uuid;`, roomValue, exam.id);
+    }
+  } catch (roomErr) {
+    logger.warn(`[Exams] Could not set room for exam ${exam.id}: ${roomErr.message}`);
+  }
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} examId=${exam.id} actor=${actorId} Scheduled exam '${exam.name}'`);
 
@@ -334,14 +397,20 @@ export const createExam = async (req, res) => {
       maxMarks: exam.maxMarks,
       type: exam.type,
       status: exam.status,
+<<<<<<< HEAD
       room: exam.room || payload.room || 'Main Hall',
       startTime: exam.startTime || payload.startTime || null,
       endTime: exam.endTime || payload.endTime || null,
+=======
+      room: roomValue,
+      hall: roomValue
+>>>>>>> c52d622 (calender module  updated & bugs fixed)
     }
   });
 };
 
 export const updateExam = async (req, res) => {
+  await ensureExamRoomColumn();
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const actorId = req.user?.id || req.user?.userId;
   const { id } = req.params;
@@ -500,6 +569,29 @@ export const updateExam = async (req, res) => {
     }
   }
 
+  // Persist room/hall update if provided
+  let currentRoom = null;
+  const newRoomVal = payload.room !== undefined ? payload.room : payload.hall;
+  if (newRoomVal !== undefined) {
+    currentRoom = (newRoomVal || '').trim();
+    try {
+      if (pool) {
+        await pool.query(`UPDATE "Exam" SET "room" = $1 WHERE "id" = $2;`, [currentRoom, id]);
+      } else {
+        await prisma.$executeRawUnsafe(`UPDATE "Exam" SET "room" = $1 WHERE "id" = $2::uuid;`, currentRoom, id);
+      }
+    } catch (roomErr) {
+      logger.warn(`[Exams] Could not update room for exam ${id}: ${roomErr.message}`);
+    }
+  } else {
+    try {
+      if (pool) {
+        const { rows } = await pool.query(`SELECT "room" FROM "Exam" WHERE "id" = $1;`, [id]);
+        currentRoom = rows[0]?.room || 'Main Hall';
+      }
+    } catch (_) {}
+  }
+
   logger.info(`[info] req=${req.id || ''} college=${collegeId} examId=${id} actor=${actorId} Updated exam details`);
   res.json({
     success: true,
@@ -514,9 +606,14 @@ export const updateExam = async (req, res) => {
       maxMarks: updated.maxMarks,
       type: updated.type,
       status: updated.status,
+<<<<<<< HEAD
       room: updated.room,
       startTime: updated.startTime,
       endTime: updated.endTime,
+=======
+      room: currentRoom ?? 'Main Hall',
+      hall: currentRoom ?? 'Main Hall'
+>>>>>>> c52d622 (calender module  updated & bugs fixed)
     }
   });
 };
@@ -536,6 +633,16 @@ export const deleteExam = async (req, res) => {
 
   await prisma.mark.deleteMany({ where: { examId: id } });
   await prisma.exam.delete({ where: { id } });
+
+  // Clean up any legacy CalendarEvent for this exam in this college
+  try {
+    const delSql = `DELETE FROM "CalendarEvent" WHERE "collegeId" = $1::uuid AND "type" = 'exam' AND ("title" = $2 OR "title" = $3)`;
+    if (pool) {
+      await pool.query(delSql, [collegeId, existing.name, `Exam: ${existing.name}`]);
+    } else {
+      await prisma.$executeRawUnsafe(delSql, collegeId, existing.name, `Exam: ${existing.name}`);
+    }
+  } catch (_) {}
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} examId=${id} actor=${actorId} Deleted exam`);
   res.json({ success: true, message: 'Exam deleted successfully' });
@@ -617,16 +724,28 @@ export const enterMarks = async (req, res) => {
 export const batchEnterMarks = async (req, res) => {
   const teacherId = req.user?.id || req.user?.userId;
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
-  const { courseId, examType, maxMarks, records } = batchEnterMarksSchema.parse(req.body);
+  const { courseId, examId, examType, maxMarks, records } = batchEnterMarksSchema.parse(req.body);
 
   // Find or create the exam
-  let exam = await prisma.exam.findFirst({
-    where: {
-      collegeId,
-      courseId,
-      name: examType
-    }
-  });
+  let exam = null;
+  if (examId) {
+    exam = await prisma.exam.findFirst({
+      where: { id: examId, collegeId }
+    });
+  }
+
+  if (!exam) {
+    exam = await prisma.exam.findFirst({
+      where: {
+        collegeId,
+        courseId,
+        OR: [
+          { name: examType },
+          { type: examType }
+        ]
+      }
+    });
+  }
 
   if (!exam) {
     exam = await prisma.exam.create({

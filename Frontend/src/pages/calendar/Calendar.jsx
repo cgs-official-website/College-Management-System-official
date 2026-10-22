@@ -126,6 +126,7 @@ export default function Calendar() {
   });
 
   useEffect(() => {
+    if (!canManage) return;
     let isMounted = true;
 
     // Load dynamic custom roles and departments for Target Audience dropdown & labels
@@ -190,7 +191,7 @@ export default function Calendar() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [canManage]);
 
   const formatAudienceLabel = (aud, deptId) => {
     if (!aud || aud === 'all' || aud === 'everyone') return 'Everyone';
@@ -253,20 +254,60 @@ export default function Calendar() {
 
   // Filter events
   const filteredEvents = useMemo(() => {
+    const normRole = String(userRole || '').toLowerCase();
+    const isAdmin = normRole === 'admin' || normRole === 'superadmin' || normRole === 'principal' || Boolean(canManage);
+
     return events.filter((ev) => {
-      const matchType = activeTypeFilter === 'all' || ev.type?.toLowerCase() === activeTypeFilter.toLowerCase();
+      const isExam = ev.type?.toLowerCase() === 'exam' || Boolean(ev.isExamRecord) || Boolean(ev.originalExamId);
+      const matchType = activeTypeFilter === 'all' || (isExam ? activeTypeFilter.toLowerCase() === 'exam' : ev.type?.toLowerCase() === activeTypeFilter.toLowerCase());
       const aud = String(ev.targetAudience || 'everyone').toLowerCase().trim();
+
+      // Strict role isolation: Ensure events targeted to other roles are NEVER shown
+      // Exams scheduled for the college are universally visible to all authorized roles in this college.
+      if (!isAdmin && !isExam) {
+        if (normRole === 'student') {
+          const disallowed = ['teacher', 'teachers', 'faculty', 'staff', 'staffs', 'hod', 'admin', 'superadmin'];
+          if (disallowed.includes(aud)) return false;
+        } else if (normRole === 'teacher' || normRole === 'faculty') {
+          const disallowed = ['student', 'students', 'staff', 'staffs', 'admin', 'superadmin'];
+          if (disallowed.includes(aud)) return false;
+        } else if (normRole === 'staff') {
+          const disallowed = ['student', 'students', 'teacher', 'teachers', 'faculty', 'hod', 'admin', 'superadmin'];
+          if (disallowed.includes(aud)) return false;
+        }
+      }
+
       let matchAudience = true;
       if (activeAudienceFilter !== 'all') {
         const filterLower = activeAudienceFilter.toLowerCase().trim();
-        if (filterLower === 'everyone' || filterLower === 'all') {
+        if (isExam) {
+          if (
+            filterLower === 'everyone' ||
+            filterLower === 'all' ||
+            filterLower === 'students' ||
+            filterLower === 'student' ||
+            filterLower === 'teachers' ||
+            filterLower === 'teacher' ||
+            filterLower === 'faculty' ||
+            filterLower === 'staff' ||
+            filterLower === 'admin' ||
+            filterLower === 'hod'
+          ) {
+            matchAudience = true;
+          } else if (filterLower.startsWith('dept:')) {
+            const dId = filterLower.split(':')[1];
+            matchAudience = ev.departmentId === dId;
+          } else {
+            matchAudience = aud === filterLower || aud === 'everyone' || aud === 'all';
+          }
+        } else if (filterLower === 'everyone' || filterLower === 'all') {
           matchAudience = aud === 'everyone' || aud === 'all';
         } else if (filterLower === 'teachers' || filterLower === 'teacher') {
           matchAudience = aud === 'teachers' || aud === 'teacher' || aud === 'faculty';
         } else if (filterLower === 'students' || filterLower === 'student') {
           matchAudience = aud === 'students' || aud === 'student';
         } else if (filterLower === 'staff') {
-          matchAudience = aud === 'staff';
+          matchAudience = aud === 'staff' || aud === 'staffs' || aud.includes('staff') || aud === 'non-teaching' || aud === 'non-teaching staff';
         } else if (filterLower === 'admin' || filterLower === 'admins') {
           matchAudience = aud === 'admin' || aud === 'admins' || aud === 'superadmin';
         } else if (filterLower === 'hod') {
@@ -275,7 +316,7 @@ export default function Calendar() {
           const dId = filterLower.split(':')[1];
           matchAudience = ev.departmentId === dId || aud === filterLower;
         } else {
-          matchAudience = aud === filterLower;
+          matchAudience = aud === filterLower || aud.includes(filterLower) || filterLower.includes(aud);
         }
       }
 
@@ -287,15 +328,26 @@ export default function Calendar() {
 
       return matchType && matchAudience && matchSearch;
     });
-  }, [events, activeTypeFilter, activeAudienceFilter, searchQuery]);
+  }, [events, activeTypeFilter, activeAudienceFilter, searchQuery, userRole, canManage]);
 
   // Group events by YYYY-MM-DD
   const eventsByDate = useMemo(() => {
     const map = {};
     filteredEvents.forEach((ev) => {
-      if (!ev.startDate) return;
-      const d = new Date(ev.startDate);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (!ev.startDate && !ev.date) return;
+      let key = null;
+      if (ev.date && typeof ev.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ev.date)) {
+        key = ev.date;
+      } else if (typeof ev.startDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(ev.startDate)) {
+        const isExam = ev.type?.toLowerCase() === 'exam' || Boolean(ev.isExamRecord) || Boolean(ev.originalExamId);
+        if (ev.allDay || isExam) {
+          key = ev.startDate.slice(0, 10);
+        }
+      }
+      if (!key) {
+        const d = new Date(ev.startDate);
+        key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
       if (!map[key]) map[key] = [];
       map[key].push(ev);
     });
@@ -339,23 +391,43 @@ export default function Calendar() {
     setIsModalOpen(true);
   };
 
+  const extractLocalDate = (dStr) => {
+    if (!dStr) return '';
+    if (typeof dStr === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dStr)) {
+      return dStr.slice(0, 10);
+    }
+    const d = new Date(dStr);
+    if (isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const extractLocalTime = (dStr, fallback = '09:00') => {
+    if (!dStr) return fallback;
+    const d = new Date(dStr);
+    if (isNaN(d.getTime())) return fallback;
+    const h = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${h}:${min}`;
+  };
+
   // Open modal for Edit
   const handleOpenEditModal = (item) => {
     if (!canManage) return;
     setEditingItem(item);
     setFormTitle(item.title ? item.title.replace(/^Exam:\s*/, '') : '');
     setFormType(item.type || 'event');
-    const sDate = item.startDate ? new Date(item.startDate).toISOString().split('T')[0] : '';
-    const eDate = item.endDate ? new Date(item.endDate).toISOString().split('T')[0] : sDate;
-    setFormStartDate(sDate);
-    setFormEndDate(eDate);
-    setFormStartTime('09:00');
-    setFormEndTime('10:00');
+    setFormStartDate(extractLocalDate(item.startDate));
+    setFormEndDate(extractLocalDate(item.endDate || item.startDate));
+    setFormStartTime(extractLocalTime(item.startDate, '09:00'));
+    setFormEndTime(extractLocalTime(item.endDate, '10:00'));
     setFormAllDay(Boolean(item.allDay));
     setFormLocation(item.location || '');
-    const initialAudience = item.departmentId
-      ? `dept:${item.departmentId}`
-      : (item.targetAudience === 'all' ? 'everyone' : (item.targetAudience || 'everyone'));
+    const initialAudience = item.targetAudience && item.targetAudience !== 'all'
+      ? item.targetAudience
+      : (item.departmentId ? `dept:${item.departmentId}` : 'everyone');
     setFormTargetAudience(initialAudience);
     setFormDescription(item.description || '');
     setIsModalOpen(true);
@@ -366,18 +438,24 @@ export default function Calendar() {
     e.preventDefault();
     if (!formTitle.trim()) return;
 
-    const startDateTime = formAllDay
-      ? `${formStartDate}T00:00:00.000Z`
-      : `${formStartDate}T${formStartTime}:00.000Z`;
-
-    const endDateTime = formAllDay
-      ? `${formEndDate || formStartDate}T23:59:59.999Z`
-      : `${formEndDate || formStartDate}T${formEndTime}:00.000Z`;
+    let startDateTime;
+    let endDateTime;
+    if (formAllDay) {
+      startDateTime = new Date(`${formStartDate}T00:00:00`).toISOString();
+      endDateTime = new Date(`${formEndDate || formStartDate}T23:59:59.999`).toISOString();
+    } else {
+      startDateTime = new Date(`${formStartDate}T${formStartTime || '09:00'}:00`).toISOString();
+      const endD = formEndDate || formStartDate;
+      endDateTime = new Date(`${endD}T${formEndTime || '10:00'}:00`).toISOString();
+    }
 
     let departmentId = null;
     if (formTargetAudience.startsWith('dept:') || formTargetAudience.startsWith('department:')) {
       departmentId = formTargetAudience.split(':')[1];
     }
+
+    const isExam = formType.toLowerCase() === 'exam';
+    const targetAudienceValue = isExam ? 'everyone' : formTargetAudience;
 
     const payload = {
       title: formTitle.trim(),
@@ -386,7 +464,7 @@ export default function Calendar() {
       endDate: endDateTime,
       allDay: formAllDay,
       location: formLocation.trim(),
-      targetAudience: formTargetAudience,
+      targetAudience: targetAudienceValue,
       departmentId,
       description: formDescription.trim()
     };
@@ -494,6 +572,11 @@ export default function Calendar() {
   const monthHolidayEvents = useMemo(() => {
     return events.filter((e) => {
       if (e.type !== 'holiday' || !e.startDate) return false;
+      const dStr = typeof e.startDate === 'string' ? e.startDate.slice(0, 10) : '';
+      if (/^\d{4}-\d{2}-\d{2}/.test(dStr)) {
+        const [y, m] = dStr.split('-').map(Number);
+        return y === currentYear && m === currentMonth + 1;
+      }
       const d = new Date(e.startDate);
       return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
     });
@@ -568,7 +651,7 @@ export default function Calendar() {
         <div className="p-4 bg-white dark:bg-[#0A0F1C] border border-rose-200 dark:border-rose-900/30 rounded-2xl bg-rose-50/30 dark:bg-rose-950/10">
           <p className="text-xs font-medium text-rose-600 dark:text-rose-400">Scheduled Exams</p>
           <p className="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1">
-            {events.filter((e) => e.type === 'exam').length}
+            {events.filter((e) => e.type?.toLowerCase() === 'exam' || e.isExamRecord || e.originalExamId).length}
           </p>
         </div>
         <div className="p-4 bg-white dark:bg-[#0A0F1C] border border-emerald-200 dark:border-emerald-900/30 rounded-2xl bg-emerald-50/30 dark:bg-emerald-950/10">
@@ -1163,7 +1246,13 @@ export default function Calendar() {
                   </label>
                   <select
                     value={formType}
-                    onChange={(e) => setFormType(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormType(val);
+                      if (val === 'exam') {
+                        setFormTargetAudience('everyone');
+                      }
+                    }}
                     className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500 dark:text-white"
                   >
                     <option value="exam">Exam</option>

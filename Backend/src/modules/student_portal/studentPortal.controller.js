@@ -466,6 +466,20 @@ export const getStudentExams = async (req, res) => {
       orderBy: { date: 'asc' }
     });
 
+    const examIds = exams.map(e => e.id);
+    const roomMap = {};
+    if (examIds.length > 0) {
+      try {
+        const rows = await prisma.$queryRawUnsafe(
+          `SELECT "id", "room" FROM "Exam" WHERE "id"::text = ANY($1)`,
+          examIds
+        );
+        for (const row of rows) {
+          roomMap[row.id] = row.room;
+        }
+      } catch (_) {}
+    }
+
     const formatted = exams.map(e => ({
       id: e.id,
       name: e.name,
@@ -473,6 +487,8 @@ export const getStudentExams = async (req, res) => {
       date: e.date,
       type: e.type,
       maxMarks: e.maxMarks,
+      room: roomMap[e.id] ?? e.room ?? 'Main Hall',
+      hall: roomMap[e.id] ?? e.room ?? 'Main Hall',
       course: e.course
     }));
 

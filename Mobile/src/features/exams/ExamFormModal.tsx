@@ -9,13 +9,91 @@ import { useDepartments } from '../../hooks/useDepartments';
 
 /** Web: pages/admin/exams/ExamFormModal.jsx */
 const PRESET_EXAM_TYPES = [
-  'Midterm Exam', 'Final Exam / Semester End', 'Internal Assessment 1', 'Internal Assessment 2',
-  'Unit Test', 'Model Examination', 'Practical / Lab Exam', 'Quiz / Class Test', 'Viva Voce',
+  'Midterm Exam',
+  'Internal Assessment 1',
+  'Internal Assessment 2',
+  'Semester Exam',
+  'Final Exam / Semester End',
+  'Unit Test',
+  'Model Examination',
+  'Practical / Lab Exam',
+  'Quiz / Class Test',
+  'Viva Voce',
 ];
+
+const parseExamType = (rawType?: string | null) => {
+  if (!rawType) return { isPreset: true, value: 'Midterm Exam', custom: '' };
+  const str = String(rawType).trim();
+
+  // Direct match
+  const direct = PRESET_EXAM_TYPES.find((p) => p.toLowerCase() === str.toLowerCase());
+  if (direct) return { isPreset: true, value: direct, custom: '' };
+
+  const lower = str.toLowerCase();
+  if (lower === 'midterm' || lower.includes('mid-term') || lower.includes('midterm')) {
+    return { isPreset: true, value: 'Midterm Exam', custom: '' };
+  }
+  if (lower === 'internal 1' || lower.includes('assessment 1') || lower.includes('cat-1') || lower.includes('cat 1')) {
+    return { isPreset: true, value: 'Internal Assessment 1', custom: '' };
+  }
+  if (lower === 'internal 2' || lower.includes('assessment 2') || lower.includes('cat-2') || lower.includes('cat 2')) {
+    return { isPreset: true, value: 'Internal Assessment 2', custom: '' };
+  }
+  if (lower === 'internal' || lower.includes('internal assessment')) {
+    return { isPreset: true, value: 'Internal Assessment 1', custom: '' };
+  }
+  if (lower.includes('unit test') || lower.includes('unit-test') || lower === 'unit') {
+    return { isPreset: true, value: 'Unit Test', custom: '' };
+  }
+  if (lower.includes('model')) {
+    return { isPreset: true, value: 'Model Examination', custom: '' };
+  }
+  if (lower.includes('viva')) {
+    return { isPreset: true, value: 'Viva Voce', custom: '' };
+  }
+  if (lower === 'final' || lower.includes('end semester') || lower.includes('end sem')) {
+    return { isPreset: true, value: 'Final Exam / Semester End', custom: '' };
+  }
+  if (lower === 'semester' || lower.includes('semester exam') || lower.includes('sem exam')) {
+    return { isPreset: true, value: 'Semester Exam', custom: '' };
+  }
+  if (lower === 'quiz' || lower.includes('quiz') || lower.includes('class test')) {
+    return { isPreset: true, value: 'Quiz / Class Test', custom: '' };
+  }
+  if (lower === 'practical' || lower.includes('practical') || lower.includes('lab exam')) {
+    return { isPreset: true, value: 'Practical / Lab Exam', custom: '' };
+  }
+
+  return { isPreset: false, value: 'CUSTOM', custom: str };
+};
+
 const today = () => new Date().toISOString().split('T')[0];
+
+const parseDateString = (rawDate?: any) => {
+  if (!rawDate) return today();
+  try {
+    const raw = String(rawDate).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+  } catch {
+    // fallback
+  }
+  return today();
+};
+
 const blank = () => ({
-  title: '', departmentId: '', courseId: '', subject: '', examDate: today(),
-  startTime: '09:00', endTime: '12:00', room: '', totalMarks: '100', type: 'Midterm Exam', customType: '',
+  title: '',
+  departmentId: '',
+  courseId: '',
+  subject: '',
+  examDate: today(),
+  startTime: '09:00',
+  endTime: '12:00',
+  room: '',
+  totalMarks: '100',
+  type: 'Midterm Exam',
+  customType: '',
 });
 
 export default function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading, embedded = false }: any) {
@@ -28,19 +106,19 @@ export default function ExamFormModal({ isOpen, onClose, onSubmit, initialData =
     if (!isOpen) return;
     setErrors({});
     if (initialData) {
-      const isPreset = PRESET_EXAM_TYPES.includes(initialData.type);
+      const typeInfo = parseExamType(initialData.type);
       setV({
         title: initialData.title || initialData.name || '',
         departmentId: initialData.departmentId || '',
         courseId: initialData.courseId || '',
         subject: initialData.subject || initialData.name || '',
-        examDate: initialData.date ? String(initialData.date).slice(0, 10) : today(),
+        examDate: parseDateString(initialData.date || initialData.examDate),
         startTime: initialData.startTime || '09:00',
         endTime: initialData.endTime || '12:00',
-        room: initialData.room || '',
+        room: initialData.room || initialData.hall || '',
         totalMarks: String(initialData.maxMarks || initialData.totalMarks || 100),
-        type: isPreset ? initialData.type : initialData.type ? 'CUSTOM' : 'Midterm Exam',
-        customType: isPreset ? '' : initialData.type || '',
+        type: typeInfo.value,
+        customType: typeInfo.custom,
       });
     } else {
       setV(blank());
@@ -65,7 +143,7 @@ export default function ExamFormModal({ isOpen, onClose, onSubmit, initialData =
     if (!v.examDate) e.examDate = 'Exam date is required';
     if (!v.startTime) e.startTime = 'Start time is required';
     if (!v.endTime) e.endTime = 'End time is required';
-    if (v.type === 'CUSTOM' && !v.customType.trim()) e.customType = 'Enter the exam type';
+    if (v.type === 'CUSTOM' && !v.customType.trim()) e.customType = 'Enter custom exam type';
     setErrors(e);
     if (Object.keys(e).length) return;
 
@@ -73,6 +151,8 @@ export default function ExamFormModal({ isOpen, onClose, onSubmit, initialData =
     const course: any = courses.find((c: any) => c.id === v.courseId);
     const examType = v.type === 'CUSTOM' ? v.customType.trim() || 'Custom Exam' : v.type;
     const marks = Number(v.totalMarks) || 100;
+    const roomStr = (v.room || '').trim();
+
     onSubmit({
       ...v,
       name: v.title,
@@ -80,6 +160,8 @@ export default function ExamFormModal({ isOpen, onClose, onSubmit, initialData =
       maxMarks: marks,
       totalMarks: marks,
       type: examType,
+      room: roomStr,
+      hall: roomStr,
       departmentId: v.departmentId || (course ? course.departmentId : null),
       departmentName: dept ? dept.name : course?.department?.name || 'General',
       departmentCode: dept ? dept.code : course?.department?.code || null,
@@ -93,16 +175,16 @@ export default function ExamFormModal({ isOpen, onClose, onSubmit, initialData =
       <Input label="Exam Title" required placeholder="e.g. First Internal Assessment" value={v.title} onChangeText={set('title')} error={errors.title} />
       <Select
         label="Department" required placeholder="Select department..." value={v.departmentId} onChange={set('departmentId')} error={errors.departmentId}
-        options={departments.map((d: any) => ({ value: d.id, label: `${d.name} (${d.code})` }))}
+        options={departments.map((d: any) => ({ value: d.id, label: d.code ? `${d.name} (${d.code})` : d.name }))}
       />
       <Select
         label="Course / Program" placeholder="Select an option" value={v.courseId} onChange={set('courseId')}
-        options={[{ value: '', label: 'Select an option' }, ...filteredCourses.map((c: any) => ({ value: c.id, label: `${c.name} (${c.code})` }))]}
+        options={[{ value: '', label: 'Select an option' }, ...filteredCourses.map((c: any) => ({ value: c.id, label: c.code ? `${c.name} (${c.code})` : c.name }))]}
       />
       <Input label="Subject / Paper Name" required placeholder="e.g. Data Structures & Algorithms" value={v.subject} onChangeText={set('subject')} error={errors.subject} />
       <Select
         label="Exam Type" required value={v.type} onChange={set('type')}
-        options={[...PRESET_EXAM_TYPES.map((t) => ({ value: t, label: t })), { value: 'CUSTOM', label: 'Custom (type your own)...' }]}
+        options={[...PRESET_EXAM_TYPES.map((t) => ({ value: t, label: t })), { value: 'CUSTOM', label: '+ Custom (Type your own)...' }]}
       />
       {v.type === 'CUSTOM' ? (
         <Input label="Custom Exam Type" required placeholder="e.g. Surprise Test" value={v.customType} onChangeText={set('customType')} error={errors.customType} />

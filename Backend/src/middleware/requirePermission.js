@@ -55,7 +55,7 @@ export const requirePermission = (moduleKey, action) => async (req, res, next) =
         success: false,
         error: {
           code: 'FORBIDDEN',
-          message: `Access denied. Your role '${role}' does not have permission to ${action} ${moduleKey}.`
+          message: `Access denied. Your role '${rawRole}' does not have permission to ${action} ${moduleKey}.`
         }
       });
     }

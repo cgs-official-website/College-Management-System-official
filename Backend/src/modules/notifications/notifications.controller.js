@@ -22,11 +22,39 @@ export async function getTargetRolesForUser(user) {
     roles.add('staffs');
   }
 
-  // Include custom role name if user has customRoleId
-  if (user.customRoleId) {
+  // Include custom role name if user has customRoleId or via user lookup
+  const uid = user.id || user.userId;
+  let customRoleId = user.customRoleId;
+  let designation = null;
+
+  if (uid) {
+    try {
+      const uRec = await prisma.user.findUnique({
+        where: { id: uid },
+        select: {
+          customRoleId: true,
+          customRole: { select: { id: true, name: true } },
+          teacherProfile: { select: { designation: true } }
+        }
+      });
+      if (uRec?.customRole?.name) {
+        const cName = uRec.customRole.name.toLowerCase().trim();
+        roles.add(cName);
+        roles.add(cName.replace(/\s+/g, '_'));
+      }
+      if (uRec?.customRoleId) {
+        roles.add(uRec.customRoleId.toLowerCase());
+      }
+      if (uRec?.teacherProfile?.designation) {
+        designation = uRec.teacherProfile.designation.toLowerCase().trim();
+        roles.add(designation);
+        roles.add(designation.replace(/\s+/g, '_'));
+      }
+    } catch (_) {}
+  } else if (customRoleId) {
     try {
       const customRole = await prisma.role.findUnique({
-        where: { id: user.customRoleId },
+        where: { id: customRoleId },
         select: { name: true }
       });
       if (customRole?.name) {
@@ -257,7 +285,7 @@ export const markAllAsRead = async (req, res) => {
     });
 
     // 2. Broadcast / role-based notifications: add user.id to readBy without touching isRead/readAt
-    const userRoles = getTargetRolesForUser(user);
+    const userRoles = await getTargetRolesForUser(user);
     const roleBased = await prisma.notification.findMany({
       where: {
         collegeId,

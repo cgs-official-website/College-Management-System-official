@@ -8,7 +8,7 @@ const router = express.Router();
 
 const adminOnly = authorize('admin', 'superadmin');
 const staffOnly = authorize('admin', 'superadmin', 'teacher', 'hod', 'faculty');
-const coursesReadAccess = authorize('admin', 'superadmin', 'teacher', 'hod', 'faculty', 'student', 'parent');
+const coursesReadAccess = authorize('admin', 'superadmin', 'teacher', 'hod', 'faculty', 'staff', 'student', 'parent');
 
 const courseSchema = z.object({
   name: z.string().min(2, "Course/Program name must be at least 2 characters"),

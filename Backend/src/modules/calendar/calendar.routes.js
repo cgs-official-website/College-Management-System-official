@@ -6,41 +6,24 @@ import {
   updateCalendarEvent,
   deleteCalendarEvent,
   getCalendarSummary,
-  configureSaturdayRule
+  configureSaturdayRule,
+  resolveUserCalendarContext
 } from './calendar.controller.js';
 import { authenticate } from '../../middleware/authenticate.js';
 import { resolveTenant } from '../../middleware/resolveTenant.js';
 import { catchAsync } from '../../lib/catchAsync.js';
 
-import { prisma } from '../../lib/prisma.js';
-
 const router = Router();
 
-// Middleware: Calendar module modifications strictly for College Admins and HODs
+// Middleware: Calendar module modifications strictly for College Admins, Principals, and HODs
 const adminOrHodOnly = async (req, res, next) => {
-  const role = String(req.user?.role || '').toLowerCase();
-  let isAllowed = role === 'admin' || role === 'hod' || role === 'superadmin' || Boolean(req.user?.isHod);
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId || req.query?.collegeId || req.body?.collegeId;
+  const userContext = await resolveUserCalendarContext(req.user, collegeId);
 
-  if (!isAllowed && req.user?.id) {
-    try {
-      const dept = await prisma.department.findFirst({
-        where: {
-          collegeId: req.user.collegeId,
-          hodUserId: req.user.id
-        },
-        select: { id: true }
-      });
-      if (dept) {
-        req.user.isHod = true;
-        isAllowed = true;
-      }
-    } catch (_) {}
-  }
-
-  if (!isAllowed) {
+  if (!userContext.canManage) {
     return res.status(403).json({
       success: false,
-      error: 'Forbidden: Calendar modifications are strictly restricted to College Admins and HODs. Regular users have View-Only access.'
+      error: 'Forbidden: Calendar modifications are strictly restricted to College Admins, Principals, and HODs. Regular users have View-Only access.'
     });
   }
   next();

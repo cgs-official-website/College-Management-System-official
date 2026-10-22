@@ -110,47 +110,119 @@ export async function ensureCalendarTable() {
 export function canManageCalendar(user, isUserHod = false) {
   if (!user) return false;
   const role = String(user.role || '').toLowerCase();
-  return role === 'admin' || role === 'hod' || role === 'superadmin' || Boolean(user.isHod) || Boolean(isUserHod);
+  return role === 'admin' || role === 'principal' || role === 'hod' || role === 'superadmin' || Boolean(user.isHod) || Boolean(isUserHod);
 }
 
 /**
- * Resolves user calendar context including role, department, HOD status, and management permissions.
+ * Resolves user calendar context including role, department, HOD status, custom role, designation, and management permissions.
  */
 export async function resolveUserCalendarContext(user, collegeId) {
-  if (!user || !user.id || !UUID_REGEX.test(String(user.id))) {
+  const userId = user?.id || user?.userId;
+  if (!userId || !UUID_REGEX.test(String(userId))) {
     return {
       userId: null,
       role: 'guest',
+      customRoleId: null,
+      customRoleName: null,
+      designation: null,
       departmentId: null,
       departmentName: null,
+      courseId: null,
+      sectionId: null,
+      enrolledCourseIds: [],
+      teacherCourseIds: [],
       isHod: false,
+      isPrincipal: false,
       canManage: false
     };
   }
 
-  const role = String(user.role || '').toLowerCase();
-  let isHod = role === 'hod' || Boolean(user.isHod);
+  const role = String(user.role || '').trim().toLowerCase();
+  const cleanRole = role.replace(/[-_\s]/g, '');
+  const isAdmin = cleanRole === 'admin' || cleanRole === 'collegeadmin' || role.includes('admin');
+  const isSuperAdmin = cleanRole === 'superadmin';
+  const isPrincipalRole = cleanRole === 'principal' || role.includes('principal');
+  let isHod = cleanRole === 'hod' || role.includes('hod') || Boolean(user.isHod) || Boolean(user.isHOD);
   let departmentId = user.departmentId || null;
   let departmentName = null;
+  let customRoleId = user.customRoleId || null;
+  let customRoleName = null;
+  let designation = null;
+  let courseId = null;
+  let sectionId = null;
+  let enrolledCourseIds = [];
+  let teacherCourseIds = [];
 
-  if (role === 'admin' || role === 'superadmin') {
+  if (isAdmin || isSuperAdmin || isPrincipalRole) {
     return {
-      userId: user.id,
-      role,
+      userId,
+      role: isSuperAdmin ? 'superadmin' : (isAdmin ? 'admin' : 'principal'),
+      customRoleId: null,
+      customRoleName: null,
+      designation: role,
       departmentId: null,
       departmentName: null,
+      courseId: null,
+      sectionId: null,
+      enrolledCourseIds: [],
+      teacherCourseIds: [],
       isHod: false,
+      isPrincipal: true,
       canManage: true
     };
   }
 
+  // Fetch full user record to resolve custom role, teacher profile (department & designation)
+  try {
+    const userRecord = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        customRoleId: true,
+        customRole: { select: { id: true, name: true } },
+        teacherProfile: {
+          select: {
+            id: true,
+            departmentId: true,
+            designation: true,
+            department: { select: { id: true, name: true } }
+          }
+        }
+      }
+    });
+
+    if (userRecord) {
+      if (userRecord.customRole?.name) {
+        customRoleName = userRecord.customRole.name;
+        customRoleId = userRecord.customRole.id;
+      }
+      if (userRecord.teacherProfile) {
+        if (!departmentId && userRecord.teacherProfile.departmentId) {
+          departmentId = userRecord.teacherProfile.departmentId;
+          departmentName = userRecord.teacherProfile.department?.name || null;
+        }
+        if (userRecord.teacherProfile.designation) {
+          designation = userRecord.teacherProfile.designation;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Calendar] Error fetching user role/profile details:', err.message);
+  }
+
+    const isPrincipal = isPrincipalRole ||
+    (designation && designation.toLowerCase() === 'principal') ||
+    (customRoleName && customRoleName.toLowerCase() === 'principal');
+
   // 1. Check if user is HOD of any department in this college
   try {
+    const deptWhere = {
+      hodUserId: userId
+    };
+    if (collegeId && UUID_REGEX.test(String(collegeId))) {
+      deptWhere.collegeId = collegeId;
+    }
     const hodDept = await prisma.department.findFirst({
-      where: {
-        collegeId,
-        hodUserId: user.id
-      },
+      where: deptWhere,
       select: { id: true, name: true }
     });
 
@@ -163,52 +235,97 @@ export async function resolveUserCalendarContext(user, collegeId) {
     console.warn('[Calendar] Error checking HOD department:', err.message);
   }
 
-  // 2. If student, find student department
-  if (!departmentId && role === 'student') {
+  if (!isHod && designation) {
+    const dLower = designation.toLowerCase();
+    if (dLower.includes('hod') || dLower.includes('head')) {
+      isHod = true;
+    }
+  }
+  if (!isHod && customRoleName) {
+    const crLower = customRoleName.toLowerCase();
+    if (crLower.includes('hod') || crLower.includes('head')) {
+      isHod = true;
+    }
+  }
+
+  // 2. If student, find student course, section, department & enrollments
+  if (role === 'student') {
     try {
       const student = await prisma.student.findUnique({
-        where: { userId: user.id },
+        where: { userId },
         select: {
+          id: true,
+          courseId: true,
+          sectionId: true,
           departmentId: true,
-          department: { select: { id: true, name: true } }
+          department: { select: { id: true, name: true } },
+          enrollments: {
+            where: { status: 'enrolled' },
+            select: { courseId: true }
+          }
         }
       });
-      if (student?.departmentId) {
-        departmentId = student.departmentId;
-        departmentName = student.department?.name || null;
+      if (student) {
+        courseId = student.courseId || null;
+        sectionId = student.sectionId || null;
+        if (student.departmentId) {
+          departmentId = student.departmentId;
+          departmentName = student.department?.name || null;
+        }
+        if (Array.isArray(student.enrollments)) {
+          enrolledCourseIds = student.enrollments.map((e) => e.courseId).filter(Boolean);
+        }
       }
     } catch (err) {
-      console.warn('[Calendar] Error fetching student department:', err.message);
+      console.warn('[Calendar] Error fetching student department & courses:', err.message);
     }
   }
 
-  // 3. If teacher or staff, find teacher profile department
-  if (!departmentId && (role === 'teacher' || role === 'faculty' || role === 'staff')) {
+  // 3. Fallback for teacher or staff
+  if (role === 'teacher' || role === 'faculty' || role === 'staff') {
     try {
       const teacher = await prisma.teacher.findUnique({
-        where: { userId: user.id },
+        where: { userId },
         select: {
+          id: true,
           departmentId: true,
-          department: { select: { id: true, name: true } }
+          department: { select: { id: true, name: true } },
+          timetable: { select: { courseId: true } },
+          sections: { select: { courseId: true } }
         }
       });
-      if (teacher?.departmentId) {
-        departmentId = teacher.departmentId;
-        departmentName = teacher.department?.name || null;
+      if (teacher) {
+        if (!departmentId && teacher.departmentId) {
+          departmentId = teacher.departmentId;
+          departmentName = teacher.department?.name || null;
+        }
+        const tCourses = [
+          ...(teacher.timetable?.map((t) => t.courseId) || []),
+          ...(teacher.sections?.map((s) => s.courseId) || [])
+        ].filter(Boolean);
+        teacherCourseIds = [...new Set(tCourses)];
       }
     } catch (err) {
-      console.warn('[Calendar] Error fetching teacher/staff department:', err.message);
+      console.warn('[Calendar] Error fetching teacher/staff department & courses:', err.message);
     }
   }
 
-  const canManage = isHod || role === 'admin' || role === 'superadmin';
+  const canManage = isHod || role === 'admin' || role === 'superadmin' || isPrincipal;
 
   return {
-    userId: user.id,
+    userId,
     role,
+    customRoleId,
+    customRoleName,
+    designation,
     departmentId,
     departmentName,
+    courseId,
+    sectionId,
+    enrolledCourseIds,
+    teacherCourseIds,
     isHod,
+    isPrincipal,
     canManage
   };
 }
@@ -234,8 +351,10 @@ async function sendCalendarNotification({ collegeId, event, isUpdate = false }) 
   const timeStr = event.allDay ? 'All Day' : (sDate ? sDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
   const locStr = event.location ? ` • Location: ${event.location}` : '';
 
-  // 1. Department-specific targeting: Send ONLY to students, teachers, and HOD belonging to this department
-  const targetDeptId = event.departmentId || (rawAud.includes(':') ? rawAud.split(':')[1] : null);
+  // 1. Explicit Department targeting: Only when targetAudience is specifically set to a department (e.g. dept:<id>)
+  const isExplicitDept = rawAud.startsWith('dept:') || rawAud.startsWith('department:');
+  const targetDeptId = isExplicitDept ? (rawAud.split(':')[1] || event.departmentId) : null;
+
   if (targetDeptId && UUID_REGEX.test(targetDeptId)) {
     try {
       const [dept, deptStudents, deptTeachers] = await Promise.all([
@@ -283,7 +402,7 @@ async function sendCalendarNotification({ collegeId, event, isUpdate = false }) 
     }
   }
 
-  // 2. Role-specific targeting: Strictly targeted ONLY to the assigned role (e.g. students, staff, teachers)
+  // 2. Role-specific targeting: Strictly targeted ONLY to the assigned role (e.g. library staff, staff, students, teachers)
   let targetRole = 'all';
   if (rawAud === 'everyone' || rawAud === 'all') {
     targetRole = 'all';
@@ -298,6 +417,7 @@ async function sendCalendarNotification({ collegeId, event, isUpdate = false }) 
   } else if (rawAud === 'staff') {
     targetRole = 'staff';
   } else {
+    // Custom role slug / name, e.g. 'library staff', 'office staff', etc.
     targetRole = rawAud;
   }
 
@@ -354,15 +474,19 @@ export const getCalendarEvents = async (req, res) => {
     // 1) Everyone
     // 2) Their specific role
     // 3) Their department
-    if (!userContext.canManage) {
+    const isAdmin = userContext.role === 'admin' || userContext.role === 'superadmin' || Boolean(userContext.isPrincipal);
+    if (!isAdmin) {
       const role = String(userContext.role || '').toLowerCase();
       const userDeptId = userContext.departmentId;
+      const customRoleName = String(userContext.customRoleName || '').toLowerCase().trim();
+      const designation = String(userContext.designation || '').toLowerCase().trim();
       const isStudent = role === 'student';
       const isTeacher = role === 'teacher' || role === 'faculty';
       const isStaff = role === 'staff';
+      const isHod = Boolean(userContext.isHod);
 
       const visConditions = [
-        `(LOWER("targetAudience") = 'everyone' OR LOWER("targetAudience") = 'all' OR "targetAudience" IS NULL OR "targetAudience" = '')`
+        `(LOWER("targetAudience") = 'everyone' OR LOWER("targetAudience") = 'all' OR "targetAudience" IS NULL OR "targetAudience" = '' OR LOWER("type") = 'exam')`
       ];
 
       if (isStudent) {
@@ -381,40 +505,62 @@ export const getCalendarEvents = async (req, res) => {
         } else {
           visConditions.push(`(LOWER("targetAudience") IN ('teacher', 'teachers', 'faculty') AND "departmentId" IS NULL)`);
         }
-      } else if (isStaff) {
-        if (userDeptId && UUID_REGEX.test(userDeptId)) {
-          visConditions.push(`(LOWER("targetAudience") = 'staff' AND ("departmentId" IS NULL OR "departmentId" = $${paramIndex}::uuid))`);
-          params.push(userDeptId);
-          paramIndex++;
-        } else {
-          visConditions.push(`(LOWER("targetAudience") = 'staff' AND "departmentId" IS NULL)`);
+
+        if (isHod) {
+          if (userDeptId && UUID_REGEX.test(userDeptId)) {
+            visConditions.push(`(LOWER("targetAudience") IN ('hod', 'hods') AND ("departmentId" IS NULL OR "departmentId" = $${paramIndex}::uuid))`);
+            params.push(userDeptId);
+            paramIndex++;
+          } else {
+            visConditions.push(`(LOWER("targetAudience") IN ('hod', 'hods') AND "departmentId" IS NULL)`);
+          }
         }
-      } else if (role) {
-        if (userDeptId && UUID_REGEX.test(userDeptId)) {
-          visConditions.push(`(LOWER("targetAudience") = $${paramIndex} AND ("departmentId" IS NULL OR "departmentId" = $${paramIndex + 1}::uuid))`);
-          params.push(role);
-          params.push(userDeptId);
+      } else if (isStaff) {
+        // Staff sees events targeted to all staff
+        visConditions.push(`(
+          LOWER("targetAudience") IN ('staff', 'staffs', 'non-teaching', 'non_teaching', 'non-teaching staff', 'non teaching staff')
+        )`);
+
+        // If staff has a specific custom role (e.g. "Library Staff")
+        if (customRoleName) {
+          const cLower = customRoleName.toLowerCase().trim();
+          visConditions.push(`(
+            LOWER("targetAudience") = $${paramIndex}
+            OR LOWER("targetAudience") = $${paramIndex + 1}
+            OR LOWER("targetAudience") ILIKE $${paramIndex + 2}
+          )`);
+          params.push(cLower, cLower.replace(/\s+/g, '_'), `%${cLower}%`);
+          paramIndex += 3;
+        }
+
+        // If staff has a specific designation
+        if (designation && designation !== customRoleName) {
+          const dLower = designation.toLowerCase().trim();
+          visConditions.push(`(
+            LOWER("targetAudience") = $${paramIndex}
+            OR LOWER("targetAudience") ILIKE $${paramIndex + 1}
+          )`);
+          params.push(dLower, `%${dLower}%`);
           paramIndex += 2;
-        } else {
-          visConditions.push(`(LOWER("targetAudience") = $${paramIndex} AND "departmentId" IS NULL)`);
-          params.push(role);
+        }
+
+        // If staff has customRoleId
+        if (userContext.customRoleId && UUID_REGEX.test(String(userContext.customRoleId))) {
+          visConditions.push(`("targetAudience" = $${paramIndex} OR LOWER("targetAudience") = $${paramIndex})`);
+          params.push(String(userContext.customRoleId).toLowerCase());
           paramIndex++;
         }
       }
 
-      // Department-specific events
+      // Department-specific broadcasts (only if audience is the department itself or everyone)
       if (userDeptId && UUID_REGEX.test(userDeptId)) {
-        visConditions.push(`"departmentId" = $${paramIndex}::uuid`);
-        params.push(userDeptId);
-        paramIndex++;
-
-        visConditions.push(`LOWER("targetAudience") = $${paramIndex}`);
-        params.push(`dept:${userDeptId.toLowerCase()}`);
-        paramIndex++;
-
-        visConditions.push(`LOWER("targetAudience") = $${paramIndex}`);
-        params.push(`department:${userDeptId.toLowerCase()}`);
-        paramIndex++;
+        visConditions.push(`(
+          ("departmentId" = $${paramIndex}::uuid AND (LOWER("targetAudience") IN ('everyone', 'all') OR "targetAudience" IS NULL OR "targetAudience" = ''))
+          OR LOWER("targetAudience") = $${paramIndex + 1}
+          OR LOWER("targetAudience") = $${paramIndex + 2}
+        )`);
+        params.push(userDeptId, `dept:${userDeptId.toLowerCase()}`, `department:${userDeptId.toLowerCase()}`);
+        paramIndex += 3;
       }
 
       query += ` AND (${visConditions.join(' OR ')})`;
@@ -429,22 +575,22 @@ export const getCalendarEvents = async (req, res) => {
     if (targetAudience && targetAudience !== 'all') {
       const audLower = targetAudience.toLowerCase().trim();
       if (audLower === 'everyone') {
-        query += ` AND (LOWER("targetAudience") = 'everyone' OR LOWER("targetAudience") = 'all')`;
+        query += ` AND (LOWER("targetAudience") = 'everyone' OR LOWER("targetAudience") = 'all' OR LOWER("type") = 'exam')`;
       } else if (audLower.startsWith('dept:')) {
         const dId = audLower.split(':')[1];
         if (dId && UUID_REGEX.test(dId)) {
-          query += ` AND ("departmentId" = $${paramIndex}::uuid OR LOWER("targetAudience") = $${paramIndex + 1})`;
+          query += ` AND ("departmentId" = $${paramIndex}::uuid OR LOWER("targetAudience") = $${paramIndex + 1} OR LOWER("type") = 'exam')`;
           params.push(dId, audLower);
           paramIndex += 2;
         }
       } else {
-        query += ` AND (LOWER("targetAudience") = $${paramIndex} OR LOWER("targetAudience") = 'everyone' OR LOWER("targetAudience") = 'all'`;
+        query += ` AND (LOWER("targetAudience") = $${paramIndex} OR LOWER("targetAudience") = 'everyone' OR LOWER("targetAudience") = 'all' OR LOWER("type") = 'exam'`;
         if (audLower === 'teachers' || audLower === 'teacher') {
           query += ` OR LOWER("targetAudience") = 'teacher' OR LOWER("targetAudience") = 'teachers' OR LOWER("targetAudience") = 'faculty'`;
         } else if (audLower === 'students' || audLower === 'student') {
           query += ` OR LOWER("targetAudience") = 'student' OR LOWER("targetAudience") = 'students'`;
         } else if (audLower === 'staff') {
-          query += ` OR LOWER("targetAudience") = 'staff'`;
+          query += ` OR LOWER("targetAudience") = 'staff' OR LOWER("targetAudience") = 'staffs' OR LOWER("targetAudience") LIKE '%staff%'`;
         } else if (audLower === 'admin' || audLower === 'admins') {
           query += ` OR LOWER("targetAudience") = 'admin' OR LOWER("targetAudience") = 'admins' OR LOWER("targetAudience") = 'superadmin'`;
         }
@@ -461,8 +607,8 @@ export const getCalendarEvents = async (req, res) => {
     } else if (month && year) {
       const m = parseInt(month, 10);
       const y = parseInt(year, 10);
-      const startOfMonth = new Date(y, m - 1, 1).toISOString();
-      const endOfMonth = new Date(y, m, 0, 23, 59, 59, 999).toISOString();
+      const startOfMonth = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0)).toISOString();
+      const endOfMonth = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999)).toISOString();
       query += ` AND "startDate" >= $${paramIndex}::timestamp AND "startDate" <= $${paramIndex + 1}::timestamp`;
       params.push(startOfMonth, endOfMonth);
       paramIndex += 2;
@@ -491,20 +637,45 @@ export const getCalendarEvents = async (req, res) => {
       try {
         const examWhere = { collegeId };
 
-        // For regular users, exams are filtered by department/course
-        if (!userContext.canManage) {
-          if (userContext.role === 'staff') {
-            if (userContext.departmentId) {
-              examWhere.course = { departmentId: userContext.departmentId };
-            } else {
-              examWhere.id = '__none__'; // Non-teaching staff don't see exams unless in department
+        // Date range filtering for exams
+        if (startDate && endDate) {
+          const s = new Date(startDate);
+          const e = new Date(endDate);
+          examWhere.date = {
+            gte: new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate(), 0, 0, 0)),
+            lte: new Date(Date.UTC(e.getUTCFullYear(), e.getUTCMonth(), e.getUTCDate(), 23, 59, 59, 999))
+          };
+        } else if (month && year) {
+          const m = parseInt(month, 10);
+          const y = parseInt(year, 10);
+          const startOfMonth = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0));
+          const endOfMonth = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+          examWhere.date = {
+            gte: startOfMonth,
+            lte: endOfMonth
+          };
+        }
+
+        // Search filtering for exams
+        if (search && search.trim()) {
+          const term = search.trim();
+          examWhere.AND = [
+            {
+              OR: [
+                { name: { contains: term, mode: 'insensitive' } },
+                { type: { contains: term, mode: 'insensitive' } },
+                { course: { name: { contains: term, mode: 'insensitive' } } },
+                { course: { code: { contains: term, mode: 'insensitive' } } }
+              ]
             }
-          } else if (userContext.departmentId) {
-            examWhere.OR = [
-              { course: { departmentId: userContext.departmentId } },
-              { course: { departmentId: null } }
-            ];
-          }
+          ];
+        }
+
+        // When college admin/HOD creates exams, automatically display to all authorized roles in that college:
+        // Admin, Principal, Teachers, Staff, and Students.
+        // Multi-tenancy isolation strictly prevents users from other colleges from seeing these exams.
+        if (req.query.departmentId && UUID_REGEX.test(String(req.query.departmentId))) {
+          examWhere.course = { departmentId: String(req.query.departmentId) };
         }
 
         const exams = await prisma.exam.findMany({
@@ -517,33 +688,59 @@ export const getCalendarEvents = async (req, res) => {
           orderBy: { date: 'asc' }
         });
 
-        examEvents = (exams || []).map((exam) => ({
-          id: `exam-${exam.id}`,
-          originalExamId: exam.id,
-          collegeId: exam.collegeId,
-          departmentId: exam.course?.departmentId || null,
-          title: `Exam: ${exam.name}`,
-          description: exam.course?.name
-            ? `Course: ${exam.course.name} (${exam.course.code || 'N/A'})\nMax Marks: ${exam.maxMarks}`
-            : `Max Marks: ${exam.maxMarks}`,
-          type: 'exam',
-          startDate: exam.date,
-          endDate: exam.date,
-          allDay: true,
-          location: 'Examination Hall',
-          targetAudience: 'students',
-          color: '#ef4444',
-          isExamRecord: true,
-          createdAt: exam.createdAt,
-          updatedAt: exam.updatedAt
-        }));
+        examEvents = (exams || []).map((exam) => {
+          const dStr = exam.date instanceof Date
+            ? exam.date.toISOString().split('T')[0]
+            : String(exam.date).split('T')[0];
+
+          return {
+            id: `exam-${exam.id}`,
+            originalExamId: exam.id,
+            collegeId: exam.collegeId,
+            departmentId: exam.course?.departmentId || null,
+            title: `Exam: ${exam.name}`,
+            description: exam.course?.name
+              ? `Course: ${exam.course.name} (${exam.course.code || 'N/A'})\nMax Marks: ${exam.maxMarks}\nType: ${exam.type || 'Examination'}`
+              : `Max Marks: ${exam.maxMarks}\nType: ${exam.type || 'Examination'}`,
+            type: 'exam',
+            startDate: `${dStr}T09:00:00.000Z`,
+            endDate: `${dStr}T12:00:00.000Z`,
+            date: dStr,
+            allDay: true,
+            location: exam.room || 'Examination Hall',
+            targetAudience: 'everyone',
+            color: '#ef4444',
+            isExamRecord: true,
+            createdAt: exam.createdAt,
+            updatedAt: exam.updatedAt
+          };
+        });
       } catch (e) {
-        // Exam table reading fail-open
+        console.warn('[Calendar] Error fetching exam events:', e.message);
       }
     }
 
+    // Deduplicate: If any customEvent in CalendarEvent represents an exam that already exists in examEvents
+    const existingExamTitlesAndDates = new Set();
+    examEvents.forEach((ev) => {
+      const cleanTitle = ev.title.replace(/^Exam:\s*/i, '').trim().toLowerCase();
+      const dateKey = ev.date || (ev.startDate ? ev.startDate.slice(0, 10) : '');
+      existingExamTitlesAndDates.add(`${cleanTitle}|${dateKey}`);
+    });
+
+    const deduplicatedCustom = (customEvents || []).filter((ce) => {
+      if (ce.type?.toLowerCase() === 'exam') {
+        const cleanTitle = (ce.title || '').replace(/^Exam:\s*/i, '').trim().toLowerCase();
+        const ceDate = ce.startDate ? new Date(ce.startDate).toISOString().slice(0, 10) : '';
+        if (existingExamTitlesAndDates.has(`${cleanTitle}|${ceDate}`)) {
+          return false; // Skip redundant custom event
+        }
+      }
+      return true;
+    });
+
     // Merge custom events and exam records safely
-    const allEvents = [...(customEvents || []), ...examEvents].sort((a, b) => {
+    const allEvents = [...deduplicatedCustom, ...examEvents].sort((a, b) => {
       const timeA = a.startDate ? new Date(a.startDate).getTime() : 0;
       const timeB = b.startDate ? new Date(b.startDate).getTime() : 0;
       return timeA - timeB;
@@ -589,17 +786,7 @@ export const getCalendarEventById = async (req, res) => {
       });
       if (!exam) return res.status(404).json({ success: false, error: 'Exam not found' });
 
-      // If regular user, verify visibility
-      if (!userContext.canManage) {
-        if (userContext.role === 'staff') {
-          if (!userContext.departmentId || exam.course?.departmentId !== userContext.departmentId) {
-            return res.status(403).json({ success: false, error: 'Forbidden: You do not have permission to view this exam.' });
-          }
-        } else if (userContext.departmentId && exam.course?.departmentId && exam.course.departmentId !== userContext.departmentId) {
-          return res.status(403).json({ success: false, error: 'Forbidden: You do not have permission to view this exam.' });
-        }
-      }
-
+      // Exams scheduled for the college are accessible to all authenticated roles of that college
       return res.json({
         success: true,
         data: {
@@ -633,26 +820,33 @@ export const getCalendarEventById = async (req, res) => {
     const event = rows[0];
 
     // Regular users visibility enforcement
-    if (!userContext.canManage) {
+    const isAdmin = userContext.role === 'admin' || userContext.role === 'superadmin';
+    if (!isAdmin) {
       const aud = String(event.targetAudience || 'everyone').toLowerCase().trim();
       const role = String(userContext.role || '').toLowerCase();
       const userDeptId = userContext.departmentId;
+      const customRoleName = String(userContext.customRoleName || '').toLowerCase().trim();
+      const designation = String(userContext.designation || '').toLowerCase().trim();
+      const isHod = Boolean(userContext.isHod);
 
       const isEveryone = aud === 'everyone' || aud === 'all' || !event.targetAudience;
       const isMyRole = (role === 'student' && (aud === 'student' || aud === 'students')) ||
                        ((role === 'teacher' || role === 'faculty') && (aud === 'teacher' || aud === 'teachers' || aud === 'faculty')) ||
-                       (role === 'staff' && aud === 'staff') ||
-                       (aud === role);
+                       (isHod && (aud === 'hod' || aud === 'hods')) ||
+                       (role === 'staff' && (aud === 'staff' || aud === 'staffs' || aud === 'non-teaching' || aud === 'non_teaching' || aud === 'non-teaching staff')) ||
+                       (customRoleName && (aud === customRoleName || aud === customRoleName.replace(/\s+/g, '_') || aud.includes(customRoleName))) ||
+                       (designation && (aud === designation || aud === designation.replace(/\s+/g, '_') || aud.includes(designation))) ||
+                       (userContext.customRoleId && aud === String(userContext.customRoleId).toLowerCase());
 
-      const isMyDept = userDeptId && (
-        event.departmentId === userDeptId ||
+      const isDeptBroadcast = userDeptId && (
         aud === `dept:${userDeptId.toLowerCase()}` ||
-        aud === `department:${userDeptId.toLowerCase()}`
+        aud === `department:${userDeptId.toLowerCase()}` ||
+        (event.departmentId === userDeptId && isEveryone)
       );
 
       const hasDeptConflict = event.departmentId && userDeptId && event.departmentId !== userDeptId;
 
-      if (!isEveryone && !isMyDept && (!isMyRole || hasDeptConflict)) {
+      if ((!isEveryone && !isDeptBroadcast && !isMyRole) || hasDeptConflict) {
         return res.status(403).json({
           success: false,
           error: 'Forbidden: You do not have permission to view this event.'
@@ -745,6 +939,100 @@ export const createCalendarEvent = async (req, res) => {
       }
     }
 
+    // When an exam is created via the Calendar module, persist directly to the Exam database to maintain single source of truth
+    if (type && type.toLowerCase() === 'exam') {
+      const examName = title.trim().replace(/^Exam:\s*/i, '');
+      const roomValue = (location || 'Examination Hall').trim();
+
+      // Find or establish an appropriate course in this college/department
+      let targetCourseId = null;
+      if (resolvedDeptId) {
+        const deptCourse = await prisma.course.findFirst({
+          where: { collegeId, departmentId: resolvedDeptId }
+        });
+        if (deptCourse) targetCourseId = deptCourse.id;
+      }
+      if (!targetCourseId) {
+        const anyCourse = await prisma.course.findFirst({ where: { collegeId } });
+        if (anyCourse) {
+          targetCourseId = anyCourse.id;
+        } else {
+          let dept = resolvedDeptId
+            ? await prisma.department.findFirst({ where: { id: resolvedDeptId, collegeId } })
+            : await prisma.department.findFirst({ where: { collegeId } });
+          if (!dept) {
+            dept = await prisma.department.create({
+              data: { collegeId, name: 'General Department', code: 'GEN' }
+            });
+          }
+          const createdCourse = await prisma.course.create({
+            data: {
+              collegeId,
+              departmentId: dept.id,
+              name: 'General Academic Program',
+              code: 'GEN-101',
+              semester: 1,
+              credits: 3
+            }
+          });
+          targetCourseId = createdCourse.id;
+        }
+      }
+
+      const createdExam = await prisma.exam.create({
+        data: {
+          collegeId,
+          courseId: targetCourseId,
+          name: examName,
+          date: sDate,
+          maxMarks: 100,
+          type: 'Midterm',
+          status: 'pending',
+          room: roomValue
+        },
+        include: {
+          course: {
+            include: { department: true }
+          }
+        }
+      });
+
+      const dStr = createdExam.date.toISOString().split('T')[0];
+      const createdExamEvent = {
+        id: `exam-${createdExam.id}`,
+        originalExamId: createdExam.id,
+        collegeId: createdExam.collegeId,
+        departmentId: createdExam.course?.departmentId || null,
+        title: `Exam: ${createdExam.name}`,
+        description: createdExam.course?.name
+          ? `Course: ${createdExam.course.name} (${createdExam.course.code || 'N/A'})\nMax Marks: ${createdExam.maxMarks}`
+          : `Max Marks: ${createdExam.maxMarks}`,
+        type: 'exam',
+        startDate: `${dStr}T09:00:00.000Z`,
+        endDate: `${dStr}T12:00:00.000Z`,
+        date: dStr,
+        allDay: true,
+        location: roomValue,
+        targetAudience: 'everyone',
+        color: '#ef4444',
+        isExamRecord: true,
+        createdAt: createdExam.createdAt,
+        updatedAt: createdExam.updatedAt
+      };
+
+      sendCalendarNotification({
+        collegeId,
+        event: createdExamEvent,
+        isUpdate: false
+      }).catch((err) => console.error('[Calendar Notification Error]:', err));
+
+      return res.status(201).json({
+        success: true,
+        message: 'Exam scheduled successfully and synchronized with calendar',
+        data: createdExamEvent
+      });
+    }
+
     const eventId = crypto.randomUUID();
     const insertSql = `
       INSERT INTO "CalendarEvent" (
@@ -755,7 +1043,7 @@ export const createCalendarEvent = async (req, res) => {
       ) VALUES (
         $1::uuid, $2::uuid, $3, $4, $5,
         $6::timestamp, $7::timestamp, $8, $9,
-        $10, $11::uuid, $12::uuid,
+        $10, ($11::text)::uuid, ($12::text)::uuid,
         $13, $14, $15
       )
       RETURNING *
@@ -833,7 +1121,7 @@ export const updateCalendarEvent = async (req, res) => {
   await ensureCalendarTable();
 
   const { id } = req.params;
-  const collegeId = req.tenant?.collegeId || req.body.collegeId || req.user?.collegeId;
+  const collegeId = req.tenant?.collegeId || req.body?.collegeId || req.user?.collegeId || req.query?.collegeId;
 
   const userContext = await resolveUserCalendarContext(req.user, collegeId);
   if (!userContext.canManage) {
@@ -851,12 +1139,39 @@ export const updateCalendarEvent = async (req, res) => {
         data: {
           name: req.body.title ? req.body.title.replace(/^Exam:\s*/, '') : undefined,
           date: req.body.startDate ? new Date(req.body.startDate) : undefined
+        },
+        include: {
+          course: {
+            select: { name: true, code: true, departmentId: true }
+          }
         }
       });
+      const dStr = updated.date instanceof Date ? updated.date.toISOString().split('T')[0] : String(updated.date).split('T')[0];
+      const formatted = {
+        id: `exam-${updated.id}`,
+        originalExamId: updated.id,
+        collegeId: updated.collegeId,
+        departmentId: updated.course?.departmentId || null,
+        title: `Exam: ${updated.name}`,
+        description: updated.course?.name
+          ? `Course: ${updated.course.name} (${updated.course.code || 'N/A'})\nMax Marks: ${updated.maxMarks}\nType: ${updated.type || 'Examination'}`
+          : `Max Marks: ${updated.maxMarks}\nType: ${updated.type || 'Examination'}`,
+        type: 'exam',
+        startDate: `${dStr}T09:00:00.000Z`,
+        endDate: `${dStr}T12:00:00.000Z`,
+        date: dStr,
+        allDay: true,
+        location: updated.room || 'Examination Hall',
+        targetAudience: 'everyone',
+        color: '#ef4444',
+        isExamRecord: true,
+        createdAt: updated.createdAt,
+        updatedAt: updated.updatedAt
+      };
       return res.json({
         success: true,
         message: 'Exam updated successfully',
-        data: updated
+        data: formatted
       });
     } catch (err) {
       return res.status(500).json({ success: false, error: err.message });
@@ -881,53 +1196,55 @@ export const updateCalendarEvent = async (req, res) => {
       color
     } = req.body;
 
-    const existing = await prisma.$queryRawUnsafe(
-      `SELECT * FROM "CalendarEvent" WHERE "id" = $1::uuid AND "collegeId" = $2::uuid LIMIT 1`,
-      id,
-      collegeId
-    );
+    let existingRows;
+    const selectSql = collegeId && UUID_REGEX.test(String(collegeId))
+      ? `SELECT * FROM "CalendarEvent" WHERE "id" = $1::uuid AND "collegeId" = $2::uuid LIMIT 1`
+      : `SELECT * FROM "CalendarEvent" WHERE "id" = $1::uuid LIMIT 1`;
+    const selectParams = collegeId && UUID_REGEX.test(String(collegeId)) ? [id, collegeId] : [id];
 
-    if (!existing || existing.length === 0) {
+    if (pool) {
+      const poolRes = await pool.query(selectSql, selectParams);
+      existingRows = poolRes.rows;
+    } else {
+      existingRows = await prisma.$queryRawUnsafe(selectSql, ...selectParams);
+    }
+
+    if (!existingRows || existingRows.length === 0) {
       return res.status(404).json({ success: false, error: 'Calendar event not found' });
     }
 
-    const current = existing[0];
-    const newTitle = title !== undefined ? title.trim() : current.title;
-    const newDesc = description !== undefined ? description : current.description;
-    const newType = type !== undefined ? type.toLowerCase() : current.type;
-    const newStart = startDate ? new Date(startDate).toISOString() : current.startDate;
-    const newEnd = endDate ? new Date(endDate).toISOString() : (startDate ? new Date(startDate).toISOString() : current.endDate);
-    const newAllDay = allDay !== undefined ? Boolean(allDay) : current.allDay;
-    const newLoc = location !== undefined ? location : current.location;
-    const newAudience = targetAudience !== undefined ? targetAudience : current.targetAudience;
-    const newColor = color !== undefined ? color : current.color;
+    const current = existingRows[0];
+    const eventCollegeId = current.collegeId || collegeId;
+    const newTitle = title !== undefined && title !== null ? String(title).trim() : current.title;
+    const newDesc = description !== undefined && description !== null ? String(description).trim() : (current.description || '');
+    const newType = type !== undefined && type !== null ? String(type).toLowerCase().trim() : current.type;
+    const newStart = startDate ? new Date(startDate).toISOString() : (current.startDate ? new Date(current.startDate).toISOString() : new Date().toISOString());
+    const newEnd = endDate
+      ? new Date(endDate).toISOString()
+      : (startDate ? new Date(startDate).toISOString() : (current.endDate ? new Date(current.endDate).toISOString() : newStart));
+    const newAllDay = allDay !== undefined ? Boolean(allDay) : Boolean(current.allDay);
+    const newLoc = location !== undefined && location !== null ? String(location).trim() : (current.location || '');
+    const newAudience = targetAudience !== undefined && targetAudience !== null ? String(targetAudience).trim() : (current.targetAudience || 'everyone');
+
+    let newColor = color !== undefined && color !== null ? color : current.color;
+    if (!newColor || (type && String(type).toLowerCase() !== String(current.type).toLowerCase())) {
+      const t = newType.toLowerCase();
+      if (t === 'exam') newColor = '#ef4444';
+      else if (t === 'holiday') newColor = '#10b981';
+      else if (t === 'academic') newColor = '#6366f1';
+      else if (t === 'meeting') newColor = '#f59e0b';
+      else newColor = '#3b82f6';
+    }
 
     let newDeptId = current.departmentId;
     if (departmentId !== undefined) {
-      newDeptId = departmentId && UUID_REGEX.test(departmentId) ? departmentId : null;
-    } else if (targetAudience && (targetAudience.startsWith('dept:') || targetAudience.startsWith('department:'))) {
-      const parsedId = targetAudience.split(':')[1];
+      newDeptId = departmentId && UUID_REGEX.test(String(departmentId)) ? String(departmentId) : null;
+    } else if (newAudience && (newAudience.startsWith('dept:') || newAudience.startsWith('department:'))) {
+      const parsedId = newAudience.split(':')[1];
       newDeptId = parsedId && UUID_REGEX.test(parsedId) ? parsedId : null;
     }
 
-    const rows = await prisma.$queryRawUnsafe(
-      `
-      UPDATE "CalendarEvent"
-      SET
-        "title" = $1,
-        "description" = $2,
-        "type" = $3,
-        "startDate" = $4::timestamp,
-        "endDate" = $5::timestamp,
-        "allDay" = $6,
-        "location" = $7,
-        "targetAudience" = $8,
-        "departmentId" = $9::uuid,
-        "color" = $10,
-        "updatedAt" = NOW()
-      WHERE "id" = $11::uuid AND "collegeId" = $12::uuid
-      RETURNING *
-      `,
+    const updateParams = [
       newTitle,
       newDesc,
       newType,
@@ -935,18 +1252,55 @@ export const updateCalendarEvent = async (req, res) => {
       newEnd,
       newAllDay,
       newLoc,
-      newAudience,
-      newDeptId,
-      newColor,
-      id,
-      collegeId
-    );
+      newAudience
+    ];
 
-    const updatedEvent = rows[0];
+    let deptSql = `"departmentId" = NULL`;
+    if (newDeptId && UUID_REGEX.test(String(newDeptId))) {
+      updateParams.push(String(newDeptId));
+      deptSql = `"departmentId" = $${updateParams.length}::uuid`;
+    }
+
+    updateParams.push(newColor);
+    const colorParamIdx = updateParams.length;
+
+    updateParams.push(id);
+    const idParamIdx = updateParams.length;
+
+    const updateSql = `
+      UPDATE "CalendarEvent"
+      SET
+        "title" = $1,
+        "description" = $2,
+        "type" = $3,
+        "startDate" = $4::timestamptz,
+        "endDate" = $5::timestamptz,
+        "allDay" = $6,
+        "location" = $7,
+        "targetAudience" = $8,
+        ${deptSql},
+        "color" = $${colorParamIdx},
+        "updatedAt" = NOW()
+      WHERE "id" = $${idParamIdx}::uuid
+      RETURNING *
+    `;
+
+    let rows;
+    if (pool) {
+      const poolRes = await pool.query(updateSql, updateParams);
+      rows = poolRes.rows;
+    } else {
+      rows = await prisma.$queryRawUnsafe(updateSql, ...updateParams);
+    }
+
+    const updatedEvent = rows && rows[0] ? rows[0] : null;
+    if (!updatedEvent) {
+      throw new Error('Update failed to modify record');
+    }
 
     // Send in-app notification on calendar event update to the assigned target role(s)
     sendCalendarNotification({
-      collegeId,
+      collegeId: eventCollegeId,
       event: updatedEvent,
       isUpdate: true
     }).catch((err) => console.error('[Calendar Notification Error]:', err));
@@ -969,7 +1323,7 @@ export const deleteCalendarEvent = async (req, res) => {
   await ensureCalendarTable();
 
   const { id } = req.params;
-  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const collegeId = req.tenant?.collegeId || req.body?.collegeId || req.user?.collegeId || req.query?.collegeId;
 
   const userContext = await resolveUserCalendarContext(req.user, collegeId);
   if (!userContext.canManage) {
@@ -982,9 +1336,35 @@ export const deleteCalendarEvent = async (req, res) => {
   try {
     if (id.startsWith('exam-')) {
       const realId = id.replace('exam-', '');
-      await prisma.exam.delete({
-        where: { id: realId }
+
+      // Delete associated marks first to satisfy foreign key constraint Mark_examId_fkey
+      await prisma.mark.deleteMany({
+        where: { examId: realId }
       });
+
+      const deletedExam = await prisma.exam.delete({
+        where: { id: realId }
+      }).catch((e) => {
+        return null;
+      });
+
+      // Clean up any legacy custom CalendarEvent matching this exam
+      try {
+        if (deletedExam?.name) {
+          const delSql = collegeId && UUID_REGEX.test(String(collegeId))
+            ? `DELETE FROM "CalendarEvent" WHERE "collegeId" = $1::uuid AND "type" = 'exam' AND ("title" = $2 OR "title" = $3)`
+            : `DELETE FROM "CalendarEvent" WHERE "type" = 'exam' AND ("title" = $1 OR "title" = $2)`;
+          const delParams = collegeId && UUID_REGEX.test(String(collegeId))
+            ? [collegeId, deletedExam.name, `Exam: ${deletedExam.name}`]
+            : [deletedExam.name, `Exam: ${deletedExam.name}`];
+          if (pool) {
+            await pool.query(delSql, delParams);
+          } else {
+            await prisma.$executeRawUnsafe(delSql, ...delParams);
+          }
+        }
+      } catch (_) {}
+
       return res.json({ success: true, message: 'Exam deleted successfully' });
     }
 
@@ -992,13 +1372,32 @@ export const deleteCalendarEvent = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Calendar event not found' });
     }
 
-    const result = await prisma.$executeRawUnsafe(
-      `DELETE FROM "CalendarEvent" WHERE "id" = $1::uuid AND "collegeId" = $2::uuid`,
-      id,
-      collegeId
-    );
+    let result = 0;
+    if (collegeId && UUID_REGEX.test(String(collegeId))) {
+      result = await prisma.$executeRawUnsafe(
+        `DELETE FROM "CalendarEvent" WHERE "id" = $1::uuid AND "collegeId" = $2::uuid`,
+        id,
+        collegeId
+      );
+    } else {
+      result = await prisma.$executeRawUnsafe(
+        `DELETE FROM "CalendarEvent" WHERE "id" = $1::uuid`,
+        id
+      );
+    }
 
     if (result === 0) {
+      // Check if it's an exam ID passed without 'exam-' prefix
+      const examWhere = { id };
+      if (collegeId && UUID_REGEX.test(String(collegeId))) {
+        examWhere.collegeId = collegeId;
+      }
+      const examExists = await prisma.exam.findFirst({ where: examWhere });
+      if (examExists) {
+        await prisma.mark.deleteMany({ where: { examId: id } });
+        await prisma.exam.delete({ where: { id } });
+        return res.json({ success: true, message: 'Exam deleted successfully' });
+      }
       return res.status(404).json({ success: false, error: 'Calendar event not found' });
     }
 
@@ -1040,21 +1439,25 @@ export const getCalendarSummary = async (req, res) => {
     const todayParams = [collegeId, todayStart, todayEnd];
     const upcomingParams = [collegeId, todayStart];
 
-    if (!userContext.canManage) {
+    const isAdmin = userContext.role === 'admin' || userContext.role === 'superadmin' || Boolean(userContext.isPrincipal);
+    if (!isAdmin) {
       const role = String(userContext.role || '').toLowerCase();
       const userDeptId = userContext.departmentId;
+      const customRoleName = String(userContext.customRoleName || '').toLowerCase().trim();
+      const designation = String(userContext.designation || '').toLowerCase().trim();
       const isStudent = role === 'student';
       const isTeacher = role === 'teacher' || role === 'faculty';
       const isStaff = role === 'staff';
+      const isHod = Boolean(userContext.isHod);
 
       let pIdxToday = 4;
       const visToday = [
-        `(LOWER("targetAudience") = 'everyone' OR LOWER("targetAudience") = 'all' OR "targetAudience" IS NULL OR "targetAudience" = '')`
+        `(LOWER("targetAudience") = 'everyone' OR LOWER("targetAudience") = 'all' OR "targetAudience" IS NULL OR "targetAudience" = '' OR LOWER("type") = 'exam')`
       ];
 
       let pIdxUpcoming = 3;
       const visUpcoming = [
-        `(LOWER("targetAudience") = 'everyone' OR LOWER("targetAudience") = 'all' OR "targetAudience" IS NULL OR "targetAudience" = '')`
+        `(LOWER("targetAudience") = 'everyone' OR LOWER("targetAudience") = 'all' OR "targetAudience" IS NULL OR "targetAudience" = '' OR LOWER("type") = 'exam')`
       ];
 
       if (isStudent) {
@@ -1083,31 +1486,76 @@ export const getCalendarSummary = async (req, res) => {
           visToday.push(`(LOWER("targetAudience") IN ('teacher', 'teachers', 'faculty') AND "departmentId" IS NULL)`);
           visUpcoming.push(`(LOWER("targetAudience") IN ('teacher', 'teachers', 'faculty') AND "departmentId" IS NULL)`);
         }
+
+        if (isHod) {
+          if (userDeptId && UUID_REGEX.test(userDeptId)) {
+            visToday.push(`(LOWER("targetAudience") IN ('hod', 'hods') AND ("departmentId" IS NULL OR "departmentId" = $${pIdxToday}::uuid))`);
+            todayParams.push(userDeptId);
+            pIdxToday++;
+
+            visUpcoming.push(`(LOWER("targetAudience") IN ('hod', 'hods') AND ("departmentId" IS NULL OR "departmentId" = $${pIdxUpcoming}::uuid))`);
+            upcomingParams.push(userDeptId);
+            pIdxUpcoming++;
+          } else {
+            visToday.push(`(LOWER("targetAudience") IN ('hod', 'hods') AND "departmentId" IS NULL)`);
+            visUpcoming.push(`(LOWER("targetAudience") IN ('hod', 'hods') AND "departmentId" IS NULL)`);
+          }
+        }
       } else if (isStaff) {
-        if (userDeptId && UUID_REGEX.test(userDeptId)) {
-          visToday.push(`(LOWER("targetAudience") = 'staff' AND ("departmentId" IS NULL OR "departmentId" = $${pIdxToday}::uuid))`);
-          todayParams.push(userDeptId);
+        visToday.push(`(
+          LOWER("targetAudience") IN ('staff', 'staffs', 'non-teaching', 'non_teaching', 'non-teaching staff', 'non teaching staff')
+        )`);
+        visUpcoming.push(`(
+          LOWER("targetAudience") IN ('staff', 'staffs', 'non-teaching', 'non_teaching', 'non-teaching staff', 'non teaching staff')
+        )`);
+
+        if (customRoleName) {
+          const cLower = customRoleName.toLowerCase().trim();
+          visToday.push(`(LOWER("targetAudience") = $${pIdxToday} OR LOWER("targetAudience") = $${pIdxToday + 1} OR LOWER("targetAudience") ILIKE $${pIdxToday + 2})`);
+          todayParams.push(cLower, cLower.replace(/\s+/g, '_'), `%${cLower}%`);
+          pIdxToday += 3;
+
+          visUpcoming.push(`(LOWER("targetAudience") = $${pIdxUpcoming} OR LOWER("targetAudience") = $${pIdxUpcoming + 1} OR LOWER("targetAudience") ILIKE $${pIdxUpcoming + 2})`);
+          upcomingParams.push(cLower, cLower.replace(/\s+/g, '_'), `%${cLower}%`);
+          pIdxUpcoming += 3;
+        }
+
+        if (designation && designation.toLowerCase().trim() !== (customRoleName || '').toLowerCase().trim()) {
+          const dLower = designation.toLowerCase().trim();
+          visToday.push(`(LOWER("targetAudience") = $${pIdxToday} OR LOWER("targetAudience") ILIKE $${pIdxToday + 1})`);
+          todayParams.push(dLower, `%${dLower}%`);
+          pIdxToday += 2;
+
+          visUpcoming.push(`(LOWER("targetAudience") = $${pIdxUpcoming} OR LOWER("targetAudience") ILIKE $${pIdxUpcoming + 1})`);
+          upcomingParams.push(dLower, `%${dLower}%`);
+          pIdxUpcoming += 2;
+        }
+
+        if (userContext.customRoleId && UUID_REGEX.test(String(userContext.customRoleId))) {
+          visToday.push(`LOWER("targetAudience") = $${pIdxToday}`);
+          todayParams.push(String(userContext.customRoleId).toLowerCase());
           pIdxToday++;
 
-          visUpcoming.push(`(LOWER("targetAudience") = 'staff' AND ("departmentId" IS NULL OR "departmentId" = $${pIdxUpcoming}::uuid))`);
-          upcomingParams.push(userDeptId);
+          visUpcoming.push(`LOWER("targetAudience") = $${pIdxUpcoming}`);
+          upcomingParams.push(String(userContext.customRoleId).toLowerCase());
           pIdxUpcoming++;
-        } else {
-          visToday.push(`(LOWER("targetAudience") = 'staff' AND "departmentId" IS NULL)`);
-          visUpcoming.push(`(LOWER("targetAudience") = 'staff' AND "departmentId" IS NULL)`);
         }
       }
 
       if (userDeptId && UUID_REGEX.test(userDeptId)) {
-        visToday.push(`"departmentId" = $${pIdxToday}::uuid`);
-        visToday.push(`LOWER("targetAudience") = $${pIdxToday + 1}`);
-        visToday.push(`LOWER("targetAudience") = $${pIdxToday + 2}`);
+        visToday.push(`(
+          ("departmentId" = $${pIdxToday}::uuid AND (LOWER("targetAudience") IN ('everyone', 'all') OR "targetAudience" IS NULL OR "targetAudience" = ''))
+          OR LOWER("targetAudience") = $${pIdxToday + 1}
+          OR LOWER("targetAudience") = $${pIdxToday + 2}
+        )`);
         todayParams.push(userDeptId, `dept:${userDeptId.toLowerCase()}`, `department:${userDeptId.toLowerCase()}`);
         pIdxToday += 3;
 
-        visUpcoming.push(`"departmentId" = $${pIdxUpcoming}::uuid`);
-        visUpcoming.push(`LOWER("targetAudience") = $${pIdxUpcoming + 1}`);
-        visUpcoming.push(`LOWER("targetAudience") = $${pIdxUpcoming + 2}`);
+        visUpcoming.push(`(
+          ("departmentId" = $${pIdxUpcoming}::uuid AND (LOWER("targetAudience") IN ('everyone', 'all') OR "targetAudience" IS NULL OR "targetAudience" = ''))
+          OR LOWER("targetAudience") = $${pIdxUpcoming + 1}
+          OR LOWER("targetAudience") = $${pIdxUpcoming + 2}
+        )`);
         upcomingParams.push(userDeptId, `dept:${userDeptId.toLowerCase()}`, `department:${userDeptId.toLowerCase()}`);
         pIdxUpcoming += 3;
       }
@@ -1121,34 +1569,60 @@ export const getCalendarSummary = async (req, res) => {
     const todayEvents = await prisma.$queryRawUnsafe(todayQuery, ...todayParams).catch(() => [{ count: 0 }]);
     const upcomingEvents = await prisma.$queryRawUnsafe(upcomingQuery, ...upcomingParams).catch(() => []);
 
-    const examWhere = {
+    // Exam queries for today & upcoming
+    const todayStartUtc = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0));
+    const todayEndUtc = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999));
+
+    const todayExamWhere = {
       collegeId,
-      date: { gte: new Date(todayStart) }
+      date: { gte: todayStartUtc, lte: todayEndUtc }
     };
 
-    if (!userContext.canManage) {
-      if (userContext.role === 'staff') {
-        if (userContext.departmentId) {
-          examWhere.course = { departmentId: userContext.departmentId };
-        } else {
-          examWhere.id = '__none__';
-        }
-      } else if (userContext.departmentId) {
-        examWhere.OR = [
-          { course: { departmentId: userContext.departmentId } },
-          { course: { departmentId: null } }
-        ];
-      }
-    }
+    const upcomingExamWhere = {
+      collegeId,
+      date: { gte: todayStartUtc }
+    };
 
-    const examsCount = await prisma.exam.count({ where: examWhere }).catch(() => 0);
+    const [todayExamsCount, upcomingExamsCount, upcomingExamsList] = await Promise.all([
+      prisma.exam.count({ where: todayExamWhere }).catch(() => 0),
+      prisma.exam.count({ where: upcomingExamWhere }).catch(() => 0),
+      prisma.exam.findMany({
+        where: upcomingExamWhere,
+        include: { course: true },
+        orderBy: { date: 'asc' },
+        take: 5
+      }).catch(() => [])
+    ]);
+
+    const formattedUpcomingExams = (upcomingExamsList || []).map((ex) => {
+      const dStr = ex.date instanceof Date ? ex.date.toISOString().split('T')[0] : String(ex.date).split('T')[0];
+      return {
+        id: `exam-${ex.id}`,
+        title: `Exam: ${ex.name}`,
+        type: 'exam',
+        startDate: `${dStr}T09:00:00.000Z`,
+        endDate: `${dStr}T12:00:00.000Z`,
+        date: dStr,
+        allDay: true,
+        location: ex.room || 'Examination Hall',
+        targetAudience: 'all',
+        color: '#ef4444',
+        isExamRecord: true
+      };
+    });
+
+    const mergedUpcoming = [...(upcomingEvents || []), ...formattedUpcomingExams]
+      .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+      .slice(0, 5);
+
+    const totalTodayCount = (todayEvents[0]?.count || 0) + todayExamsCount;
 
     return res.json({
       success: true,
       data: {
-        todayCount: todayEvents[0]?.count || 0,
-        upcomingExamsCount: examsCount,
-        upcomingEvents,
+        todayCount: totalTodayCount,
+        upcomingExamsCount,
+        upcomingEvents: mergedUpcoming,
         canManage: userContext.canManage
       }
     });

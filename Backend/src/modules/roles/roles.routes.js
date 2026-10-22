@@ -24,7 +24,7 @@ router.use(authenticate, resolveTenant);
 
 router.get('/', (req, res, next) => {
   const role = (req.user?.role || '').toLowerCase();
-  if (role === 'admin' || role === 'superadmin' || role === 'hod' || Boolean(req.user?.isHod)) {
+  if (role === 'admin' || role === 'superadmin' || role === 'hod' || role === 'staff' || role === 'teacher' || role === 'faculty' || Boolean(req.user?.isHod)) {
     return next();
   }
   return requirePermission('roles', 'read')(req, res, next);

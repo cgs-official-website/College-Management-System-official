@@ -13,10 +13,22 @@ export function useCalendar(initialFilters = {}) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [filters, setFilters] = useState(initialFilters);
 
-  // Role Rule check: Strictly College Admins and HODs
+  useEffect(() => {
+    setFilters(initialFilters);
+  }, [
+    initialFilters.type,
+    initialFilters.month,
+    initialFilters.year,
+    initialFilters.search,
+    initialFilters.startDate,
+    initialFilters.endDate,
+    initialFilters.targetAudience
+  ]);
+
+  // Role Rule check: College Admins, Principals, and HODs
   const normalizedRole = String(userRole || userData?.role || '').toLowerCase();
   const isHod = normalizedRole === 'hod' || Boolean(userData?.isHod) || Boolean(userData?.isHOD);
-  const isAdmin = normalizedRole === 'admin' || normalizedRole === 'superadmin';
+  const isAdmin = normalizedRole === 'admin' || normalizedRole === 'superadmin' || normalizedRole === 'principal';
   const initialCanManage = isAdmin || isHod;
 
   const [backendCanManage, setBackendCanManage] = useState(null);
@@ -130,6 +142,14 @@ export function useCalendar(initialFilters = {}) {
       };
       const res = await api.put(`/calendar/events/${id}`, payload);
       toast.success('Calendar item updated successfully!');
+      
+      const updated = res?.data?.data || res?.data || res;
+      if (updated && updated.id) {
+        setEvents((prev) =>
+          prev.map((ev) => (ev.id === id ? { ...ev, ...updated } : ev))
+        );
+      }
+
       await fetchEvents();
       fetchSummary();
       return res?.data || res;
@@ -152,6 +172,7 @@ export function useCalendar(initialFilters = {}) {
       const qs = collegeId ? `?collegeId=${collegeId}` : '';
       await api.delete(`/calendar/events/${id}${qs}`);
       toast.success('Item deleted from calendar.');
+      setEvents((prev) => prev.filter((ev) => ev.id !== id));
       await fetchEvents();
       fetchSummary();
     } catch (error) {

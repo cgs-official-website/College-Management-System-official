@@ -1,12 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { BookOpen, Users, Save, AlertCircle, FileBarChart } from 'lucide-react';
-
+import { BookOpen, Users, Save, AlertCircle, FileBarChart, Sparkles, Calendar } from 'lucide-react';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
+
+export const STANDARD_EXAM_TYPES = [
+  'Internal Assessment 1',
+  'Internal Assessment 2',
+  'Unit Test',
+  'Model Examination',
+  'Midterm Examination',
+  'Semester Examination',
+  'Final Examination',
+  'Practical / Lab Exam',
+  'Quiz / Class Test',
+  'Viva Voce',
+  'Assignment 1',
+  'Assignment 2'
+];
 
 export default function TeacherGrades() {
   const { userData } = useAuth();
@@ -14,7 +28,11 @@ export default function TeacherGrades() {
   
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState('');
-  const [examType, setExamType] = useState('Midterm');
+  
+  // Scheduled exams for the selected course
+  const [scheduledExams, setScheduledExams] = useState([]);
+  const [selectedExamKey, setSelectedExamKey] = useState('Internal Assessment 1');
+  const [customExamName, setCustomExamName] = useState('');
   const [maxMarks, setMaxMarks] = useState(100);
   
   const [students, setStudents] = useState([]);
@@ -22,12 +40,17 @@ export default function TeacherGrades() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Fetch teacher's classes/courses
   useEffect(() => {
     if (!userData?.collegeId) return;
     const fetchCourses = async () => {
       try {
         const response = await api.get('/courses/my-classes');
-        setCourses(response.data || []);
+        const courseList = response.data || [];
+        setCourses(courseList);
+        if (courseList.length > 0 && !selectedCourse) {
+          setSelectedCourse(courseList[0].id);
+        }
       } catch (error) {
         console.error("Error fetching courses:", error);
       }
@@ -35,31 +58,104 @@ export default function TeacherGrades() {
     fetchCourses();
   }, [userData]);
 
+  // Fetch students & scheduled exams when class changes
   useEffect(() => {
     if (!selectedCourse || !userData?.collegeId) {
       setStudents([]);
+      setScheduledExams([]);
       return;
     }
-    const fetchStudents = async () => {
+
+    const selectedClass = courses.find(c => c.id === selectedCourse);
+    const targetCourseId = selectedClass?.courseId || selectedCourse;
+
+    const loadData = async () => {
       setLoading(true);
       try {
-        const response = await api.get(`/students?sectionId=${selectedCourse}`);
-        const studentData = response.data || [];
+        // Fetch students and exams in parallel
+        const [studentsRes, examsRes] = await Promise.all([
+          api.get(`/students?sectionId=${selectedCourse}`),
+          api.get('/exams', { params: { courseId: targetCourseId } }).catch(() => ({ data: [] }))
+        ]);
+
+        const studentData = studentsRes.data || [];
         setStudents(studentData);
-        
-        const initialMarks = {};
-        studentData.forEach(s => initialMarks[s.id] = '');
-        setMarks(initialMarks);
+
+        const examList = Array.isArray(examsRes.data) ? examsRes.data : [];
+        setScheduledExams(examList);
+
+        // Auto-select first scheduled exam if available, else standard
+        if (examList.length > 0) {
+          const firstExam = examList[0];
+          setSelectedExamKey(`scheduled:${firstExam.id}`);
+          setMaxMarks(firstExam.maxMarks || 100);
+          
+          // Pre-populate any existing marks
+          const initialMarks = {};
+          studentData.forEach(s => {
+            const foundMark = firstExam.marks?.find(m => m.studentId === s.id);
+            initialMarks[s.id] = (foundMark && foundMark.obtainedMarks !== undefined) ? String(foundMark.obtainedMarks) : '';
+          });
+          setMarks(initialMarks);
+        } else {
+          setSelectedExamKey('Internal Assessment 1');
+          setMaxMarks(100);
+          const initialMarks = {};
+          studentData.forEach(s => initialMarks[s.id] = '');
+          setMarks(initialMarks);
+        }
       } catch (error) {
-        console.error("Error fetching students:", error);
+        console.error("Error loading roster/exams:", error);
         toast.error('Failed to load students');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchStudents();
-  }, [selectedCourse, userData]);
+    loadData();
+  }, [selectedCourse, courses, userData]);
+
+  // Handle exam selection change
+  const handleExamChange = (newKey) => {
+    setSelectedExamKey(newKey);
+
+    if (newKey.startsWith('scheduled:')) {
+      const examId = newKey.replace('scheduled:', '');
+      const exam = scheduledExams.find(e => e.id === examId);
+      if (exam) {
+        setMaxMarks(exam.maxMarks || 100);
+        const newMarks = {};
+        students.forEach(s => {
+          const found = exam.marks?.find(m => m.studentId === s.id);
+          newMarks[s.id] = (found && found.obtainedMarks !== undefined) ? String(found.obtainedMarks) : '';
+        });
+        setMarks(newMarks);
+        return;
+      }
+    }
+
+    if (newKey === 'CUSTOM') {
+      // Keep existing marks or blank
+      return;
+    }
+
+    // Standard exam selected - check if an exam of this type already exists in scheduledExams
+    const matchedExam = scheduledExams.find(e => (e.type === newKey || e.name === newKey || e.title === newKey));
+    if (matchedExam) {
+      setMaxMarks(matchedExam.maxMarks || 100);
+      const newMarks = {};
+      students.forEach(s => {
+        const found = matchedExam.marks?.find(m => m.studentId === s.id);
+        newMarks[s.id] = (found && found.obtainedMarks !== undefined) ? String(found.obtainedMarks) : '';
+      });
+      setMarks(newMarks);
+    } else {
+      setMaxMarks(100);
+      const newMarks = {};
+      students.forEach(s => newMarks[s.id] = '');
+      setMarks(newMarks);
+    }
+  };
 
   const handleMarkChange = (studentId, value) => {
     const num = Number(value);
@@ -72,6 +168,28 @@ export default function TeacherGrades() {
 
   const handleSaveGrades = async () => {
     if (!selectedCourse) return toast.error('Please select a class first');
+
+    // Resolve exam title/type and optional examId
+    let resolvedExamType = '';
+    let resolvedExamId = undefined;
+
+    if (selectedExamKey.startsWith('scheduled:')) {
+      const examId = selectedExamKey.replace('scheduled:', '');
+      const exam = scheduledExams.find(e => e.id === examId);
+      resolvedExamId = exam?.id;
+      resolvedExamType = exam?.type || exam?.name || exam?.title || 'Exam';
+    } else if (selectedExamKey === 'CUSTOM') {
+      if (!customExamName.trim()) {
+        return toast.error('Please enter a name for the custom examination');
+      }
+      resolvedExamType = customExamName.trim();
+    } else {
+      resolvedExamType = selectedExamKey;
+      const matchedExam = scheduledExams.find(e => (e.type === selectedExamKey || e.name === selectedExamKey));
+      if (matchedExam) {
+        resolvedExamId = matchedExam.id;
+      }
+    }
     
     // Check if any mark is empty
     const unentered = students.filter(s => marks[s.id] === '');
@@ -79,11 +197,6 @@ export default function TeacherGrades() {
       if (!(await confirm({ message: `There are ${unentered.length} students without marks. Submit anyway?` }))) {
         return;
       }
-    }
-
-    if (!selectedCourse || !examType) {
-      toast.error("Please select a course and an exam");
-      return;
     }
 
     setSaving(true);
@@ -106,13 +219,21 @@ export default function TeacherGrades() {
       const selectedClass = courses.find(c => c.id === selectedCourse);
 
       await api.post('/exams/batch-marks', {
-        courseId: selectedClass?.courseId,
-        examType: examType,
+        courseId: selectedClass?.courseId || selectedCourse,
+        examId: resolvedExamId,
+        examType: resolvedExamType,
         maxMarks: Number(maxMarks),
         records
       });
 
       toast.success("Marks saved successfully");
+
+      // Refresh exams cache so current marks persist
+      const targetCourseId = selectedClass?.courseId || selectedCourse;
+      const updatedExamsRes = await api.get('/exams', { params: { courseId: targetCourseId } });
+      if (Array.isArray(updatedExamsRes?.data)) {
+        setScheduledExams(updatedExamsRes.data);
+      }
     } catch (err) {
       console.error(err);
       if (err.message?.includes('422')) {
@@ -136,14 +257,14 @@ export default function TeacherGrades() {
         <button 
           onClick={handleSaveGrades}
           disabled={saving || students.length === 0}
-          className="flex items-center gap-2 px-6 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-xl font-bold shadow-lg shadow-primary-500/30 transition-all"
+          className="flex items-center gap-2 px-6 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-xl font-bold shadow-lg shadow-primary-500/30 transition-all hover:scale-105 active:scale-95"
         >
           {saving ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-5 h-5" />}
           {saving ? 'Submitting...' : 'Submit Grades'}
         </button>
       </div>
 
-      <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm p-6">
+      <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm p-6 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Class / Subject</label>
@@ -158,34 +279,69 @@ export default function TeacherGrades() {
               ))}
             </select>
           </div>
+
           <div>
             <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Examination Type</label>
             <div className="relative">
-              <FileBarChart className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <FileBarChart className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
               <select 
-                value={examType}
-                onChange={(e) => setExamType(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 appearance-none"
+                value={selectedExamKey}
+                onChange={(e) => handleExamChange(e.target.value)}
+                className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
-                <option value="Assignment 1">Assignment 1</option>
-                <option value="Assignment 2">Assignment 2</option>
-                <option value="Midterm">Midterm Examination</option>
-                <option value="Final">Final Examination</option>
-                <option value="Practical">Practical / Lab</option>
+                {scheduledExams.length > 0 && (
+                  <optgroup label="📋 Scheduled Course Exams">
+                    {scheduledExams.map(ex => (
+                      <option key={ex.id} value={`scheduled:${ex.id}`}>
+                        {ex.title || ex.name} ({ex.type || 'Exam'} - Max {ex.maxMarks})
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+
+                <optgroup label="Institutional Examination Types">
+                  {STANDARD_EXAM_TYPES.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </optgroup>
+
+                <optgroup label="Other">
+                  <option value="CUSTOM">+ Custom Examination Type...</option>
+                </optgroup>
               </select>
             </div>
           </div>
+
           <div>
             <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Maximum Marks</label>
             <input 
               type="number"
               value={maxMarks}
-              onChange={(e) => setMaxMarks(Number(e.target.value))}
+              onChange={(e) => setMaxMarks(Math.max(1, Number(e.target.value)))}
               min="1"
               className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
         </div>
+
+        {/* Custom Exam Input Field */}
+        {selectedExamKey === 'CUSTOM' && (
+          <div className="bg-primary-50/60 dark:bg-primary-500/10 p-4 rounded-xl border border-primary-200 dark:border-primary-500/20 flex flex-col sm:flex-row items-start sm:items-center gap-3 animate-in fade-in duration-200">
+            <Sparkles className="w-5 h-5 text-primary-600 dark:text-primary-400 shrink-0 mt-0.5 sm:mt-0" />
+            <div className="flex-1 w-full">
+              <label className="block text-xs font-bold text-primary-900 dark:text-primary-300 mb-1">
+                Custom Examination Title / Type *
+              </label>
+              <input 
+                type="text"
+                value={customExamName}
+                onChange={(e) => setCustomExamName(e.target.value)}
+                placeholder="e.g. Surprise Test, Pre-Board Exam, CAT-1, Aptitude Test"
+                className="w-full bg-white dark:bg-[#0A0F1C] border border-primary-300 dark:border-primary-500/30 rounded-lg px-3.5 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {selectedCourse && (

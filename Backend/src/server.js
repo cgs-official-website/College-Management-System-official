@@ -6,7 +6,7 @@ import * as Sentry from '@sentry/node';
 import helmet from 'helmet';
 
 // ---------------------------------------------------------
-// STARTUP ENVIRONMENT VALIDATION
+// STARTUP ENVIRONMENT VALIDATION (Hot-reloaded for exam schema updates)
 // ---------------------------------------------------------
 const REQUIRED_ENV_VARS = ['DATABASE_URL', 'JWT_SECRET'];
 const missingVars = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
