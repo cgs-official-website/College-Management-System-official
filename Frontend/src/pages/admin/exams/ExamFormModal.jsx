@@ -74,7 +74,6 @@ export const parseExamType = (rawType) => {
   return { isPreset: false, value: 'CUSTOM', custom: str };
 };
 
-<<<<<<< HEAD
 export const normalizeHall = (rawHall) => {
   if (!rawHall) return '';
   let h = String(rawHall).trim().toLowerCase();
@@ -94,13 +93,6 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
   const { courses = [], isLoading: isCoursesLoading, error: coursesError } = useCourses();
   
   const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm({
-=======
-export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, isLoading }) {
-  const { departments = [], isLoading: isDepartmentsLoading } = useDepartments();
-  const { courses = [] } = useCourses();
-
-  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm({
->>>>>>> c52d622 (calender module  updated & bugs fixed)
     defaultValues: {
       title: '',
       departmentId: '',
@@ -117,7 +109,6 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
   });
 
   const selectedDeptId = watch('departmentId');
-<<<<<<< HEAD
   const watchedRoom = watch('room');
   const watchedDate = watch('examDate');
   const watchedStartTime = watch('startTime');
@@ -163,9 +154,6 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
     const hallDisplay = /hall/i.test(rawTrimmed) ? rawTrimmed : `Hall ${rawTrimmed}`;
     return `${hallDisplay} is already booked${timeStr} for ${conflictName}.`;
   }, [watchedRoom, watchedDate, watchedStartTime, watchedEndTime, existingExams, initialData]);
-=======
-  const selectedType = watch('type');
->>>>>>> c52d622 (calender module  updated & bugs fixed)
 
   useEffect(() => {
     if (isOpen) {
@@ -366,7 +354,6 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
         </div>
 
         <div className="grid grid-cols-1 gap-4">
-<<<<<<< HEAD
           <div>
             <Input 
               label="Room / Examination Hall" 
@@ -380,13 +367,6 @@ export function ExamFormModal({ isOpen, onClose, onSubmit, initialData = null, i
               </p>
             )}
           </div>
-=======
-          <Input
-            label="Room / Examination Hall"
-            placeholder="e.g. Main Auditorium Hall 2"
-            {...register('room')}
-          />
->>>>>>> c52d622 (calender module  updated & bugs fixed)
         </div>
 
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-white/10 mt-6">

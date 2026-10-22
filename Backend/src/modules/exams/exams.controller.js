@@ -398,8 +398,6 @@ export const createExam = async (req, res) => {
       room: exam.room || payload.room || 'Main Hall',
       startTime: exam.startTime || payload.startTime || null,
       endTime: exam.endTime || payload.endTime || null,
-      room: roomValue,
-      hall: roomValue
     }
   });
 };
@@ -604,8 +602,6 @@ export const updateExam = async (req, res) => {
       room: updated.room,
       startTime: updated.startTime,
       endTime: updated.endTime,
-      room: currentRoom ?? 'Main Hall',
-      hall: currentRoom ?? 'Main Hall'
     }
   });
 };

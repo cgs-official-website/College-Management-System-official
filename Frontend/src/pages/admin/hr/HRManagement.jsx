@@ -15,163 +15,6 @@ import toast from 'react-hot-toast';
 import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
 import { api } from '../../../services/apiClient';
 
-export const STAFF_IMPORT_FIELDS = [
-  {
-    name: 'Employee_ID',
-    required: true,
-    type: 'String',
-    description: 'Unique Staff / Employee Identification Number',
-    example: 'EMP-2026-001'
-  },
-  {
-    name: 'Staff_Name',
-    required: true,
-    type: 'String',
-    description: 'Full name of the faculty or staff member',
-    example: 'Dr. Jane Smith'
-  },
-  {
-    name: 'Email_ID',
-    required: true,
-    type: 'Email',
-    description: 'Official email address for staff login and account setup',
-    example: 'elevenr31@gmail.com'
-  },
-  {
-    name: 'Department',
-    required: true,
-    type: 'String',
-    description: 'Department name (e.g. Computer Science, Mechanical)',
-    example: 'Computer Science'
-  },
-  {
-    name: 'Designation',
-    required: false,
-    type: 'String',
-    description: 'Job designation (e.g. Professor, Assistant Professor, Lab Tech)',
-    example: 'Assistant Professor'
-  },
-  {
-    name: 'Date_of_Joining',
-    required: false,
-    type: 'Date (YYYY-MM-DD)',
-    description: 'Joining date in YYYY-MM-DD format',
-    example: '2024-06-01'
-  },
-  {
-    name: 'Gender',
-    required: false,
-    type: 'String',
-    description: 'Gender (Male / Female / Other)',
-    example: 'Female'
-  },
-  {
-    name: 'Date_of_Birth',
-    required: false,
-    type: 'Date (YYYY-MM-DD)',
-    description: 'Date of birth in YYYY-MM-DD format',
-    example: '1988-04-12'
-  },
-  {
-    name: 'Employment_Type',
-    required: false,
-    type: 'String',
-    description: 'Permanent, Full-Time, Contract, or Visiting',
-    example: 'Permanent'
-  },
-  {
-    name: 'Qualification',
-    required: false,
-    type: 'String',
-    description: 'Highest qualification / degree',
-    example: 'Ph.D. in Computer Science'
-  },
-  {
-    name: 'Experience_Years',
-    required: false,
-    type: 'Number',
-    description: 'Total years of academic or industry experience',
-    example: '6'
-  },
-  {
-    name: 'Mobile_Number',
-    required: false,
-    type: 'String',
-    description: '10-digit mobile contact number',
-    example: '9876543210'
-  },
-  {
-    name: 'Aadhaar_Number',
-    required: false,
-    type: 'String',
-    description: '12-digit Aadhaar / National ID number',
-    example: '123456789012'
-  },
-  {
-    name: 'PAN_Number',
-    required: false,
-    type: 'String',
-    description: 'Permanent Account Number (PAN)',
-    example: 'ABCDE1234F'
-  },
-  {
-    name: 'Blood_Group',
-    required: false,
-    type: 'String',
-    description: 'Blood group (A+, B+, O+, AB+, etc.)',
-    example: 'O+'
-  },
-  {
-    name: 'Address',
-    required: false,
-    type: 'String',
-    description: 'Residential address',
-    example: '42 Academic Avenue'
-  },
-  {
-    name: 'City',
-    required: false,
-    type: 'String',
-    description: 'City of residence',
-    example: 'Chennai'
-  },
-  {
-    name: 'District',
-    required: false,
-    type: 'String',
-    description: 'District name',
-    example: 'Chennai'
-  },
-  {
-    name: 'State',
-    required: false,
-    type: 'String',
-    description: 'State / Province',
-    example: 'Tamil Nadu'
-  },
-  {
-    name: 'Pincode',
-    required: false,
-    type: 'String',
-    description: 'Postal pincode / zip code',
-    example: '600025'
-  },
-  {
-    name: 'Emergency_Contact_Name',
-    required: false,
-    type: 'String',
-    description: 'Name of emergency contact person',
-    example: 'Robert Smith'
-  },
-  {
-    name: 'Emergency_Contact_Number',
-    required: false,
-    type: 'String',
-    description: 'Phone number of emergency contact person',
-    example: '9876543211'
-  }
-];
-
 const formatJoiningDate = (dateVal) => {
   if (!dateVal) return 'N/A';
   try {
@@ -187,7 +30,7 @@ const formatJoiningDate = (dateVal) => {
   }
 };
 
-const STAFF_IMPORT_FIELDS = [
+export const STAFF_IMPORT_FIELDS = [
   { name: 'Employee_ID', required: true, type: 'String', description: 'Unique staff / teacher ID', example: 'TCH001' },
   { name: 'Staff_Name', required: true, type: 'String', description: 'Full name of the staff member', example: 'Kalaivaani P' },
   { name: 'Email_ID', required: true, type: 'String', description: 'Valid email, used for the account setup link (must be unique)', example: 'kalaivaani.p@example.com' },
@@ -537,7 +380,6 @@ export default function HRManagement() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">HR & Staff Directory</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage all college employees and faculty.</p>
         </div>
-<<<<<<< HEAD
         <div className="flex gap-2">
           <ExcelUploadButton
             onUpload={bulkImport}
@@ -547,19 +389,6 @@ export default function HRManagement() {
             fields={STAFF_IMPORT_FIELDS}
             notes={STAFF_IMPORT_NOTES}
             sampleFileName="staff_import_template.xlsx"
-=======
-        <div className="flex flex-wrap items-center gap-2">
-          <ExcelUploadButton 
-            onUpload={handleBulkImport} 
-            isLoading={isImporting} 
-            label="Import Staff"
-            title="Import Staff Directory"
-            description="Upload an Excel (.xlsx, .xls) or CSV file with employee data. Download the template below for sample data and column specifications."
-            fields={STAFF_IMPORT_FIELDS}
-            showFieldsTable={true}
-            sampleFileName="staff_directory_import_template.xlsx"
-            instructionsNote="1. Do not rename or delete header columns in row 1 of the Template sheet. 2. Employee_ID, Staff_Name, Email_ID, and Department are required. 3. Enter a valid Email_ID so staff can receive their account setup invitation. 4. Row 2 has sample data; delete it before importing."
->>>>>>> c52d622 (calender module  updated & bugs fixed)
           />
           <Button 
             variant="outline" 
