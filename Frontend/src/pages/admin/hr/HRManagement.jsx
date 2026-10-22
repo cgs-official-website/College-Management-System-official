@@ -537,7 +537,6 @@ export default function HRManagement() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">HR & Staff Directory</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage all college employees and faculty.</p>
         </div>
-<<<<<<< HEAD
         <div className="flex gap-2">
           <ExcelUploadButton
             onUpload={bulkImport}
@@ -547,19 +546,6 @@ export default function HRManagement() {
             fields={STAFF_IMPORT_FIELDS}
             notes={STAFF_IMPORT_NOTES}
             sampleFileName="staff_import_template.xlsx"
-=======
-        <div className="flex flex-wrap items-center gap-2">
-          <ExcelUploadButton 
-            onUpload={handleBulkImport} 
-            isLoading={isImporting} 
-            label="Import Staff"
-            title="Import Staff Directory"
-            description="Upload an Excel (.xlsx, .xls) or CSV file with employee data. Download the template below for sample data and column specifications."
-            fields={STAFF_IMPORT_FIELDS}
-            showFieldsTable={true}
-            sampleFileName="staff_directory_import_template.xlsx"
-            instructionsNote="1. Do not rename or delete header columns in row 1 of the Template sheet. 2. Employee_ID, Staff_Name, Email_ID, and Department are required. 3. Enter a valid Email_ID so staff can receive their account setup invitation. 4. Row 2 has sample data; delete it before importing."
->>>>>>> c52d622 (calender module  updated & bugs fixed)
           />
           <Button 
             variant="outline" 

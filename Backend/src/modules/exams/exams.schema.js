@@ -12,12 +12,9 @@ export const createExamSchema = z.object({
   type: z.string().min(1, 'Exam type is required').default('Midterm'),
   status: z.enum(['pending', 'active', 'completed']).optional().default('pending'),
   room: z.string().optional().default('Main Hall'),
-<<<<<<< HEAD
   startTime: z.string().optional().nullable(),
   endTime: z.string().optional().nullable(),
-=======
   hall: z.string().optional(),
->>>>>>> c52d622 (calender module  updated & bugs fixed)
 });
 
 export const updateExamSchema = z.object({
@@ -30,12 +27,9 @@ export const updateExamSchema = z.object({
   type: z.string().min(1).optional(),
   status: z.enum(['pending', 'active', 'completed']).optional(),
   room: z.string().optional(),
-<<<<<<< HEAD
   startTime: z.string().optional().nullable(),
   endTime: z.string().optional().nullable(),
-=======
   hall: z.string().optional(),
->>>>>>> c52d622 (calender module  updated & bugs fixed)
 });
 
 export const enterMarksSchema = z.object({

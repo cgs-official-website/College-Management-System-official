@@ -228,14 +228,10 @@ export const getExams = async (req, res) => {
       maxMarks: exam.maxMarks,
       type: exam.type || 'Midterm',
       status: exam.status || 'active',
-<<<<<<< HEAD
-      room: exam.room || 'Main Hall',
-      startTime: exam.startTime || null,
-      endTime: exam.endTime || null,
-=======
       room: roomVal,
       hall: roomVal,
->>>>>>> c52d622 (calender module  updated & bugs fixed)
+      startTime: exam.startTime || null,
+      endTime: exam.endTime || null,
       totalStudentsAppeared,
       averageScore: avgScore,
       marks: exam.marks.map(m => ({
@@ -397,14 +393,10 @@ export const createExam = async (req, res) => {
       maxMarks: exam.maxMarks,
       type: exam.type,
       status: exam.status,
-<<<<<<< HEAD
-      room: exam.room || payload.room || 'Main Hall',
+      room: roomValue,
+      hall: roomValue,
       startTime: exam.startTime || payload.startTime || null,
       endTime: exam.endTime || payload.endTime || null,
-=======
-      room: roomValue,
-      hall: roomValue
->>>>>>> c52d622 (calender module  updated & bugs fixed)
     }
   });
 };
@@ -606,14 +598,10 @@ export const updateExam = async (req, res) => {
       maxMarks: updated.maxMarks,
       type: updated.type,
       status: updated.status,
-<<<<<<< HEAD
-      room: updated.room,
+      room: currentRoom ?? updated.room ?? 'Main Hall',
+      hall: currentRoom ?? updated.room ?? 'Main Hall',
       startTime: updated.startTime,
       endTime: updated.endTime,
-=======
-      room: currentRoom ?? 'Main Hall',
-      hall: currentRoom ?? 'Main Hall'
->>>>>>> c52d622 (calender module  updated & bugs fixed)
     }
   });
 };

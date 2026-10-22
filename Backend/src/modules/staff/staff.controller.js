@@ -552,15 +552,7 @@ export const bulkImportStaff = async (req, res) => {
         deptId = dept.id;
       }
 
-<<<<<<< HEAD
-=======
-      const setupEmail = String(row['Email_ID*'] || row['Email_ID'] || row['Email*'] || row['Email'] || '').trim();
-      if (!setupEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(setupEmail)) {
-        throw new Error('A valid Email_ID is required for teacher setup');
-      }
-      const email = setupEmail.toLowerCase();
 
->>>>>>> c52d622 (calender module  updated & bugs fixed)
       await prisma.$transaction(async (tx) => {
         const staleTeachers = await tx.teacher.findMany({
           where: {
