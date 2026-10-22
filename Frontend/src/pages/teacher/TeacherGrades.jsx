@@ -290,7 +290,7 @@ export default function TeacherGrades() {
                 className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 {scheduledExams.length > 0 && (
-                  <optgroup label="📋 Scheduled Course Exams">
+                  <optgroup label="Scheduled Course Exams">
                     {scheduledExams.map(ex => (
                       <option key={ex.id} value={`scheduled:${ex.id}`}>
                         {ex.title || ex.name} ({ex.type || 'Exam'} - Max {ex.maxMarks})
