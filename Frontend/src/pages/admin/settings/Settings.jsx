@@ -4,7 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../contexts/AuthContext';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
-import { Building, Shield, User, Camera, Eye, EyeOff } from 'lucide-react';
+import { Building, Shield, User, Camera, Eye, EyeOff, Globe, ShieldAlert } from 'lucide-react';
+import DomainManagementPage from '../domains/DomainManagementPage';
+import NonCompliantUsersPage from '../domains/NonCompliantUsersPage';
 import { api } from '../../../services/apiClient';
 import toast from 'react-hot-toast';
 
@@ -187,6 +189,18 @@ export default function Settings() {
             >
               <Shield className="w-5 h-5" /> Security
             </button>
+            <button
+              onClick={() => setActiveTab('domains')}
+              className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-colors ${activeTab === 'domains' ? 'bg-white dark:bg-[#0A0F1C] text-primary-600 dark:text-primary-400 shadow-sm border border-slate-200 dark:border-white/10' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'}`}
+            >
+              <Globe className="w-5 h-5" /> Domain Management
+            </button>
+            <button
+              onClick={() => setActiveTab('non-compliant')}
+              className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-colors ${activeTab === 'non-compliant' ? 'bg-white dark:bg-[#0A0F1C] text-primary-600 dark:text-primary-400 shadow-sm border border-slate-200 dark:border-white/10' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'}`}
+            >
+              <ShieldAlert className="w-5 h-5" /> Domain Compliance
+            </button>
           </nav>
         </div>
 
@@ -291,6 +305,18 @@ export default function Settings() {
                   {changePasswordMutation.isPending ? 'Updating...' : 'Update Password'}
                 </Button>
               </form>
+            </div>
+          )}
+
+          {activeTab === 'domains' && (
+            <div className="pt-2">
+              <DomainManagementPage />
+            </div>
+          )}
+
+          {activeTab === 'non-compliant' && (
+            <div className="pt-2">
+              <NonCompliantUsersPage />
             </div>
           )}
         </div>

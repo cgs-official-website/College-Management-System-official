@@ -42,6 +42,8 @@ import TeacherAssignments from './TeacherAssignments';
 import TeacherAttendance from './TeacherAttendance';
 import TeacherSchedule from './TeacherSchedule';
 import StaffSettings from '../shared/StaffSettings';
+import TeacherSettings from './TeacherSettings';
+import DomainWarningBanner from '../../components/common/DomainWarningBanner';
 import TeacherGrades from './TeacherGrades';
 import TeacherMyLeaves from './TeacherMyLeaves';
 
@@ -256,6 +258,8 @@ const TeacherLayout = () => {
           </div>
         </header>
 
+        <DomainWarningBanner />
+
         <main className="flex-1 overflow-y-auto p-6 md:p-8 relative">
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03] dark:opacity-[0.05] pointer-events-none mix-blend-overlay"></div>
           
@@ -275,7 +279,7 @@ const TeacherLayout = () => {
               <Route path="/student-leaves" element={<LeaveRequestsDashboard />} />
 
               <Route path="/ptm" element={<TeacherPtm />} />
-              <Route path="/settings" element={<StaffSettings />} />
+              <Route path="/settings" element={<TeacherSettings />} />
               {canViewNotices && <Route path="/notices" element={<NoticeBoard />} />}
               {canUseFacilities && <Route path="/facility-requests" element={<HODFacilityRequests />} />}
               {userData?.role === 'hod' && <Route path="/timetable" element={<Timetable />} />}

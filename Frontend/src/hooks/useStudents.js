@@ -22,7 +22,8 @@ export function useStudents(collegeId) {
       queryClient.invalidateQueries({ queryKey: ['students', collegeId] });
     },
     onError: (err) => {
-      toast.error(err.message || 'Failed to add student');
+      const msg = err.response?.data?.message || err.message || 'Failed to add student';
+      toast.error(msg);
     }
   });
 
@@ -33,7 +34,8 @@ export function useStudents(collegeId) {
       queryClient.invalidateQueries({ queryKey: ['students', collegeId] });
     },
     onError: (err) => {
-      toast.error(err.message || 'Failed to update student');
+      const msg = err.response?.data?.message || err.message || 'Failed to update student';
+      toast.error(msg);
     }
   });
 
@@ -57,15 +59,23 @@ export function useStudents(collegeId) {
         toast.success(`Imported ${successCount} student${successCount === 1 ? '' : 's'} successfully!`);
       }
       if (stats.failed > 0) {
-        const firstErr = stats.errors?.[0] ? `: ${stats.errors[0]}` : '';
-        toast.error(`${stats.failed} row(s) failed${firstErr}`);
+        if (Array.isArray(stats.errors) && stats.errors.length > 0) {
+          stats.errors.slice(0, 5).forEach((errMsg) => {
+            toast.error(errMsg, { duration: 6000 });
+          });
+          if (stats.errors.length > 5) {
+            toast.error(`...and ${stats.errors.length - 5} more error(s). Check console for full details.`, { duration: 6000 });
+          }
+        } else {
+          toast.error(`${stats.failed} row(s) failed to import.`);
+        }
         console.error('Import errors:', stats.errors);
       }
       queryClient.invalidateQueries({ queryKey: ['students', collegeId] });
       queryClient.invalidateQueries({ queryKey: ['students'] });
     },
     onError: (err) => {
-      toast.error(err.message || 'Failed to import students');
+      toast.error(err.response?.data?.message || err.message || 'Failed to import students');
     }
   });
 
