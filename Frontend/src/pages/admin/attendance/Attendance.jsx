@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, CheckCircle2, XCircle, Clock, Users, UserCheck, UserX, CheckCheck } from 'lucide-react';
+import { Calendar, CheckCircle2, XCircle, Clock, Users, UserCheck, UserX, CheckCheck, Percent } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useStudents } from '../../../hooks/useStudents';
 import { useAttendance } from '../../../hooks/useAttendance';
@@ -61,7 +61,7 @@ export default function Attendance() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-4 shadow-sm flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 flex items-center justify-center font-bold">
             <Users className="w-5 h-5" />
@@ -97,8 +97,18 @@ export default function Attendance() {
             <UserX className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-slate-500 font-medium">Absent / Rate</p>
-            <p className="text-xl font-extrabold text-rose-600 dark:text-rose-400">{absentCount} ({attendanceRate})</p>
+            <p className="text-xs text-slate-500 font-medium">Absent</p>
+            <p className="text-xl font-extrabold text-rose-600 dark:text-rose-400">{absentCount}</p>
+          </div>
+        </div>
+        
+        <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-4 shadow-sm flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+            <Percent className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 font-medium">Attendance Rate</p>
+            <p className="text-xl font-extrabold text-indigo-600 dark:text-indigo-400">{attendanceRate}</p>
           </div>
         </div>
       </div>
