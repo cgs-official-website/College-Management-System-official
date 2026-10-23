@@ -35,8 +35,15 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
   const filteredRoles = roles.filter(r => !r.isSystemRole && r.category === roleCategory);
 
   useEffect(() => {
-    if (isOpen && initialData?.customRoleId && roles.length > 0) {
-      setValue('customRoleId', initialData.customRoleId);
+    if (isOpen && roles.length > 0) {
+      if (initialData?.customRoleId) {
+        setValue('customRoleId', initialData.customRoleId);
+      } else if (initialData?.designation) {
+        const matchingRole = roles.find(r => r.name.toLowerCase() === initialData.designation.toLowerCase());
+        if (matchingRole) {
+          setValue('customRoleId', matchingRole.id);
+        }
+      }
     }
   }, [roles, isOpen, initialData, setValue]);
 
@@ -61,7 +68,11 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
   useEffect(() => {
     if (isOpen) {
       refetchRoles();
-      const isNonTeaching = initialData?.staffType === 'non-teaching' || initialData?.role === 'staff';
+      const isNonTeaching = initialData?.staffType === 'non-teaching' ||
+        initialData?.role === 'staff' ||
+        roles.find(r => r.id === initialData?.customRoleId)?.category === 'non_teaching' ||
+        /admin|office|library|account|clerk|reception|driver|peon|warden|security|maintenance|store/i.test(initialData?.designation || initialData?.customRole || '');
+
       const rawDate = initialData?.joiningDate || initialData?.joinDate || initialData?.createdAt;
       const formattedJoinDate = formatToDateInput(rawDate);
       reset(initialData ? {
@@ -94,17 +105,25 @@ export function StaffFormModal({ isOpen, onClose, onSubmit, initialData = null, 
   const onFormSubmit = (data) => {
     const isNonTeaching = data.staffType === 'non-teaching';
     const selectedRole = roles.find(r => r.id === data.customRoleId);
-    const designation = selectedRole ? selectedRole.name : (isNonTeaching ? 'Staff' : 'Teacher');
+    const designation = selectedRole ? selectedRole.name : (data.designation || (isNonTeaching ? 'Staff' : 'Teacher'));
+
+    const isHod = (selectedRole?.name && /^(hod|head of department)$/i.test(selectedRole.name)) ||
+                  (data.role === 'hod') ||
+                  (designation && /^(hod|head of department)$/i.test(designation));
 
     const TEACHING_ROLES = ['teacher', 'hod', 'faculty'];
-    const keepExisting = initialData && TEACHING_ROLES.includes(initialData.role);
+    const keepExisting = initialData && TEACHING_ROLES.includes(initialData.role) && !isHod;
 
     const effectiveJoinDate = data.joinDate || data.joiningDate || new Date().toISOString().split('T')[0];
+
+    const determinedRole = isNonTeaching
+      ? 'staff'
+      : (isHod ? 'hod' : (keepExisting ? initialData.role : (data.role && data.role !== 'staff' ? data.role : 'teacher')));
 
     const payload = {
       ...data,
       staffType: isNonTeaching ? 'non-teaching' : 'teaching',
-      role: isNonTeaching ? 'staff' : (keepExisting ? initialData.role : (data.role && data.role !== 'staff' ? data.role : 'teacher')),
+      role: determinedRole,
       name: `${data.firstName || ''} ${data.lastName || ''}`.trim(),
       designation: designation,
       customRoleId: data.customRoleId || null,

@@ -57,7 +57,7 @@ export const getStaff = async (req, res) => {
           email: true,
           role: true,
           customRoleId: true,
-          customRole: { select: { id: true, name: true } },
+          customRole: { select: { id: true, name: true, category: true } },
           accountStatus: true,
         }
       },
@@ -76,6 +76,18 @@ export const getStaff = async (req, res) => {
     const firstName = nameParts[0] || 'Staff';
     const lastName = nameParts.slice(1).join(' ') || '';
 
+    const isHod = (t.user?.role === 'hod') || 
+                  (t.user?.customRole?.name?.toLowerCase() === 'hod') || 
+                  (t.designation?.toLowerCase() === 'hod') || 
+                  (t.designation?.toLowerCase() === 'head of department');
+
+    const isExplicitNonTeaching = t.user?.role === 'staff' ||
+      t.user?.customRole?.category === 'non_teaching' ||
+      /admin|office|library|account|clerk|reception|driver|peon|warden|security|maintenance|store/i.test(t.user?.customRole?.name || t.designation || '');
+
+    const resolvedRole = isHod ? 'hod' : (isExplicitNonTeaching ? 'staff' : (t.user?.role || 'teacher'));
+    const staffType = isExplicitNonTeaching ? 'non-teaching' : (['teacher', 'hod', 'faculty'].includes(resolvedRole) ? 'teaching' : 'non-teaching');
+
     return {
       id: t.id,
       teacherId: t.teacherId || null,
@@ -91,13 +103,14 @@ export const getStaff = async (req, res) => {
       joinDate: t.joiningDate || t.createdAt,
       salaryGrade: t.salaryGrade || 'Grade A',
       userId: t.userId,
-      role: t.user?.role || 'teacher',
+      role: resolvedRole,
       customRole: t.user?.customRole?.name || null,
       customRoleId: t.user?.customRoleId || null,
       status: t.user?.accountStatus || 'active',
       accountStatus: t.user?.accountStatus || 'active',
-      staffType: ['teacher', 'hod', 'faculty'].includes(t.user?.role) ? 'teaching' : 'non-teaching',
+      staffType,
       createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
       customFields: (typeof t.customFields === 'object' && t.customFields !== null && !Array.isArray(t.customFields)) ? t.customFields : {},
     };
   });
@@ -189,8 +202,8 @@ export const createStaff = async (req, res) => {
     accountRole = 'staff';
   } else {
     // Teaching staff: must be 'teacher', 'hod', or 'faculty'.
-    // If frontend sends 'staff' by mistake, normalize to 'teacher'.
-    accountRole = TEACHER_TIER_ROLES.includes(payload.role) ? payload.role : 'teacher';
+    const isHod = payload.role === 'hod' || /^(hod|head of department)$/i.test((payload.designation || '').trim());
+    accountRole = isHod ? 'hod' : (TEACHER_TIER_ROLES.includes(payload.role) ? payload.role : 'teacher');
   }
 
   // Email is optional — the teacher will provide their own during registration.
@@ -365,13 +378,17 @@ export const updateStaff = async (req, res) => {
   let updated;
   try {
     updated = await prisma.$transaction(async (tx) => {
-      if ((resolvedUpdateName !== undefined || payload.role || payload.customRoleId !== undefined || payload.status || normalizedEmail || isNonTeaching) && teacher.userId) {
+      const isHodDesig = payload.role === 'hod' || (payload.designation && /^(hod|head of department)$/i.test(payload.designation.trim()));
+      const shouldUpdateRole = payload.role || isHodDesig || isNonTeaching;
+      const targetUserRole = payload.role ? payload.role : (isHodDesig ? 'hod' : (isNonTeaching ? 'staff' : undefined));
+
+      if ((resolvedUpdateName !== undefined || shouldUpdateRole || payload.customRoleId !== undefined || payload.status || normalizedEmail) && teacher.userId) {
         await tx.user.update({
           where: { id: teacher.userId },
           data: {
             ...(resolvedUpdateName !== undefined ? { name: resolvedUpdateName } : {}),
             ...(normalizedEmail ? { email: normalizedEmail } : {}),
-            ...(payload.role ? { role: payload.role } : (isNonTeaching ? { role: 'staff' } : {})),
+            ...(targetUserRole ? { role: targetUserRole } : {}),
             ...(payload.customRoleId !== undefined ? { customRoleId: payload.customRoleId } : {}),
             ...(payload.status ? { accountStatus: payload.status } : {})
           }
@@ -573,8 +590,12 @@ export const bulkImportStaff = async (req, res) => {
         if (user?.teacherProfile) throw new Error(`Email ${email} already belongs to a staff member`);
 
         if (!user) {
+          const isHodDesig = /^(hod|head of department)$/i.test(designation.trim());
+          const isNonTeachingDesig = /admin|office|library|account|clerk|reception|driver|peon|warden|security|maintenance|store/i.test(designation.trim());
+          const importRole = isHodDesig ? 'hod' : (isNonTeachingDesig ? 'staff' : 'teacher');
+
           user = await tx.user.create({
-            data: { email, name: staffName, collegeId, role: 'teacher', passwordHash: null, accountStatus: 'pending_setup' },
+            data: { email, name: staffName, collegeId, role: importRole, passwordHash: null, accountStatus: 'pending_setup' },
           });
         }
 

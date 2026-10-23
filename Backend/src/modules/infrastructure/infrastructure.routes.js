@@ -10,10 +10,7 @@ const router = Router();
 
 router.use(authenticate, resolveTenant);
 
-const canUse = (action) => (req, res, next) => {
-  if (req.user?.role === 'hod' && !req.user.customRoleId) return next();
-  return requirePermission('infrastructure', action)(req, res, next);
-};
+const canUse = (action) => requirePermission('infrastructure', action);
 
 router.get('/', canUse('read'), getAssets);
 router.post('/', authorize('admin'), createAsset);

@@ -207,33 +207,54 @@ export default function HRManagementScreen() {
     }
   };
 
-  const roleBadge = (role?: string) => {
-    const roleMap: Record<
-      string,
-      { label: string; bg: string; fg: string }
-    > = {
-      hod: {
+  const roleBadge = (role?: string, member?: any) => {
+    const rawDesig = (member?.designation || '').trim();
+    const isGenericDesig = !rawDesig || ['teacher', 'staff', 'n/a', 'support'].includes(rawDesig.toLowerCase());
+    const specificDesignation = !isGenericDesig ? rawDesig : null;
+    const specificRole = (member?.customRole || specificDesignation || '').trim();
+
+    const normalizedRole = String(role || member?.role || '').toLowerCase();
+    const isHod = normalizedRole === 'hod' || (specificRole && /^(hod|head of department)$/i.test(specificRole));
+    const isAdmin = normalizedRole === 'admin' || (specificRole && /^admin(istrator)?$/i.test(specificRole));
+    const isNonTeaching = member?.staffType === 'non-teaching' || normalizedRole === 'staff' ||
+      /admin|office|library|account|clerk|reception|driver|peon|warden|security|maintenance|store/i.test(specificRole);
+
+    let badge = {
+      label: specificRole || (normalizedRole === 'teacher' ? 'Teacher' : (normalizedRole === 'staff' ? 'Staff' : 'Support')),
+      bg: colors.primarySoft,
+      fg: colors.primary,
+      hasShield: false,
+    };
+
+    if (isHod) {
+      badge = {
         label: 'HOD',
         bg: colors.warningSoft,
         fg: colors.warning,
-      },
-      teacher: {
-        label: 'Teacher',
-        bg: colors.primarySoft,
-        fg: colors.primary,
-      },
-      admin: {
+        hasShield: true,
+      };
+    } else if (isAdmin) {
+      badge = {
         label: 'Admin',
         bg: colors.infoSoft,
         fg: colors.info,
-      },
-    };
-
-    const badge = roleMap[role || ''] || {
-      label: 'Support',
-      bg: colors.cardAlt,
-      fg: colors.textMuted,
-    };
+        hasShield: true,
+      };
+    } else if (isNonTeaching) {
+      badge = {
+        label: specificRole || 'Staff',
+        bg: colors.infoSoft,
+        fg: colors.info,
+        hasShield: true,
+      };
+    } else if (specificRole) {
+      badge = {
+        label: specificRole,
+        bg: colors.primarySoft,
+        fg: colors.primary,
+        hasShield: false,
+      };
+    }
 
     return (
       <View
@@ -242,7 +263,7 @@ export default function HRManagementScreen() {
           { backgroundColor: badge.bg },
         ]}
       >
-        {role === 'hod' ? (
+        {badge.hasShield ? (
           <Shield size={11} color={badge.fg} />
         ) : null}
 
@@ -252,7 +273,7 @@ export default function HRManagementScreen() {
             fontSize: 10,
             fontWeight: fontWeight.extrabold,
             textTransform: 'uppercase',
-            marginLeft: role === 'hod' ? 4 : 0,
+            marginLeft: badge.hasShield ? 4 : 0,
           }}
         >
           {badge.label}
@@ -431,7 +452,7 @@ export default function HRManagementScreen() {
                 </View>
 
                 <View style={styles.badges}>
-                  {roleBadge(member.role)}
+                  {roleBadge(member.role, member)}
 
                   {member.teacherId ? (
                     <View

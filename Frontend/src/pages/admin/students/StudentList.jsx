@@ -144,7 +144,12 @@ const STUDENT_IMPORT_FIELDS = [
 
 export default function StudentList() {
   const confirm = useConfirm();
-  const { userData } = useAuth();
+  const { userData, userRole, permissions } = useAuth();
+  const isAdmin = userRole === 'admin' || userRole === 'superadmin';
+  const canCreateStudent = isAdmin || permissions?.students?.canCreate === true;
+  const canUpdateStudent = isAdmin || permissions?.students?.canUpdate === true;
+  const canDeleteStudent = isAdmin || permissions?.students?.canDelete === true;
+
   const queryClient = useQueryClient();
   const collegeId = userData?.collegeId || 'default_college_id';
   const { students, isLoading, addStudent, updateStudent, deleteStudent, isAdding, isUpdating, isImporting, bulkImport } = useStudents(collegeId);
@@ -286,8 +291,8 @@ export default function StudentList() {
       accessorKey: 'id',
       cell: (row) => (
         <div className="flex items-center gap-2">
-          {/* Activate button — only for pending students */}
-          {row.status === 'pending' && (
+          {/* Activate button — only for pending students if canUpdate */}
+          {row.status === 'pending' && canUpdateStudent && (
             <button
               onClick={() => handleActivate(row)}
               disabled={activatingId === row.id}
@@ -300,20 +305,24 @@ export default function StudentList() {
               }
             </button>
           )}
-          <button
-            onClick={() => handleOpenEdit(row)}
-            className="p-1.5 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-slate-500 hover:text-primary-600 transition-colors"
-            title="Edit"
-          >
-            <Edit className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => handleDelete(row.id)}
-            className="p-1.5 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-slate-500 hover:text-red-600 transition-colors"
-            title="Delete"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          {canUpdateStudent && (
+            <button
+              onClick={() => handleOpenEdit(row)}
+              className="p-1.5 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-slate-500 hover:text-primary-600 transition-colors"
+              title="Edit"
+            >
+              <Edit className="w-4 h-4" />
+            </button>
+          )}
+          {canDeleteStudent && (
+            <button
+              onClick={() => handleDelete(row.id)}
+              className="p-1.5 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-slate-500 hover:text-red-600 transition-colors"
+              title="Delete"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       )
     }
@@ -338,26 +347,32 @@ export default function StudentList() {
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage student records and import admissions.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ExcelUploadButton
-            onUpload={bulkImport}
-            isLoading={isImporting}
-            title="Import Students"
-            label="Import"
-            sampleFileName="students_import_template.xlsx"
-            description="Upload an Excel (.xlsx, .xls) or CSV file with student records. Required: Admission_No and Student_Name."
-            fields={STUDENT_IMPORT_FIELDS}
-          />
-          <button
-            onClick={() => setIsLinkModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 text-sm font-semibold rounded-xl transition-colors"
-          >
-            <LinkIcon className="w-4 h-4" />
-            Registration Link
-          </button>
-          <Button onClick={handleOpenAdd}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Student
-          </Button>
+          {canCreateStudent && (
+            <ExcelUploadButton
+              onUpload={bulkImport}
+              isLoading={isImporting}
+              title="Import Students"
+              label="Import"
+              sampleFileName="students_import_template.xlsx"
+              description="Upload an Excel (.xlsx, .xls) or CSV file with student records. Required: Admission_No and Student_Name."
+              fields={STUDENT_IMPORT_FIELDS}
+            />
+          )}
+          {canUpdateStudent && (
+            <button
+              onClick={() => setIsLinkModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 text-sm font-semibold rounded-xl transition-colors"
+            >
+              <LinkIcon className="w-4 h-4" />
+              Registration Link
+            </button>
+          )}
+          {canCreateStudent && (
+            <Button onClick={handleOpenAdd}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Student
+            </Button>
+          )}
         </div>
       </div>
 

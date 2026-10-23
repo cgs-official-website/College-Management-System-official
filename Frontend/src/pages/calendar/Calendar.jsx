@@ -257,7 +257,12 @@ export default function Calendar() {
   // Filter events
   const filteredEvents = useMemo(() => {
     const normRole = String(userRole || '').toLowerCase();
-    const isAdmin = normRole === 'admin' || normRole === 'superadmin' || normRole === 'principal' || Boolean(canManage);
+    const isHod = normRole === 'hod' ||
+                  normRole.includes('hod') ||
+                  Boolean(userData?.isHod) ||
+                  Boolean(userData?.isHOD) ||
+                  String(userData?.customRole?.name || '').toLowerCase().includes('hod');
+    const isAdmin = normRole === 'admin' || normRole === 'superadmin' || normRole === 'principal' || isHod || Boolean(canManage);
 
     return events.filter((ev) => {
       const isExam = ev.type?.toLowerCase() === 'exam' || Boolean(ev.isExamRecord) || Boolean(ev.originalExamId);
@@ -633,7 +638,7 @@ export default function Calendar() {
             <>
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                 <Shield className="w-3.5 h-3.5" />
-                Admin &amp; HOD Access
+                Admin Access
               </span>
               <button
                 type="button"
@@ -646,7 +651,7 @@ export default function Calendar() {
             </>
           ) : (
             <span
-              title="You have View-Only access. You can only see events targeted to Everyone, your role, or your department. Only Admins and HODs can schedule or modify events."
+              title="You have View-Only access. Only College Admins can schedule or modify events."
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10"
             >
               <Eye className="w-4 h-4 text-slate-400" />

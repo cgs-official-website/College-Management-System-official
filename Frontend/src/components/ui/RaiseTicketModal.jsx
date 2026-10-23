@@ -34,7 +34,7 @@ export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'Colle
     setFetchingTickets(true);
     try {
       const res = await api.get('/tickets');
-      const list = res.data?.data || res.data || [];
+      const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : (res?.data?.data || []);
       setMyTickets(list);
       
       if (selectedTicket) {
@@ -63,6 +63,10 @@ export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'Colle
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!subject.trim() || !description.trim()) {
+      setErrorMsg('Please enter both subject and description.');
+      return;
+    }
     setLoading(true);
     setErrorMsg('');
     setSuccessMsg('');
@@ -74,20 +78,20 @@ export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'Colle
         priority
       });
 
-      const newTicket = res.data?.data || {
+      const newTicket = res?.data || (res?.id ? res : {
         id: `TK-${Date.now()}`,
         subject: subject.trim(),
         description: description.trim(),
         priority,
         status: 'open',
         createdAt: new Date().toISOString()
-      };
+      });
 
-      setMyTickets(prev => [newTicket, ...prev]);
+      setMyTickets(prev => [newTicket, ...prev.filter(t => t.id !== newTicket.id)]);
 
       try {
         const current = JSON.parse(localStorage.getItem('zuna_tickets') || '[]');
-        localStorage.setItem('zuna_tickets', JSON.stringify([newTicket, ...current]));
+        localStorage.setItem('zuna_tickets', JSON.stringify([newTicket, ...current.filter(t => t.id !== newTicket.id)]));
       } catch (_e) {}
 
       setSuccessMsg('✓ Ticket submitted! Zuna SuperAdmin will reply shortly.');
@@ -96,10 +100,12 @@ export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'Colle
       setTimeout(() => {
         setSuccessMsg('');
         setActiveTab('history');
-      }, 1200);
+        fetchTickets();
+      }, 1000);
     } catch (err) {
       console.error('Failed to submit ticket:', err);
-      setErrorMsg(err.response?.data?.error?.message || 'Failed to submit ticket. Please try again.');
+      const msg = err.data?.error?.message || err.response?.data?.error?.message || err.message || 'Failed to submit ticket. Please try again.';
+      setErrorMsg(msg);
     } finally {
       setLoading(false);
     }
@@ -122,13 +128,14 @@ export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'Colle
         text: replyText.trim()
       });
 
-      const replyObj = res.data?.data?.reply || clientReply;
+      const replyObj = res?.data?.reply || res?.reply || clientReply;
       const updatedMessages = [...(selectedTicket.messages || []), replyObj];
       const updatedTicket = { ...selectedTicket, messages: updatedMessages };
 
       setSelectedTicket(updatedTicket);
       setMyTickets(prev => prev.map(t => t.id === selectedTicket.id ? updatedTicket : t));
       setReplyText('');
+      fetchTickets();
     } catch (err) {
       console.warn('Reply write error, applying optimistic message:', err);
       const updatedTicket = {
@@ -233,9 +240,14 @@ export default function RaiseTicketModal({ isOpen, onClose, collegeName = 'Colle
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-2">
-              <button type="button" onClick={onClose} className="px-5 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-2xl">Cancel</button>
-              <button type="submit" disabled={loading} className="px-6 py-2.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-2xl shadow-lg shadow-amber-500/25 flex items-center gap-2">
-                <LuSend size={14} /> {loading ? 'Submitting...' : 'Submit to Zuna Admin'}
+              <button type="button" onClick={onClose} className="px-5 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-colors">Cancel</button>
+              <button 
+                type="submit" 
+                disabled={loading} 
+                className="px-6 py-2.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed rounded-2xl shadow-lg shadow-amber-500/25 flex items-center gap-2 transition-all cursor-pointer"
+              >
+                {loading ? <LuLoader className="animate-spin" size={14} /> : <LuSend size={14} />}
+                <span>{loading ? 'Submitting to Zuna...' : 'Submit to Zuna Admin'}</span>
               </button>
             </div>
           </form>

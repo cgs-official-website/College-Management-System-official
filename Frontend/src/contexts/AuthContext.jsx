@@ -285,22 +285,38 @@ export function AuthProvider({ children }) {
       // PROCESS PERMISSIONS
       // =========================
       const permsMap = {};
+      const isAdmin = normalizedRole === 'admin' || normalizedRole === 'superadmin';
 
-      if (
-        data.customRole?.permissions
-      ) {
-        data.customRole.permissions.forEach(
-          (p) => {
-            if (p.module?.key) {
-              permsMap[p.module.key] = {
-                canCreate: p.canCreate,
-                canRead: p.canRead,
-                canUpdate: p.canUpdate,
-                canDelete: p.canDelete
-              };
-            }
+      if (isAdmin) {
+        // College Admin has universal full access across all modules
+        const allModuleKeys = [
+          'admission', 'students', 'staff', 'academic', 'timetable', 
+          'attendance', 'exams', 'fees', 'library', 'hostel', 
+          'transport', 'infrastructure', 'notices', 'placements', 
+          'reports', 'audit', 'inventory', 'store', 'payroll', 
+          'api_integration', 'custom', 'settings', 'roles', 'calendar', 'complaints'
+        ];
+        allModuleKeys.forEach((key) => {
+          permsMap[key] = {
+            canCreate: true,
+            canRead: true,
+            canUpdate: true,
+            canDelete: true
+          };
+        });
+      } else if (data.permissions && Object.keys(data.permissions).length > 0) {
+        Object.assign(permsMap, data.permissions);
+      } else if (data.customRole?.permissions) {
+        data.customRole.permissions.forEach((p) => {
+          if (p.module?.key) {
+            permsMap[p.module.key] = {
+              canCreate: Boolean(p.canCreate),
+              canRead: Boolean(p.canRead),
+              canUpdate: Boolean(p.canUpdate),
+              canDelete: Boolean(p.canDelete)
+            };
           }
-        );
+        });
       }
 
       setPermissions(permsMap);
@@ -344,6 +360,20 @@ export function AuthProvider({ children }) {
     } finally {
       if (sequence === restoreSequence.current) setLoading(false);
     }
+  };
+
+  // Dynamic permission check helper: College Admin has universal access, others obey permissions
+  const canAccess = (moduleKey, action = 'read') => {
+    if (userRole === 'admin' || userRole === 'superadmin') return true;
+    if (!moduleKey) return true;
+    const actionKeyMap = {
+      create: 'canCreate',
+      read: 'canRead',
+      update: 'canUpdate',
+      delete: 'canDelete'
+    };
+    const actionProp = actionKeyMap[action?.toLowerCase?.() || 'read'] || 'canRead';
+    return permissions?.[moduleKey]?.[actionProp] === true;
   };
 
   // =========================
@@ -393,6 +423,7 @@ export function AuthProvider({ children }) {
     userData,
     userRole,
     permissions,
+    canAccess,
     loading,
 
     login,

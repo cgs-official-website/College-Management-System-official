@@ -81,10 +81,10 @@ export function StaffDetailsModal({ isOpen, onClose, staff }) {
 
           <div className="bg-white dark:bg-[#0A0F1C] p-4 rounded-xl border border-slate-200 dark:border-white/10">
             <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 mb-1 text-sm">
-              <Shield className="w-4 h-4" /> System Role
+              <Shield className="w-4 h-4" /> Role
             </div>
             <p className="font-medium text-slate-900 dark:text-white capitalize">
-              {staff.role || 'Staff'}
+              {staff.customRole || (staff.designation && !['teacher', 'staff'].includes(staff.designation.toLowerCase()) ? staff.designation : null) || (staff.role === 'hod' ? 'HOD' : staff.role) || 'Staff'}
             </p>
           </div>
         </div>

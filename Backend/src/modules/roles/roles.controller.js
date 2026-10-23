@@ -1,8 +1,41 @@
 import { prisma, logger } from '../../server.js';
 import { createRoleSchema, updateRoleSchema, updateRolePermissionsSchema } from './roles.schema.js';
+import { invalidateRolePermissionsCache } from '../../middleware/requirePermission.js';
 
 export const getModules = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+
+  // Ensure core system modules exist in DB
+  const coreModules = [
+    { key: 'students', label: 'Students Directory' },
+    { key: 'staff', label: 'HR & Staff Management' },
+    { key: 'attendance', label: 'Attendance Management' },
+    { key: 'fees', label: 'Fees & Financials' },
+    { key: 'exams', label: 'Exams & Marks' },
+    { key: 'library', label: 'Library Management' },
+    { key: 'hostel', label: 'Hostel Management' },
+    { key: 'transport', label: 'Transport & Routes' },
+    { key: 'infrastructure', label: 'Infrastructure & Facilities' },
+    { key: 'notices', label: 'Notice Board' },
+    { key: 'academic', label: 'Academic Structure' },
+    { key: 'timetable', label: 'Timetable' },
+    { key: 'calendar', label: 'Academic & Events Calendar' },
+    { key: 'payroll', label: 'Payroll Management' },
+    { key: 'inventory', label: 'Inventory Management' },
+    { key: 'store', label: 'Campus Store' },
+    { key: 'api_integration', label: 'API Integrations' },
+    { key: 'admission', label: 'Admission' },
+    { key: 'reports', label: 'Reports' },
+  ];
+
+  for (const cm of coreModules) {
+    await prisma.module.upsert({
+      where: { key: cm.key },
+      update: {},
+      create: { key: cm.key, label: cm.label }
+    }).catch(() => {});
+  }
+
   const allModules = await prisma.module.findMany({
     orderBy: { key: 'asc' }
   });
@@ -13,6 +46,62 @@ export const getModules = async (req, res) => {
 export const getRoles = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId;
   const actorId = req.user?.id || req.user?.userId;
+
+  if (collegeId) {
+    // Ensure default HOD role exists for this college so College Admin can customize its permissions
+    const existingHod = await prisma.role.findFirst({
+      where: { collegeId, name: { equals: 'HOD', mode: 'insensitive' } }
+    });
+
+    if (!existingHod) {
+      try {
+        const allModules = await prisma.module.findMany();
+        const collegeModules = allModules.filter(m => !m.key.startsWith('custom_') || m.key.startsWith(`custom_${collegeId}_`));
+        const hodDefaultModules = ['students', 'staff', 'academic', 'timetable', 'attendance', 'exams', 'notices'];
+
+        await prisma.$transaction(async (tx) => {
+          const newHod = await tx.role.create({
+            data: {
+              name: 'HOD',
+              category: 'teaching',
+              collegeId,
+              isSystemRole: false
+            }
+          });
+
+          if (collegeModules.length > 0) {
+            await tx.rolePermission.createMany({
+              data: collegeModules.map(m => {
+                const isDefault = hodDefaultModules.includes(m.key);
+                return {
+                  roleId: newHod.id,
+                  moduleId: m.id,
+                  canCreate: isDefault,
+                  canRead: isDefault,
+                  canUpdate: isDefault,
+                  canDelete: false
+                };
+              })
+            });
+          }
+
+          // Link any existing unlinked HOD users in this college
+          await tx.user.updateMany({
+            where: {
+              collegeId,
+              role: 'hod',
+              customRoleId: null
+            },
+            data: {
+              customRoleId: newHod.id
+            }
+          });
+        });
+      } catch (seedErr) {
+        logger.warn(`[getRoles] HOD auto-seed skipped or already handled: ${seedErr.message}`);
+      }
+    }
+  }
 
   const roles = await prisma.role.findMany({
     where: { collegeId },
@@ -199,6 +288,8 @@ export const updateRole = async (req, res) => {
     data: { ...(name ? { name } : {}), ...(category ? { category } : {}) }
   });
 
+  invalidateRolePermissionsCache(id);
+
   logger.info(`[info] req=${req.id || ''} college=${collegeId} roleId=${id} actor=${actorId} Updated role`);
   res.json({ success: true, data: updated });
 };
@@ -246,6 +337,8 @@ export const deleteRole = async (req, res) => {
   await prisma.role.delete({
     where: { id }
   });
+
+  invalidateRolePermissionsCache(id);
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} roleId=${id} actor=${actorId} Deleted role '${role.name}'`);
   res.json({ success: true, message: `Role '${role.name}' deleted successfully.` });
@@ -295,6 +388,9 @@ export const updateRolePermissions = async (req, res) => {
       })
     )
   );
+
+  // Invalidate cache immediately so new permissions take effect right away
+  invalidateRolePermissionsCache(id);
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} roleId=${id} actor=${actorId} Updated permission matrix (${permissions.length} modules)`);
   res.json({ success: true, message: 'Permissions updated successfully' });

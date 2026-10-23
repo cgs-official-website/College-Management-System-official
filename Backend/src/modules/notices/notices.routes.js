@@ -9,8 +9,8 @@ const router = Router();
 
 router.use(authenticate, resolveTenant);
 
-router.get('/', requirePermission('notices', 'read'), getNotices);
-router.get('/:id', requirePermission('notices', 'read'), getNoticeById);
+router.get('/', getNotices);
+router.get('/:id', getNoticeById);
 router.post('/', requirePermission('notices', 'create'), createNotice);
 router.put('/:id', requirePermission('notices', 'update'), updateNotice);
 router.patch('/:id', requirePermission('notices', 'update'), updateNotice);

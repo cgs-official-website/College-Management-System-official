@@ -202,8 +202,8 @@ const AdminLayout = () => {
     icon: FileText,
     moduleKey: 'custom'
     })) || []),
-    { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon, moduleKey: 'settings' },
-    { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck, moduleKey: 'roles' },
+    { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon, moduleKey: 'settings', adminOnly: true },
+    { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck, moduleKey: 'roles', adminOnly: true },
   ]
     .map(link => {
       if (link.children) {

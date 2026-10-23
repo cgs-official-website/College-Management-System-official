@@ -105,12 +105,13 @@ export async function ensureCalendarTable() {
 }
 
 /**
- * Role check helper: Only ADMIN and HOD can access / manage calendar.
+ * Role check helper: Only College Admin can manage calendar (HOD and others have View-Only access).
  */
-export function canManageCalendar(user, isUserHod = false) {
+export function canManageCalendar(user) {
   if (!user) return false;
   const role = String(user.role || '').toLowerCase();
-  return role === 'admin' || role === 'principal' || role === 'hod' || role === 'superadmin' || Boolean(user.isHod) || Boolean(isUserHod);
+  const cleanRole = role.replace(/[-_\s]/g, '');
+  return cleanRole === 'admin' || cleanRole === 'superadmin' || cleanRole === 'principal';
 }
 
 /**
@@ -178,6 +179,7 @@ export async function resolveUserCalendarContext(user, collegeId) {
     userRecord = await prisma.user.findUnique({
       where: { id: userId },
       select: {
+        role: true,
         customRoleId: true,
         customRole: { select: { id: true, name: true } },
         teacherProfile: {
@@ -192,9 +194,16 @@ export async function resolveUserCalendarContext(user, collegeId) {
     });
 
     if (userRecord) {
+      const dbRole = String(userRecord.role || '').toLowerCase();
+      if (dbRole === 'hod' || dbRole.includes('hod')) {
+        isHod = true;
+      }
       if (userRecord.customRole?.name) {
         customRoleName = userRecord.customRole.name;
         customRoleId = userRecord.customRole.id;
+        if (customRoleName.toLowerCase().includes('hod')) {
+          isHod = true;
+        }
       }
       if (userRecord.teacherProfile) {
         if (!departmentId && userRecord.teacherProfile.departmentId) {
@@ -321,24 +330,9 @@ export async function resolveUserCalendarContext(user, collegeId) {
     }
   }
 
-  let canManage = isHod || role === 'admin' || role === 'superadmin' || isPrincipal || isAdmin;
-  if (!canManage && (role.includes('dean') || role.includes('coordinator') || role.includes('director') || role.includes('head'))) {
-    canManage = true;
-  }
-  if (!canManage && customRoleId) {
-    try {
-      const hasPerm = await prisma.rolePermission.findFirst({
-        where: {
-          roleId: customRoleId,
-          module: { key: { in: ['calendar', 'events', 'exams'] } },
-          OR: [{ canCreate: true }, { canUpdate: true }]
-        }
-      });
-      if (hasPerm) {
-        canManage = true;
-      }
-    } catch (_) {}
-  }
+  // Only College Admin (admin, superadmin, principal) has full management access.
+  // HOD and other roles have View-Only access and cannot create, edit, or delete events.
+  const canManage = Boolean(isAdmin || isSuperAdmin || isPrincipal);
 
   return {
     userId,
@@ -503,7 +497,8 @@ export const getCalendarEvents = async (req, res) => {
     // 2) Their specific role
     // 3) Their department
     const isAdmin = userContext.role === 'admin' || userContext.role === 'superadmin' || Boolean(userContext.isPrincipal);
-    if (!isAdmin) {
+    const canManageEvents = isAdmin || Boolean(userContext.canManage) || Boolean(userContext.isHod);
+    if (!canManageEvents) {
       const role = String(userContext.role || '').toLowerCase();
       const userDeptId = userContext.departmentId;
       const customRoleName = String(userContext.customRoleName || '').toLowerCase().trim();
