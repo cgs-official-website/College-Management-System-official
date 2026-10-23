@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, useAnimation } from 'framer-motion';
 import { Link } from 'react-router-dom';
+import api from '../../services/api';
 
 
 import {
@@ -52,11 +53,28 @@ const FloatingCard = ({ icon: Icon, title, delay, className }) => (
   </motion.div>
 );
 
+const DEFAULT_PLANS = [
+  {
+    id: 'starter',
+    name: 'Standard Campus',
+    price: '$2.50',
+    order: 1,
+    modules: ['student_directory', 'attendance_tracking', 'exam_grading', 'timetable', 'notice_board']
+  },
+  {
+    id: 'enterprise',
+    name: 'Enterprise ERP',
+    price: '$4.00',
+    order: 2,
+    modules: ['student_directory', 'attendance_tracking', 'exam_grading', 'fees_management', 'hr_and_payroll', 'library_and_hostel', 'transport_routes', 'custom_roles']
+  }
+];
+
 const LandingPage = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
-  const [activePlans, setActivePlans] = useState([]);
+  const [activePlans, setActivePlans] = useState(DEFAULT_PLANS);
   const [fetchError, setFetchError] = useState(null);
 
   const [landingData, setLandingData] = useState({
@@ -71,13 +89,13 @@ const LandingPage = () => {
   useEffect(() => {
     const fetchLandingData = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/v1/landing-page');
-        const data = await response.json();
-        if (response.ok && data.data) {
-          setLandingData(data.data);
+        const res = await api.get('/landing-page');
+        const data = res?.data || res;
+        if (data && typeof data === 'object') {
+          setLandingData(prev => ({ ...prev, ...data }));
         }
       } catch (error) {
-        console.error("Error fetching landing data:", error);
+        // Gracefully retain built-in landing data
       }
     };
     fetchLandingData();
@@ -86,17 +104,16 @@ const LandingPage = () => {
   useEffect(() => {
     const fetchPlans = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/v1/subscriptions/public');
-        const data = await response.json();
-        
-        if (response.ok && data.data) {
-          setActivePlans(data.data.sort((a, b) => a.order - b.order));
+        const res = await api.get('/subscriptions/public');
+        const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        if (list.length > 0) {
+          setActivePlans(list.sort((a, b) => a.order - b.order));
+          setFetchError(null);
         } else {
-          setFetchError(data.error || 'Failed to load plans');
+          setActivePlans(DEFAULT_PLANS);
         }
       } catch (error) {
-        console.error("Error fetching plans:", error);
-        setFetchError(error.message);
+        setActivePlans(DEFAULT_PLANS);
       }
     };
     fetchPlans();
@@ -457,7 +474,7 @@ const LandingPage = () => {
           </div>
 
           <div className={`grid grid-cols-1 md:grid-cols-${Math.min(activePlans.length, 3) || 1} gap-8 max-w-6xl mx-auto`}>
-            {fetchError ? (
+            {fetchError && activePlans.length === 0 ? (
               <div className="col-span-full text-center py-20 text-red-500">
                 <p className="text-xl font-bold">Error fetching plans.</p>
                 <p className="mt-2">{fetchError}</p>
