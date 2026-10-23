@@ -3,7 +3,10 @@ import { redis, redisKeys } from '../lib/cache.js';
 import { prisma } from '../lib/prisma.js';
 import { logger } from '../lib/logger.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+if (!process.env.JWT_SECRET) {
+  throw new Error('FATAL: JWT_SECRET environment variable is required but missing.');
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export const authenticate = async (req, res, next) => {
   let token = null;

@@ -8,7 +8,7 @@ import helmet from 'helmet';
 // ---------------------------------------------------------
 // STARTUP ENVIRONMENT VALIDATION (Hot-reloaded for exam schema updates)
 // ---------------------------------------------------------
-const REQUIRED_ENV_VARS = ['DATABASE_URL', 'JWT_SECRET'];
+const REQUIRED_ENV_VARS = ['DATABASE_URL', 'JWT_SECRET', 'JWT_REFRESH_SECRET'];
 const missingVars = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
 
 import { logger } from './lib/logger.js';
@@ -148,6 +148,7 @@ import departmentsRoutes from './modules/departments/departments.routes.js';
 import coursesRoutes from './modules/courses/courses.routes.js';
 import sectionsRoutes from './modules/sections/sections.routes.js';
 import ptmRoutes from './modules/ptm/ptm.routes.js';
+import domainsRoutes from './modules/domains/domains.routes.js';
 import staffProfileRoutes from './modules/staffProfile/staffProfile.routes.js';
 import * as stubs from './modules/stubs.js';
 import { getModules } from './modules/roles/roles.controller.js';
@@ -182,6 +183,7 @@ app.use('/api/v1/departments', departmentsRoutes);
 app.use('/api/v1/courses', coursesRoutes);
 app.use('/api/v1/sections', sectionsRoutes);
 app.use('/api/v1/ptm', ptmRoutes);
+app.use('/api/v1/domains', domainsRoutes);
 app.use('/api/v1/staff-profile', staffProfileRoutes);
 import assignmentsRoutes from './modules/assignments/assignments.routes.js';
 import leavesRoutes from './modules/leaves/leaves.routes.js';

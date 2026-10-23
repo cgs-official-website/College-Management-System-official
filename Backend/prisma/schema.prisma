@@ -87,6 +87,7 @@ model College {
   transportAllocations     StudentTransportAllocation[]
   routeStops               RouteStop[]
   transportFeeTerms        TransportFeeTerm[]
+  collegeDomains           CollegeDomain[]
 }
 
 model BillingSubscription {
@@ -1527,3 +1528,20 @@ model TransportFeeTerm {
   @@unique([collegeId, label])
   @@index([collegeId, isCurrent])
 }
+
+model CollegeDomain {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId         String    @db.Uuid
+  domain            String
+  verificationToken String
+  status            String    @default("PENDING") // PENDING, VERIFIED
+  verifiedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
+
+  college College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+
+  @@unique([collegeId, domain])
+  @@index([domain])
+  @@index([collegeId])
+}

@@ -14,10 +14,17 @@ const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 export const redis = new Redis(redisUrl, {
   maxRetriesPerRequest: 1,
   lazyConnect: true,
+  enableOfflineQueue: false,
+  connectTimeout: 1000,
+  commandTimeout: 500,
   retryStrategy: (times) => {
+    // In production or when REDIS_URL is configured, auto-reconnect with backoff capped at 5s
+    if (process.env.NODE_ENV === 'production' || process.env.REDIS_URL) {
+      return Math.min(times * 200, 5000);
+    }
     if (times > 3) {
       logger.warn('[warn] Redis unreachable after 3 attempts. Disabling cache and failing open.');
-      return null; // Stop retrying
+      return null; // Stop retrying in local dev when Redis is not running
     }
     return Math.min(times * 50, 2000); // fail fast
   },

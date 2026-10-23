@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { createStudentSchema, updateStudentSchema } from './students.schema.js';
 import { deleteStudentProfile } from '../users/deleteUserRecords.js';
 import { releaseTransportFees } from '../transport/transportFees.js';
+import { assertEmailAllowedForCollege } from '../domains/domains.service.js';
 
 export const getStudents = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId || req.query.collegeId;
@@ -378,6 +379,8 @@ export const createStudent = async (req, res) => {
     }
   }
 
+  await assertEmailAllowedForCollege(collegeId, email, 'student');
+
   const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
 
   let student;
@@ -560,6 +563,10 @@ export const updateStudent = async (req, res) => {
   }
 
   const normalizedEmail = payload.email?.trim().toLowerCase();
+  const currentLoginEmail = (student.user?.email || '').trim().toLowerCase();
+  if (normalizedEmail && normalizedEmail !== currentLoginEmail) {
+    await assertEmailAllowedForCollege(collegeId, normalizedEmail, 'student');
+  }
   if (normalizedEmail && student.userId) {
     const duplicateEmail = await prisma.user.findFirst({
       where: { email: normalizedEmail, collegeId, NOT: { id: student.userId } },
@@ -1030,6 +1037,8 @@ export const bulkImportStudents = async (req, res) => {
       const { index, admissionNo, studentName, fName, lName, cleanEmail, dobFormatted, dateOfAdmission, studentMobile, parentMobile, parentName, motherName, gender, address, city, district, state, pincode, bloodGroup, batchYear, residenceType, transportRequired, rollNo, registerNumber, deptId, courseId, sectionId } = row;
 
       try {
+        await assertEmailAllowedForCollege(collegeId, cleanEmail, 'student');
+
         await prisma.$transaction(async (tx) => {
           let existingStudent = await tx.student.findFirst({
             where: {

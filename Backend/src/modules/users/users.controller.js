@@ -2,6 +2,7 @@ import { prisma, logger } from '../../server.js';
 import bcrypt from 'bcryptjs';
 import { assignUserRoleSchema } from '../roles/roles.schema.js';
 import { changePasswordSchema } from './users.schema.js';
+import { assertEmailAllowedForCollege } from '../domains/domains.service.js';
 
 export const getUsers = async (req, res) => {
   const { role, collegeId: queryCollegeId } = req.query;
@@ -123,7 +124,7 @@ export const assignUserRole = async (req, res) => {
 
 export const updateProfile = async (req, res) => {
   const userId = req.user?.userId || req.user?.id;
-  const { email, currentPassword, newPassword } = req.body;
+  const { email, currentPassword, newPassword, firstName, lastName, phone, designation } = req.body;
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) {
@@ -133,7 +134,15 @@ export const updateProfile = async (req, res) => {
     });
   }
 
-  if (newPassword) {
+  // --- (a) VALIDATION FIRST (NO WRITES) ---
+  // 1. Determine if email is changing
+  const normalizedEmail = email ? email.trim().toLowerCase() : null;
+  const willUpdateEmail = Boolean(normalizedEmail && normalizedEmail !== user.email.toLowerCase());
+
+  // 2. Password verification if email is changing or newPassword given
+  const requiresPasswordVerification = willUpdateEmail || Boolean(newPassword);
+  let newPasswordHash = null;
+  if (requiresPasswordVerification) {
     if (!currentPassword) {
       return res.status(400).json({
         success: false,
@@ -147,18 +156,18 @@ export const updateProfile = async (req, res) => {
         error: { code: 'INVALID_PASSWORD', message: 'Invalid current password' }
       });
     }
-    
-    const passwordHash = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({
-      where: { id: userId },
-      data: { passwordHash }
-    });
+    if (newPassword) {
+      newPasswordHash = await bcrypt.hash(newPassword, 10);
+    }
   }
 
-  if (email && email !== user.email) {
+  // 3. Email domain check & duplicate check (only if email is changing)
+  if (willUpdateEmail) {
+    await assertEmailAllowedForCollege(user.collegeId, normalizedEmail, user.role);
+
     const existing = await prisma.user.findFirst({
       where: {
-        email,
+        email: normalizedEmail,
         collegeId: user.collegeId
       }
     });
@@ -168,14 +177,9 @@ export const updateProfile = async (req, res) => {
         error: { code: 'EMAIL_IN_USE', message: 'Email already in use in this college' }
       });
     }
-    await prisma.user.update({
-      where: { id: userId },
-      data: { email }
-    });
   }
 
-  const { firstName, lastName, phone, designation } = req.body;
-
+  // 3. Phone 10-digit check
   if (phone !== undefined && phone !== null && phone !== '') {
     const cleanPhone = String(phone).replace(/\D/g, '');
     if (cleanPhone.length !== 10) {
@@ -186,46 +190,78 @@ export const updateProfile = async (req, res) => {
     }
   }
 
+  // --- (b) DATABASE WRITES IN ONE TRANSACTION ---
+  const userData = {};
+  if (willUpdateEmail) {
+    userData.email = normalizedEmail;
+  }
+  if (newPasswordHash) {
+    userData.passwordHash = newPasswordHash;
+  }
   if (firstName || lastName) {
-    const fullName = `${firstName || ''} ${lastName || ''}`.trim() || user.name;
-    await prisma.user.update({
-      where: { id: userId },
-      data: { 
-        name: fullName
-      }
-    });
+    userData.name = `${firstName || ''} ${lastName || ''}`.trim() || user.name;
   }
 
-  if (phone !== undefined) {
-    const cleanPhone = phone ? String(phone).replace(/\D/g, '') : null;
-    if (user.role === 'student') {
-      const studentProfile = await prisma.student.findFirst({ where: { userId } });
-      if (studentProfile) {
-        await prisma.student.update({
-          where: { id: studentProfile.id },
-          data: { studentMobile: cleanPhone }
-        });
-      }
-    } else if (user.role === 'teacher' || user.role === 'hod') {
-      const teacherProfile = await prisma.teacher.findFirst({ where: { userId } });
-      if (teacherProfile) {
-        await prisma.teacher.update({
-          where: { id: teacherProfile.id },
-          data: { mobileNumber: cleanPhone }
-        });
-      }
-    }
-  }
+  const phoneValue = phone !== undefined ? (phone ? String(phone).replace(/\D/g, '') : null) : undefined;
 
-  if (designation && (user.role === 'teacher' || user.role === 'hod')) {
-    const teacherProfile = await prisma.teacher.findFirst({ where: { userId } });
-    if (teacherProfile) {
-      await prisma.teacher.update({
-        where: { id: teacherProfile.id },
-        data: { designation }
+  await prisma.$transaction(async (tx) => {
+    if (Object.keys(userData).length > 0) {
+      await tx.user.update({
+        where: { id: userId },
+        data: userData
       });
     }
-  }
+
+    if (willUpdateEmail) {
+      if (user.role === 'student') {
+        const studentProfile = await tx.student.findFirst({ where: { userId } });
+        if (studentProfile) {
+          await tx.student.update({
+            where: { id: studentProfile.id },
+            data: { emailId: normalizedEmail }
+          });
+        }
+      } else if (user.role === 'teacher' || user.role === 'hod') {
+        const teacherProfile = await tx.teacher.findFirst({ where: { userId } });
+        if (teacherProfile) {
+          await tx.teacher.update({
+            where: { id: teacherProfile.id },
+            data: { emailId: normalizedEmail }
+          });
+        }
+      }
+    }
+
+    if (phoneValue !== undefined) {
+      if (user.role === 'student') {
+        const studentProfile = await tx.student.findFirst({ where: { userId } });
+        if (studentProfile) {
+          await tx.student.update({
+            where: { id: studentProfile.id },
+            data: { studentMobile: phoneValue }
+          });
+        }
+      } else if (user.role === 'teacher' || user.role === 'hod') {
+        const teacherProfile = await tx.teacher.findFirst({ where: { userId } });
+        if (teacherProfile) {
+          await tx.teacher.update({
+            where: { id: teacherProfile.id },
+            data: { mobileNumber: phoneValue }
+          });
+        }
+      }
+    }
+
+    if (designation && (user.role === 'teacher' || user.role === 'hod')) {
+      const teacherProfile = await tx.teacher.findFirst({ where: { userId } });
+      if (teacherProfile) {
+        await tx.teacher.update({
+          where: { id: teacherProfile.id },
+          data: { designation }
+        });
+      }
+    }
+  });
 
   res.json({ success: true, message: 'Profile updated' });
 };

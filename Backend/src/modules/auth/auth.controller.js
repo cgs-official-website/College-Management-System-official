@@ -21,9 +21,16 @@ import { getNextCollegeCode } from '../../lib/collegeCodeGenerator.js';
 import { notify } from '../notifications/notify.service.js';
 import { findUserWithMatchingPassword } from './auth.credentials.js';
 import { createAuditLog } from '../audit/audit.service.js';
+import { assertEmailAllowedForCollege, isEmailAllowedForCollege, isExemptRole } from '../domains/domains.service.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
-const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret';
+if (!process.env.JWT_SECRET) {
+  throw new Error('FATAL: JWT_SECRET environment variable is required but missing.');
+}
+if (!process.env.JWT_REFRESH_SECRET) {
+  throw new Error('FATAL: JWT_REFRESH_SECRET environment variable is required but missing.');
+}
+const JWT_SECRET = process.env.JWT_SECRET;
+const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
 export const login = async (req, res) => {
   try {
@@ -149,6 +156,24 @@ export const login = async (req, res) => {
       status: 'SUCCESS'
     }).catch(() => { });
 
+    // Non-blocking login-time check for non-exempt roles
+    let warnings;
+    try {
+      if (user.collegeId && !isExemptRole(user.role)) {
+        const domainCheck = await isEmailAllowedForCollege(user.collegeId, user.email, user.role);
+        if (!domainCheck.allowed && domainCheck.code === 'EMAIL_DOMAIN_NOT_ALLOWED') {
+          warnings = [
+            {
+              code: 'EMAIL_DOMAIN_MISMATCH',
+              message: `Your account email '${user.email}' does not match your institution's verified email domain. Please update your profile with an official institutional email address.`
+            }
+          ];
+        }
+      }
+    } catch (checkErr) {
+      logger.warn(`[LoginDomainCheck] Non-blocking domain warning check failed: ${checkErr.message}`);
+    }
+
     res.json({
       success: true,
       data: {
@@ -160,7 +185,8 @@ export const login = async (req, res) => {
           collegeId: user.collegeId,
           email: user.email,
           name: user.name
-        }
+        },
+        ...(warnings ? { warnings } : {})
       }
     });
   } catch (error) {
@@ -668,6 +694,8 @@ export const studentRegister = async (req, res) => {
 
     const normalizedAdmissionNumber = admissionNumber.trim();
     const normalizedEmail = email.trim().toLowerCase();
+
+    await assertEmailAllowedForCollege(collegeId, normalizedEmail, 'student');
     const student = normalizedAdmissionNumber
       ? await prisma.student.findFirst({
         where: {
@@ -822,6 +850,15 @@ export const studentRegister = async (req, res) => {
       }
     });
   } catch (error) {
+    if (error.code === 'EMAIL_DOMAIN_NOT_ALLOWED') {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'EMAIL_DOMAIN_NOT_ALLOWED',
+          message: "Please use your institution's email address.",
+        },
+      });
+    }
     const status = error.statusCode || (error.code === 'P2002' ? 409 : 400);
     res.status(status).json({
       success: false,
@@ -1217,6 +1254,8 @@ export const teacherRegister = async (req, res) => {
     const teacherEmail = payload.email.trim().toLowerCase();
     const fullName = `${payload.firstName} ${payload.lastName || ''}`.trim();
 
+    await assertEmailAllowedForCollege(claims.collegeId, teacherEmail, 'teacher');
+
     stage = 'update-teacher-user-email';
 
     let collegeName;
@@ -1349,6 +1388,15 @@ export const teacherRegister = async (req, res) => {
       errorName: error.name,
       errorCode: error.code || error.statusCode || 'UNKNOWN',
     }, 'Teacher registration step 1 failed');
+    if (error.code === 'EMAIL_DOMAIN_NOT_ALLOWED') {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'EMAIL_DOMAIN_NOT_ALLOWED',
+          message: "Please use your institution's email address.",
+        },
+      });
+    }
     const isValidationError = error.name === 'ZodError';
     const status = error.statusCode || (isValidationError ? 400 : 400);
     res.status(status).json({
