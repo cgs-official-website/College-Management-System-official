@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { api } from '../../services/apiClient';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -77,6 +78,7 @@ const SYSTEM_AUDIENCE_ROLES = [
 ];
 
 export default function Calendar() {
+  const { userData } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [activeTypeFilter, setActiveTypeFilter] = useState('all');
@@ -265,15 +267,29 @@ export default function Calendar() {
       // Strict role isolation: Ensure events targeted to other roles are NEVER shown
       // Exams scheduled for the college are universally visible to all authorized roles in this college.
       if (!isAdmin && !isExam) {
-        if (normRole === 'student') {
-          const disallowed = ['teacher', 'teachers', 'faculty', 'staff', 'staffs', 'hod', 'admin', 'superadmin'];
-          if (disallowed.includes(aud)) return false;
-        } else if (normRole === 'teacher' || normRole === 'faculty') {
-          const disallowed = ['student', 'students', 'staff', 'staffs', 'admin', 'superadmin'];
-          if (disallowed.includes(aud)) return false;
-        } else if (normRole === 'staff') {
-          const disallowed = ['student', 'students', 'teacher', 'teachers', 'faculty', 'hod', 'admin', 'superadmin'];
-          if (disallowed.includes(aud)) return false;
+        const userCustomRole = String(userData?.customRole?.name || userData?.customRoleName || '').toLowerCase().trim();
+        const userDesignation = String(userData?.designation || '').toLowerCase().trim();
+        const cleanAud = aud.replace(/[-_\s]/g, '');
+        const cleanRole = normRole.replace(/[-_\s]/g, '');
+        const cleanCustomRole = userCustomRole.replace(/[-_\s]/g, '');
+
+        const isTargetedToMe =
+          (cleanRole && (cleanAud === cleanRole || aud.includes(normRole) || normRole.includes(aud))) ||
+          (cleanCustomRole && (cleanAud === cleanCustomRole || aud.includes(userCustomRole) || userCustomRole.includes(aud))) ||
+          (userDesignation && (aud === userDesignation || aud.includes(userDesignation) || userDesignation.includes(aud))) ||
+          ((normRole.includes('admin') || userCustomRole.includes('admin')) && (aud === 'admin' || aud === 'admins'));
+
+        if (!isTargetedToMe) {
+          if (normRole === 'student') {
+            const disallowed = ['teacher', 'teachers', 'faculty', 'staff', 'staffs', 'hod', 'admin', 'superadmin'];
+            if (disallowed.includes(aud)) return false;
+          } else if (normRole === 'teacher' || normRole === 'faculty') {
+            const disallowed = ['student', 'students', 'staff', 'staffs', 'admin', 'superadmin'];
+            if (disallowed.includes(aud)) return false;
+          } else if (normRole === 'staff') {
+            const disallowed = ['student', 'students', 'teacher', 'teachers', 'faculty', 'hod', 'admin', 'superadmin'];
+            if (disallowed.includes(aud)) return false;
+          }
         }
       }
 
@@ -328,7 +344,7 @@ export default function Calendar() {
 
       return matchType && matchAudience && matchSearch;
     });
-  }, [events, activeTypeFilter, activeAudienceFilter, searchQuery, userRole, canManage]);
+  }, [events, activeTypeFilter, activeAudienceFilter, searchQuery, userRole, canManage, userData]);
 
   // Group events by YYYY-MM-DD
   const eventsByDate = useMemo(() => {
@@ -488,7 +504,7 @@ export default function Calendar() {
     try {
       await deleteEvent(deletingItem.id);
       setDeletingItem(null);
-    } catch (_) {}
+    } catch (_) { }
   };
 
   const isToday = (d) => {
@@ -533,7 +549,7 @@ export default function Calendar() {
     if (existingHoliday) {
       try {
         await deleteEvent(existingHoliday.id);
-      } catch (_) {}
+      } catch (_) { }
     } else {
       let count = 0;
       for (let i = 1; i <= dateNum; i++) {
@@ -555,7 +571,7 @@ export default function Calendar() {
           location: 'Campus-wide',
           description: `Official Saturday holiday (${title}) configured by Admin/HOD.`
         });
-      } catch (_) {}
+      } catch (_) { }
     }
   };
 
@@ -710,11 +726,10 @@ export default function Calendar() {
               <button
                 key={typeKey}
                 onClick={() => setActiveTypeFilter(typeKey)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize whitespace-nowrap transition-all ${
-                  isActive
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize whitespace-nowrap transition-all ${isActive
                     ? 'bg-primary-600 text-white shadow-sm'
                     : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10'
-                }`}
+                  }`}
               >
                 {typeKey === 'all' ? 'All Types' : TYPE_CONFIG[typeKey]?.label || typeKey}
               </button>
@@ -780,22 +795,20 @@ export default function Calendar() {
           <div className="flex items-center p-1 bg-slate-100 dark:bg-white/5 rounded-xl border border-slate-200 dark:border-white/10">
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded-lg transition-colors ${
-                viewMode === 'grid'
+              className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid'
                   ? 'bg-white dark:bg-[#0A0F1C] text-primary-600 dark:text-primary-400 shadow-sm'
                   : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
+                }`}
               title="Grid View"
             >
               <Grid className="w-4 h-4" />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded-lg transition-colors ${
-                viewMode === 'list'
+              className={`p-1.5 rounded-lg transition-colors ${viewMode === 'list'
                   ? 'bg-white dark:bg-[#0A0F1C] text-primary-600 dark:text-primary-400 shadow-sm'
                   : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
+                }`}
               title="List View"
             >
               <List className="w-4 h-4" />
@@ -816,11 +829,10 @@ export default function Calendar() {
                   {WEEKDAY_NAMES.map((w, idx) => (
                     <div
                       key={w}
-                      className={`text-center py-2 text-xs font-bold uppercase tracking-wider ${
-                        idx === 0
+                      className={`text-center py-2 text-xs font-bold uppercase tracking-wider ${idx === 0
                           ? 'text-rose-500 dark:text-rose-400'
                           : 'text-slate-600 dark:text-slate-400'
-                      }`}
+                        }`}
                     >
                       {w}
                     </div>
@@ -855,32 +867,30 @@ export default function Calendar() {
                             ? `${dayDate.toDateString()} (Click to select, double-click to add event)`
                             : dayDate.toDateString()
                         }
-                        className={`min-h-[95px] sm:min-h-[110px] p-2 rounded-xl flex flex-col justify-between cursor-pointer border transition-all select-none ${
-                          activeSelected
+                        className={`min-h-[95px] sm:min-h-[110px] p-2 rounded-xl flex flex-col justify-between cursor-pointer border transition-all select-none ${activeSelected
                             ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-950/25 ring-2 ring-primary-500/30 shadow-sm'
                             : isSun && isCurMonth
-                            ? 'border-slate-100 dark:border-white/5 bg-rose-50/20 dark:bg-rose-950/10 hover:border-slate-300 dark:hover:border-white/20'
-                            : isSatHoliday && isCurMonth
-                            ? 'border-slate-100 dark:border-white/5 bg-emerald-50/20 dark:bg-emerald-950/10 hover:border-slate-300 dark:hover:border-white/20'
-                            : isCurMonth
-                            ? 'border-slate-100 dark:border-white/5 bg-white dark:bg-white/[0.02] hover:border-slate-300 dark:hover:border-white/20'
-                            : 'border-transparent opacity-30 bg-transparent cursor-default'
-                        }`}
+                              ? 'border-slate-100 dark:border-white/5 bg-rose-50/20 dark:bg-rose-950/10 hover:border-slate-300 dark:hover:border-white/20'
+                              : isSatHoliday && isCurMonth
+                                ? 'border-slate-100 dark:border-white/5 bg-emerald-50/20 dark:bg-emerald-950/10 hover:border-slate-300 dark:hover:border-white/20'
+                                : isCurMonth
+                                  ? 'border-slate-100 dark:border-white/5 bg-white dark:bg-white/[0.02] hover:border-slate-300 dark:hover:border-white/20'
+                                  : 'border-transparent opacity-30 bg-transparent cursor-default'
+                          }`}
                       >
                         {/* Day number header - Clean, no plus, no suitcase, no cup, no clutter */}
                         <div className="flex items-center justify-between">
                           <span
-                            className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full transition-all ${
-                              activeToday
+                            className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full transition-all ${activeToday
                                 ? 'bg-primary-600 text-white shadow-sm'
                                 : activeSelected
-                                ? 'text-primary-600 dark:text-primary-400 font-extrabold scale-110'
-                                : isSun && isCurMonth
-                                ? 'text-rose-600 dark:text-rose-400'
-                                : isCurMonth
-                                ? 'text-slate-700 dark:text-slate-300'
-                                : 'text-slate-400 dark:text-slate-600'
-                            }`}
+                                  ? 'text-primary-600 dark:text-primary-400 font-extrabold scale-110'
+                                  : isSun && isCurMonth
+                                    ? 'text-rose-600 dark:text-rose-400'
+                                    : isCurMonth
+                                      ? 'text-slate-700 dark:text-slate-300'
+                                      : 'text-slate-400 dark:text-slate-600'
+                              }`}
                           >
                             {dayDate.getDate()}
                           </span>
@@ -991,18 +1001,16 @@ export default function Calendar() {
                 const satHoliday = getSaturdayHolidayEvent(selectedDateKey);
                 const isHoliday = Boolean(satHoliday);
                 return (
-                  <div className={`p-3.5 rounded-xl border mb-3 transition-all ${
-                    isHoliday
+                  <div className={`p-3.5 rounded-xl border mb-3 transition-all ${isHoliday
                       ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40'
                       : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10'
-                  }`}>
+                    }`}>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
                         {isHoliday ? (satHoliday?.title || 'Saturday Holiday') : 'Working Saturday'}
                       </span>
-                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                        isHoliday ? 'bg-emerald-500 text-white' : 'bg-slate-600 text-white'
-                      }`}>
+                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${isHoliday ? 'bg-emerald-500 text-white' : 'bg-slate-600 text-white'
+                        }`}>
                         {isHoliday ? 'Official Off' : 'Working Day'}
                       </span>
                     </div>
@@ -1020,11 +1028,10 @@ export default function Calendar() {
                           type="button"
                           onClick={() => handleToggleSaturdayHoliday(selectedDate)}
                           disabled={isSubmitting}
-                          className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center ${
-                            isHoliday
+                          className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center ${isHoliday
                               ? 'bg-white dark:bg-slate-900 text-rose-600 border border-rose-200 dark:border-rose-900/50 hover:bg-rose-50 shadow-sm'
                               : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm'
-                          }`}
+                            }`}
                         >
                           {isHoliday ? 'Change to Working Day' : 'Mark as Leave (Holiday)'}
                         </button>
@@ -1304,10 +1311,10 @@ export default function Calendar() {
                     {!availableRoles.some(
                       (r) => r.value.toLowerCase() === formTargetAudience.toLowerCase()
                     ) && (
-                      <option value={formTargetAudience}>
-                        {formTargetAudience.charAt(0).toUpperCase() + formTargetAudience.slice(1)}
-                      </option>
-                    )}
+                        <option value={formTargetAudience}>
+                          {formTargetAudience.charAt(0).toUpperCase() + formTargetAudience.slice(1)}
+                        </option>
+                      )}
                   </select>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                     Regular users (Teachers, Students, Staff) have View-Only access and can only see events targeted to Everyone, their specific role, or their department.

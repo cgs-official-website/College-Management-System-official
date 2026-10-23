@@ -55,11 +55,19 @@ export function useCalendar(initialFilters = {}) {
       const response = await api.get(qs ? `/calendar/events?${qs}` : '/calendar/events');
 
       const raw = response?.data || response;
-      if (raw?.canManage !== undefined) {
-        setBackendCanManage(Boolean(raw.canManage));
+      const canManageVal = response?.canManage !== undefined
+        ? response.canManage
+        : (response?.data?.canManage !== undefined
+          ? response.data.canManage
+          : (raw?.canManage !== undefined ? raw.canManage : null));
+
+      if (canManageVal !== null && canManageVal !== undefined) {
+        setBackendCanManage(Boolean(canManageVal));
       }
-      if (raw?.userDepartment) {
-        setUserDepartment(raw.userDepartment);
+
+      const deptVal = response?.userDepartment || response?.data?.userDepartment || raw?.userDepartment;
+      if (deptVal) {
+        setUserDepartment(deptVal);
       }
 
       let list = [];
@@ -219,6 +227,7 @@ export function useCalendar(initialFilters = {}) {
     canManage,
     isAdmin,
     isHod,
+    userData,
     userRole: normalizedRole,
     userDepartment,
     filters,

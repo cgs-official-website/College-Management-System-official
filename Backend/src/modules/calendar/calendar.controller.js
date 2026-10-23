@@ -173,8 +173,9 @@ export async function resolveUserCalendarContext(user, collegeId) {
   }
 
   // Fetch full user record to resolve custom role, teacher profile (department & designation)
+  let userRecord = null;
   try {
-    const userRecord = await prisma.user.findUnique({
+    userRecord = await prisma.user.findUnique({
       where: { id: userId },
       select: {
         customRoleId: true,
@@ -184,7 +185,7 @@ export async function resolveUserCalendarContext(user, collegeId) {
             id: true,
             departmentId: true,
             designation: true,
-            department: { select: { id: true, name: true } }
+            department: { select: { id: true, name: true, hodUserId: true } }
           }
         }
       }
@@ -203,20 +204,30 @@ export async function resolveUserCalendarContext(user, collegeId) {
         if (userRecord.teacherProfile.designation) {
           designation = userRecord.teacherProfile.designation;
         }
+        // If teacher's department assigns them as HOD directly
+        const deptHodId = userRecord.teacherProfile.department?.hodUserId;
+        if (deptHodId && (deptHodId === userId || deptHodId === userRecord.teacherProfile.id)) {
+          isHod = true;
+        }
       }
     }
   } catch (err) {
     console.warn('[Calendar] Error fetching user role/profile details:', err.message);
   }
 
-    const isPrincipal = isPrincipalRole ||
+  const isPrincipal = isPrincipalRole ||
     (designation && designation.toLowerCase() === 'principal') ||
     (customRoleName && customRoleName.toLowerCase() === 'principal');
 
-  // 1. Check if user is HOD of any department in this college
+  // 1. Check if user is HOD of any department in this college (via userId OR teacherProfile.id)
   try {
+    const teacherProfileId = userRecord?.teacherProfile?.id;
+    const orConditions = [{ hodUserId: userId }];
+    if (teacherProfileId) {
+      orConditions.push({ hodUserId: teacherProfileId });
+    }
     const deptWhere = {
-      hodUserId: userId
+      OR: orConditions
     };
     if (collegeId && UUID_REGEX.test(String(collegeId))) {
       deptWhere.collegeId = collegeId;
@@ -237,13 +248,13 @@ export async function resolveUserCalendarContext(user, collegeId) {
 
   if (!isHod && designation) {
     const dLower = designation.toLowerCase();
-    if (dLower.includes('hod') || dLower.includes('head')) {
+    if (dLower.includes('hod') || dLower.includes('head') || dLower.includes('dean')) {
       isHod = true;
     }
   }
   if (!isHod && customRoleName) {
     const crLower = customRoleName.toLowerCase();
-    if (crLower.includes('hod') || crLower.includes('head')) {
+    if (crLower.includes('hod') || crLower.includes('head') || crLower.includes('dean')) {
       isHod = true;
     }
   }
@@ -310,7 +321,24 @@ export async function resolveUserCalendarContext(user, collegeId) {
     }
   }
 
-  const canManage = isHod || role === 'admin' || role === 'superadmin' || isPrincipal;
+  let canManage = isHod || role === 'admin' || role === 'superadmin' || isPrincipal || isAdmin;
+  if (!canManage && (role.includes('dean') || role.includes('coordinator') || role.includes('director') || role.includes('head'))) {
+    canManage = true;
+  }
+  if (!canManage && customRoleId) {
+    try {
+      const hasPerm = await prisma.rolePermission.findFirst({
+        where: {
+          roleId: customRoleId,
+          module: { key: { in: ['calendar', 'events', 'exams'] } },
+          OR: [{ canCreate: true }, { canUpdate: true }]
+        }
+      });
+      if (hasPerm) {
+        canManage = true;
+      }
+    } catch (_) {}
+  }
 
   return {
     userId,
@@ -520,36 +548,49 @@ export const getCalendarEvents = async (req, res) => {
         visConditions.push(`(
           LOWER("targetAudience") IN ('staff', 'staffs', 'non-teaching', 'non_teaching', 'non-teaching staff', 'non teaching staff')
         )`);
+      }
 
-        // If staff has a specific custom role (e.g. "Library Staff")
-        if (customRoleName) {
-          const cLower = customRoleName.toLowerCase().trim();
-          visConditions.push(`(
-            LOWER("targetAudience") = $${paramIndex}
-            OR LOWER("targetAudience") = $${paramIndex + 1}
-            OR LOWER("targetAudience") ILIKE $${paramIndex + 2}
-          )`);
-          params.push(cLower, cLower.replace(/\s+/g, '_'), `%${cLower}%`);
-          paramIndex += 3;
-        }
+      // Universal specific role matching (e.g. "admin office", "admin_office", or any custom role assigned)
+      const userRolesToCheck = new Set();
+      if (role && !['student', 'teacher', 'faculty'].includes(role)) {
+        userRolesToCheck.add(role);
+        userRolesToCheck.add(role.replace(/_/g, ' '));
+        userRolesToCheck.add(role.replace(/\s+/g, '_'));
+      }
+      if (customRoleName) {
+        userRolesToCheck.add(customRoleName);
+        userRolesToCheck.add(customRoleName.replace(/_/g, ' '));
+        userRolesToCheck.add(customRoleName.replace(/\s+/g, '_'));
+      }
+      if (designation && designation !== customRoleName) {
+        userRolesToCheck.add(designation);
+        userRolesToCheck.add(designation.replace(/_/g, ' '));
+        userRolesToCheck.add(designation.replace(/\s+/g, '_'));
+      }
 
-        // If staff has a specific designation
-        if (designation && designation !== customRoleName) {
-          const dLower = designation.toLowerCase().trim();
-          visConditions.push(`(
-            LOWER("targetAudience") = $${paramIndex}
-            OR LOWER("targetAudience") ILIKE $${paramIndex + 1}
-          )`);
-          params.push(dLower, `%${dLower}%`);
-          paramIndex += 2;
-        }
+      for (const rName of userRolesToCheck) {
+        if (!rName) continue;
+        const rLower = rName.toLowerCase().trim();
+        visConditions.push(`(
+          LOWER("targetAudience") = $${paramIndex}
+          OR LOWER("targetAudience") = $${paramIndex + 1}
+          OR LOWER("targetAudience") ILIKE $${paramIndex + 2}
+          OR $${paramIndex} ILIKE '%' || LOWER("targetAudience") || '%'
+        )`);
+        params.push(rLower, rLower.replace(/\s+/g, '_'), `%${rLower}%`);
+        paramIndex += 3;
+      }
 
-        // If staff has customRoleId
-        if (userContext.customRoleId && UUID_REGEX.test(String(userContext.customRoleId))) {
-          visConditions.push(`("targetAudience" = $${paramIndex} OR LOWER("targetAudience") = $${paramIndex})`);
-          params.push(String(userContext.customRoleId).toLowerCase());
-          paramIndex++;
-        }
+      // If user role or custom role represents an administrative office role, also match admin audiences
+      if (role.includes('admin') || customRoleName.includes('admin')) {
+        visConditions.push(`LOWER("targetAudience") IN ('admin', 'admins')`);
+      }
+
+      // If user has customRoleId
+      if (userContext.customRoleId && UUID_REGEX.test(String(userContext.customRoleId))) {
+        visConditions.push(`("targetAudience" = $${paramIndex} OR LOWER("targetAudience") = $${paramIndex})`);
+        params.push(String(userContext.customRoleId).toLowerCase());
+        paramIndex++;
       }
 
       // Department-specific broadcasts (only if audience is the department itself or everyone)
@@ -834,8 +875,10 @@ export const getCalendarEventById = async (req, res) => {
                        ((role === 'teacher' || role === 'faculty') && (aud === 'teacher' || aud === 'teachers' || aud === 'faculty')) ||
                        (isHod && (aud === 'hod' || aud === 'hods')) ||
                        (role === 'staff' && (aud === 'staff' || aud === 'staffs' || aud === 'non-teaching' || aud === 'non_teaching' || aud === 'non-teaching staff')) ||
-                       (customRoleName && (aud === customRoleName || aud === customRoleName.replace(/\s+/g, '_') || aud.includes(customRoleName))) ||
-                       (designation && (aud === designation || aud === designation.replace(/\s+/g, '_') || aud.includes(designation))) ||
+                       (role && (aud === role || aud === role.replace(/_/g, ' ') || aud === role.replace(/\s+/g, '_') || aud.includes(role) || role.includes(aud))) ||
+                       (customRoleName && (aud === customRoleName || aud === customRoleName.replace(/\s+/g, '_') || aud === customRoleName.replace(/_/g, ' ') || aud.includes(customRoleName) || customRoleName.includes(aud))) ||
+                       (designation && (aud === designation || aud === designation.replace(/\s+/g, '_') || aud === designation.replace(/_/g, ' ') || aud.includes(designation) || designation.includes(aud))) ||
+                       ((role.includes('admin') || customRoleName.includes('admin')) && (aud === 'admin' || aud === 'admins')) ||
                        (userContext.customRoleId && aud === String(userContext.customRoleId).toLowerCase());
 
       const isDeptBroadcast = userDeptId && (
