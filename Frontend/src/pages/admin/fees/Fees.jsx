@@ -17,10 +17,15 @@ export default function Fees() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingFee, setEditingFee] = useState(null);
 
-  const filteredFees = fees.filter(fee => 
-    fee.studentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    fee.feeType?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const filteredFees = fees.filter(fee => {
+    const matchesSearch =
+      fee.studentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      fee.feeType?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || fee.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const handleOpenAdd = () => {
     setEditingFee(null);
@@ -129,10 +134,18 @@ export default function Fees() {
             className="pl-10 mb-0"
           />
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" className="px-4">
-            <Filter className="w-4 h-4 mr-2" /> Filter
-          </Button>
+        <div className="flex gap-2 items-center">
+          <Filter className="w-4 h-4 text-slate-400" />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0A0F1C] text-sm text-slate-700 dark:text-slate-300"
+          >
+            <option value="all">All Status</option>
+            <option value="paid">Paid</option>
+            <option value="pending">Pending</option>
+            <option value="overdue">Overdue</option>
+          </select>
         </div>
       </div>
 

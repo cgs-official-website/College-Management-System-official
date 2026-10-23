@@ -82,6 +82,9 @@ const StudentFeesDashboard = () => {
     );
   }
 
+  const formatDate = (d) =>
+  d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Not set';
+
   const isTransportInvoice = selectedInvoice?.feeType === 'Transport Fee';
 
   return (
@@ -146,6 +149,14 @@ const StudentFeesDashboard = () => {
           </div>
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-white/5">
+            <div className="hidden sm:grid sm:grid-cols-[1fr_9rem_17rem] gap-4 px-6 py-3 bg-slate-50 dark:bg-white/5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              <span>Fee Details</span>
+              <span className="text-center">Due Date</span>
+              <div className="flex justify-end gap-4">
+                <span className="flex-1 text-right">Amount</span>
+                <span className="w-32 text-center">Action</span>
+              </div>
+            </div>
             {feeInfo.invoices.map((inv) => {
               const isPaid = inv.status === 'paid';
               const isPartial = inv.status === 'partial';
@@ -154,9 +165,9 @@ const StudentFeesDashboard = () => {
                 : Number(inv.amountPaid || 0);
               const feeDisplayName = inv.feeType || inv.feeStructure?.name || inv.transactions?.[0]?.gatewayRef || 'Academic Fee';
               const pendingDue = Math.max(0, Number(inv.amountDue || 0) - effectivePaid);
-
+              const isOverdue = !isPaid && inv.dueDate && new Date(inv.dueDate).setHours(23, 59, 59, 999) < Date.now();
               return (
-                <div key={inv.id} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                <div key={inv.id} className="p-6 flex flex-col sm:grid sm:grid-cols-[1fr_9rem_17rem] sm:items-center gap-4 hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
                   <div className="flex items-start gap-4">
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 font-extrabold text-sm border ${
                       isPaid 
@@ -181,21 +192,27 @@ const StudentFeesDashboard = () => {
                         </span>
                       </div>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        Due: ₹{inv.amountDue?.toLocaleString('en-IN') || 0} • Paid: ₹{effectivePaid.toLocaleString('en-IN')}
+                        Total: ₹{inv.amountDue?.toLocaleString('en-IN') || 0} • Paid: ₹{effectivePaid.toLocaleString('en-IN')}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
-                    <div className="text-left sm:text-right">
+                  {/* Due Date column */}
+                  <div className="sm:text-center">
+                    <p className="sm:hidden text-[10px] font-bold uppercase tracking-wider text-slate-400">Due Date</p>
+                    <p className={`text-sm font-bold ${isOverdue ? 'text-rose-500' : 'text-slate-700 dark:text-slate-300'}`}>
+                      {formatDate(inv.dueDate)}
+                    </p>
+                    {isOverdue && (
+                      <p className="text-[10px] font-bold uppercase text-rose-500">Overdue</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between sm:justify-end gap-4">
+                    <div className="text-left sm:text-right sm:flex-1">
                       <p className="text-base font-extrabold text-slate-900 dark:text-white">
                         ₹{inv.amountDue?.toLocaleString('en-IN') || 0}
-                      </p>
-                      {inv.dueDate && (
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          Due Date: {new Date(inv.dueDate).toLocaleDateString()}
-                        </p>
-                      )}
+                      </p>       
                     </div>
 
                     {isPaid ? (
@@ -207,11 +224,11 @@ const StudentFeesDashboard = () => {
                             department: userData?.department || 'Academic',
                             invoiceName: feeDisplayName,
                             amount: effectivePaid,
-                            date: new Date(inv.dueDate || Date.now()).toLocaleDateString(),
+                            date: formatDate(inv.transactions?.[0]?.createdAt || inv.paidAt || Date.now()),
                             receiptNumber: inv.transactions?.[0]?.gatewayRef || `REC-${inv.id.substring(0, 8)}`
                           });
                         }}
-                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors"
+                        className="sm:w-32 justify-center px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors"
                       >
                         <Download className="w-3.5 h-3.5" />
                         Receipt
@@ -219,7 +236,7 @@ const StudentFeesDashboard = () => {
                     ) : (
                       <button
                         onClick={() => handleOpenPayModal(inv)}
-                        className="px-5 py-2.5 bg-gradient-to-r from-primary-600 to-teal-600 hover:from-primary-700 hover:to-teal-700 text-white font-bold text-xs rounded-xl shadow-md shadow-primary-500/20 flex items-center gap-1.5 transition-all"
+                        className="sm:w-32 justify-center px-5 py-2.5 bg-gradient-to-r from-primary-600 to-teal-600 hover:from-primary-700 hover:to-teal-700 text-white font-bold text-xs rounded-xl shadow-md shadow-primary-500/20 flex items-center gap-1.5 transition-all"
                       >
                         <CreditCard className="w-3.5 h-3.5" />
                         Pay ₹{pendingDue.toLocaleString('en-IN')}
@@ -270,6 +287,12 @@ const StudentFeesDashboard = () => {
                     <span>Total Fee Amount:</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200">
                       ₹{selectedInvoice.amountDue?.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-slate-500">
+                    <span>Due Date:</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">
+                      {formatDate(selectedInvoice.dueDate)}
                     </span>
                   </div>
                 </div>

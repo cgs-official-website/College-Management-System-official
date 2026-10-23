@@ -565,6 +565,7 @@ export const getStudentFees = async (req, res) => {
         ...f,
         amountPaid: effectivePaid,
         feeType: resolvedFeeType,
+        dueDate: f.dueDate ?? f.feeStructure?.dueDate ?? null,
         feeStructure: {
           ...(f.feeStructure || {}),
           name: resolvedFeeType

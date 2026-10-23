@@ -218,7 +218,7 @@ const StudentLayout = () => {
                </div>
                <div className="truncate">
                  <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate">{studentFullName}</p>
-                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">STUDENT PORTAL</p>
+                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">STUDENT</p>
                </div>
              </div>
              <LogOut className="w-5 h-5 text-slate-400 group-hover:text-red-600 transition-colors shrink-0 ml-2" />
@@ -267,7 +267,7 @@ const StudentLayout = () => {
             >
               <div className="hidden md:block text-right">
                 <p className="text-sm font-bold text-slate-900 dark:text-white leading-none">{studentFullName}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Verified Student</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Student</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold shadow-md overflow-hidden">
                 {profile?.hasProfileImage ? (
