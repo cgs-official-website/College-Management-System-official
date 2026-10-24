@@ -20,15 +20,18 @@ This document details all deployment-blocking and environment-specific tasks tha
 
 ---
 
-## 2. Login Behavior Change & Rollout Advisory (CRITICAL)
-- [ ] **Hard Login Enforcement Activated**:
-  - Non-exempt users (`student`, `teacher`, `staff`) whose email does not match an authorized domain are now **hard-blocked from login** with `403 Forbidden` (`code: 'EMAIL_DOMAIN_NOT_ALLOWED'`).
-  - Soft warnings on login are deprecated for student and teacher roles; soft warning banners remain visible exclusively for `admin` accounts.
+## 2. Login Behavior & Grandfathering Advisory
+- [ ] **Grandfathering for Existing Accounts**:
+  - **Existing gmail students lock aaga maattaanga. Toggle pudhu creation-ku mattum.**
+  - Pre-existing accounts (student, teacher, staff, admin) whose emails do not match college verified domains are **never blocked at login** (they receive 200 OK + `EMAIL_DOMAIN_MISMATCH` soft warning banner).
+  - Students created with `@gmail.com` when the toggle was ON can set their password and log in at any time, even after the toggle is switched OFF.
+- [ ] **Creation-Side Enforcement (Toggle Control)**:
+  - The "Allow Gmail addresses" toggle (`allowPersonalEmail`) strictly controls **new account creation and profile updates**:
+    - Toggle ON: `@gmail.com` exact match permitted for new account creation.
+    - Toggle OFF: `@gmail.com` blocked (403 `EMAIL_DOMAIN_NOT_ALLOWED`) on student/staff creation, admin email edit, bulk import, and self-registration.
+    - Non-compliant users audit page flags `@gmail.com` users when toggle is OFF, and unflags them when toggle is ON.
 - [ ] **Admin Lockout Protection**:
-  - `admin`, `superadmin`, and `parent` roles are **always permitted to log in** regardless of domain status to prevent administrative lockout.
-- [ ] **CRITICAL ROLLOUT STEP: Existing Gmail Students Lockout Prevention**:
-  - **Existing Gmail students lock aaguvaanga, rollout-ku munnadi toggle ON pannanum**: If a college has verified institutional domains but currently has active students or teachers using `@gmail.com`, admins **MUST** enable the **"Allow Gmail addresses"** toggle in `/admin/domains` (or via `PATCH /api/v1/domains/settings` with `{"allowPersonalEmail": true}`) **BEFORE** or immediately upon rollout.
-  - Failure to enable the toggle will cause all existing `@gmail.com` student and staff accounts to be blocked at login.
+  - `admin`, `superadmin`, and `parent` roles are **always permitted to log in** and are exempt from creation domain checks.
 
 ---
 

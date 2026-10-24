@@ -101,30 +101,6 @@ export const login = async (req, res) => {
       }
     }
 
-    // Hard domain enforcement check for Student/Teacher/Staff
-    // ADMIN, SUPERADMIN, PARENT are exempt from login blocking (prevents lockout)
-    const normalizedRole = (user.role || '').trim().toLowerCase();
-    const isExemptFromLoginBlock = ['admin', 'superadmin', 'parent'].includes(normalizedRole);
-
-    if (user.collegeId && !isExemptFromLoginBlock) {
-      try {
-        const domainCheck = await isEmailAllowedForCollege(user.collegeId, user.email, user.role);
-        if (!domainCheck.allowed) {
-          return res.status(403).json({
-            success: false,
-            code: 'EMAIL_DOMAIN_NOT_ALLOWED',
-            message: 'Your email is not from your college domain. Please contact your admin.',
-            error: {
-              code: 'EMAIL_DOMAIN_NOT_ALLOWED',
-              message: 'Your email is not from your college domain. Please contact your admin.',
-            },
-          });
-        }
-      } catch (domainErr) {
-        logger.error(`[LoginDomainCheck] Domain check error during login: ${domainErr.message}. Failing open.`);
-      }
-    }
-
     const accessToken = jwt.sign(
       { userId: user.id, collegeId: user.collegeId, role: user.role },
       JWT_SECRET,
@@ -180,11 +156,14 @@ export const login = async (req, res) => {
       status: 'SUCCESS'
     }).catch(() => { });
 
-    // Soft-warning check: For ADMIN only (student/teacher/staff are hard blocked above)
+    // Soft-warning check: domain mismatch warning (non-blocking, grandfather existing accounts)
+    // parent & superadmin are never warned; all other users with unaligned domains receive a warning banner
     let warnings;
     try {
-      if (user.collegeId && normalizedRole === 'admin') {
-        const domainCheck = await isEmailAllowedForCollege(user.collegeId, user.email, 'teacher');
+      const normalizedRole = (user.role || '').trim().toLowerCase();
+      const isNeverWarned = ['parent', 'superadmin'].includes(normalizedRole);
+      if (user.collegeId && !isNeverWarned) {
+        const domainCheck = await isEmailAllowedForCollege(user.collegeId, user.email, null);
         if (!domainCheck.allowed && domainCheck.code === 'EMAIL_DOMAIN_NOT_ALLOWED') {
           warnings = [
             {
@@ -195,7 +174,7 @@ export const login = async (req, res) => {
         }
       }
     } catch (checkErr) {
-      logger.warn(`[LoginDomainCheck] Admin domain warning check failed: ${checkErr.message}`);
+      logger.warn(`[LoginDomainCheck] Domain warning check failed: ${checkErr.message}`);
     }
 
     res.json({

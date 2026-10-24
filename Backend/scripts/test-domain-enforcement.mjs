@@ -403,7 +403,7 @@ async function runEnforcementTests() {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // TEST (i): Pre-existing user with non-matching domain is BLOCKED at login (403 hard enforcement)
+    // TEST (i): Pre-existing user with non-matching domain logs in OK (200) with EMAIL_DOMAIN_MISMATCH warning (grandfathered)
     // ─────────────────────────────────────────────────────────────
     {
       const loginCheckRes = await apiRequest('/auth/login', {
@@ -412,16 +412,16 @@ async function runEnforcementTests() {
       });
 
       const passed =
-        loginCheckRes.status === 403 &&
-        (loginCheckRes.data?.error?.code === 'EMAIL_DOMAIN_NOT_ALLOWED' || loginCheckRes.data?.code === 'EMAIL_DOMAIN_NOT_ALLOWED') &&
-        (loginCheckRes.data?.error?.message === 'Your email is not from your college domain. Please contact your admin.' ||
-          loginCheckRes.data?.message === 'Your email is not from your college domain. Please contact your admin.');
+        loginCheckRes.status === 200 &&
+        loginCheckRes.data?.success === true &&
+        Array.isArray(loginCheckRes.data?.data?.warnings) &&
+        loginCheckRes.data.data.warnings.some((w) => w.code === 'EMAIL_DOMAIN_MISMATCH');
 
       logResult(
         'i',
-        'Pre-existing user with non-matching domain is BLOCKED at login (403 EMAIL_DOMAIN_NOT_ALLOWED)',
+        'Pre-existing user with non-matching domain logs in OK (200) with EMAIL_DOMAIN_MISMATCH warning (grandfathered)',
         passed,
-        `Status: ${loginCheckRes.status}, Email: ${preExistingMismatchedUser.email}`
+        `Status: ${loginCheckRes.status}, Warnings: ${JSON.stringify(loginCheckRes.data?.data?.warnings || [])}`
       );
     }
 
@@ -1394,53 +1394,153 @@ async function runEnforcementTests() {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // TEST (q7): Toggle OFF -> gmail.com is BLOCKED (create & login) + flagged in audit
+    // TEST (q7): Toggle OFF -> existing gmail student logs in OK (200 with warning) & is flagged in audit
     // ─────────────────────────────────────────────────────────────
     {
-      // 1. Create student with gmail when toggle is OFF -> 403 BLOCKED
-      const newGmailEmail = `new.gmail.${SUFFIX}@gmail.com`;
+      // 1. Existing gmail student logs in when toggle is OFF -> 200 OK with EMAIL_DOMAIN_MISMATCH warning (grandfathered)
+      const loginRes = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: gmailStudentEmail, password: FIXTURE_PASSWORD }),
+      });
+      const isLoginAllowedWithWarning =
+        loginRes.status === 200 &&
+        loginRes.data?.success === true &&
+        Array.isArray(loginRes.data?.data?.warnings) &&
+        loginRes.data.data.warnings.some((w) => w.code === 'EMAIL_DOMAIN_MISMATCH');
+
+      // 2. Existing gmail student IS flagged in non-compliant query when toggle is OFF
+      const auditRes = await apiRequest('/domains/non-compliant-users', {}, adminToken);
+      const flaggedUsers = auditRes.data?.data?.users || [];
+      const isGmailNowFlagged = flaggedUsers.some((u) => u.email === gmailStudentEmail);
+
+      const passed = isLoginAllowedWithWarning && isGmailNowFlagged;
+
+      logResult(
+        'q7',
+        'Toggle OFF: existing gmail.com student logs in OK (200 with warning banner) and is FLAGGED in audit',
+        passed,
+        `LoginAllowedWithWarning: ${isLoginAllowedWithWarning}, AuditFlagged: ${isGmailNowFlagged}`
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // TEST (q8): Toggle ON -> create gmail student -> set-password -> toggle OFF -> login 200 (Grandfathering flow)
+    // ─────────────────────────────────────────────────────────────
+    {
+      // 1. Turn toggle ON
+      const patchOnRes = await apiRequest(
+        '/domains/settings',
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ allowPersonalEmail: true }),
+        },
+        adminToken
+      );
+
+      // 2. Create student with gmail.com while toggle is ON
+      const grandfatherEmail = `grandfather.student.${SUFFIX}@gmail.com`;
+      const grandfatherAdmNo = `ADM-GF-${Date.now().toString().slice(-6)}`;
+      const createRes = await apiRequest(
+        '/students',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            firstName: 'Grandfather',
+            lastName: 'Student',
+            email: grandfatherEmail,
+            admissionNumber: grandfatherAdmNo,
+            departmentId: department.id,
+            rollNo: `R-GF-${Date.now().toString().slice(-4)}`,
+          }),
+        },
+        adminToken
+      );
+
+      const createdStudentId = createRes.data?.data?.id || createRes.data?.id;
+      if (createdStudentId) createdStudentIds.push(createdStudentId);
+      const createdUser = await prisma.user.findFirst({ where: { email: grandfatherEmail, collegeId: college.id } });
+      if (createdUser?.id) createdUserIds.push(createdUser.id);
+
+      // 3. Set password / activate account via public student activation endpoint
+      const activateRes = await apiRequest('/auth/student/activate', {
+        method: 'POST',
+        body: JSON.stringify({
+          collegeId: college.id,
+          admissionNumber: grandfatherAdmNo,
+          email: grandfatherEmail,
+          password: FIXTURE_PASSWORD,
+          confirmPassword: FIXTURE_PASSWORD,
+        }),
+      });
+
+      // 4. Turn toggle OFF
+      const patchOffRes = await apiRequest(
+        '/domains/settings',
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ allowPersonalEmail: false }),
+        },
+        adminToken
+      );
+
+      // 5. Grandfathered student logs in when toggle is OFF -> 200 OK with warning
+      const loginRes = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: grandfatherEmail, password: FIXTURE_PASSWORD }),
+      });
+
+      const isLoginAllowedWithWarning =
+        loginRes.status === 200 &&
+        loginRes.data?.success === true &&
+        Boolean(loginRes.data?.data?.accessToken) &&
+        Array.isArray(loginRes.data?.data?.warnings) &&
+        loginRes.data.data.warnings.some((w) => w.code === 'EMAIL_DOMAIN_MISMATCH');
+
+      const passed =
+        patchOnRes.status === 200 &&
+        createRes.status === 201 &&
+        activateRes.status === 200 &&
+        patchOffRes.status === 200 &&
+        isLoginAllowedWithWarning;
+
+      logResult(
+        'q8',
+        'Toggle ON: create gmail student -> set-password -> toggle OFF -> login 200 OK with warning',
+        passed,
+        `Create: ${createRes.status}, Activate: ${activateRes.status}, Login: ${loginRes.status}, Warning: ${isLoginAllowedWithWarning}`
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // TEST (q9): Toggle OFF -> new gmail student create is BLOCKED (403)
+    // ─────────────────────────────────────────────────────────────
+    {
+      const blockedEmail = `blocked.new.gmail.${SUFFIX}@gmail.com`;
       const createRes = await apiRequest(
         '/students',
         {
           method: 'POST',
           body: JSON.stringify({
             firstName: 'Blocked',
-            lastName: 'Gmail',
-            email: newGmailEmail,
-            admissionNumber: `ADM-BLKG-${Date.now().toString().slice(-6)}`,
+            lastName: 'NewGmail',
+            email: blockedEmail,
+            admissionNumber: `ADM-BL-${Date.now().toString().slice(-6)}`,
             departmentId: department.id,
-            rollNo: `R-BLKG-${Date.now().toString().slice(-4)}`,
+            rollNo: `R-BL-${Date.now().toString().slice(-4)}`,
           }),
         },
         adminToken
       );
+
       const isCreateBlocked =
         createRes.status === 403 &&
         (createRes.data?.error?.code === 'EMAIL_DOMAIN_NOT_ALLOWED' || createRes.data?.code === 'EMAIL_DOMAIN_NOT_ALLOWED');
 
-      // 2. Existing gmail student tries to log in when toggle is OFF -> 403 BLOCKED
-      const loginRes = await apiRequest('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email: gmailStudentEmail, password: FIXTURE_PASSWORD }),
-      });
-      const isLoginBlocked =
-        loginRes.status === 403 &&
-        (loginRes.data?.error?.code === 'EMAIL_DOMAIN_NOT_ALLOWED' || loginRes.data?.code === 'EMAIL_DOMAIN_NOT_ALLOWED') &&
-        (loginRes.data?.error?.message === 'Your email is not from your college domain. Please contact your admin.' ||
-          loginRes.data?.message === 'Your email is not from your college domain. Please contact your admin.');
-
-      // 3. Existing gmail student IS now flagged in non-compliant query when toggle is OFF
-      const auditRes = await apiRequest('/domains/non-compliant-users', {}, adminToken);
-      const flaggedUsers = auditRes.data?.data?.users || [];
-      const isGmailNowFlagged = flaggedUsers.some((u) => u.email === gmailStudentEmail);
-
-      const passed = isCreateBlocked && isLoginBlocked && isGmailNowFlagged;
-
       logResult(
-        'q7',
-        'Toggle OFF: gmail.com is BLOCKED on create (403), BLOCKED on login (403), and FLAGGED in audit',
-        passed,
-        `CreateBlocked: ${isCreateBlocked}, LoginBlocked: ${isLoginBlocked}, AuditFlagged: ${isGmailNowFlagged}`
+        'q9',
+        'Toggle OFF: new gmail student creation is BLOCKED with 403 EMAIL_DOMAIN_NOT_ALLOWED',
+        isCreateBlocked,
+        `Status: ${createRes.status}, Code: ${createRes.data?.error?.code || createRes.data?.code}`
       );
     }
   } catch (err) {
