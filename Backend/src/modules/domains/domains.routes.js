@@ -5,6 +5,8 @@ import { authorize } from '../../middleware/authorize.js';
 import { catchAsync } from '../../lib/catchAsync.js';
 import {
   getDomains,
+  getDomainSettings,
+  updateDomainSettings,
   addDomain,
   verifyDomain,
   deleteDomain,
@@ -17,6 +19,8 @@ const router = Router();
 router.use(authenticate, resolveTenant, authorize('admin'));
 
 router.get('/', catchAsync(getDomains));
+router.get('/settings', catchAsync(getDomainSettings));
+router.patch('/settings', catchAsync(updateDomainSettings));
 router.get('/non-compliant-users', catchAsync(getNonCompliantUsers));
 router.post('/', catchAsync(addDomain));
 router.post('/:id/verify', catchAsync(verifyDomain));

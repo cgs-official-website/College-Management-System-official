@@ -22,3 +22,6 @@ CREATE INDEX IF NOT EXISTS "CollegeDomain_collegeId_idx" ON "CollegeDomain"("col
 
 -- Global uniqueness for VERIFIED domains (verified domain cannot be verified by another college)
 CREATE UNIQUE INDEX IF NOT EXISTS "CollegeDomain_verified_domain_key" ON "CollegeDomain"("domain") WHERE "status" = 'VERIFIED';
+
+-- College personal email (e.g. gmail.com) toggle
+ALTER TABLE "College" ADD COLUMN IF NOT EXISTS "allowPersonalEmail" BOOLEAN NOT NULL DEFAULT false;

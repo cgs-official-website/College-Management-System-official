@@ -45,3 +45,10 @@ export const addDomainSchema = z.object({
 export const domainIdParamSchema = z.object({
   id: z.string().uuid('Invalid domain ID format.'),
 });
+
+export const updateDomainSettingsSchema = z.object({
+  allowPersonalEmail: z.boolean({
+    required_error: 'allowPersonalEmail is required',
+    invalid_type_error: 'allowPersonalEmail must be a boolean',
+  }),
+});

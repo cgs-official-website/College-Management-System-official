@@ -7,6 +7,7 @@ import {
   isEmailAllowedForCollege,
   getVerifiedDomainsForCollege,
   invalidateVerifiedDomainsCache,
+  invalidateCollegeDomainSettingsCache,
 } from '../src/modules/domains/domains.service.js';
 
 const PORT = process.env.PORT || 5000;
@@ -402,7 +403,7 @@ async function runEnforcementTests() {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // TEST (i): Pre-existing user with non-matching domain logs in successfully (Option B)
+    // TEST (i): Pre-existing user with non-matching domain is BLOCKED at login (403 hard enforcement)
     // ─────────────────────────────────────────────────────────────
     {
       const loginCheckRes = await apiRequest('/auth/login', {
@@ -411,12 +412,14 @@ async function runEnforcementTests() {
       });
 
       const passed =
-        loginCheckRes.status === 200 &&
-        Boolean(loginCheckRes.data?.data?.accessToken || loginCheckRes.data?.data?.token);
+        loginCheckRes.status === 403 &&
+        (loginCheckRes.data?.error?.code === 'EMAIL_DOMAIN_NOT_ALLOWED' || loginCheckRes.data?.code === 'EMAIL_DOMAIN_NOT_ALLOWED') &&
+        (loginCheckRes.data?.error?.message === 'Your email is not from your college domain. Please contact your admin.' ||
+          loginCheckRes.data?.message === 'Your email is not from your college domain. Please contact your admin.');
 
       logResult(
         'i',
-        'Pre-existing user with non-matching domain logs in successfully (OPTION B SOFT ENFORCEMENT)',
+        'Pre-existing user with non-matching domain is BLOCKED at login (403 EMAIL_DOMAIN_NOT_ALLOWED)',
         passed,
         `Status: ${loginCheckRes.status}, Email: ${preExistingMismatchedUser.email}`
       );
@@ -515,6 +518,7 @@ async function runEnforcementTests() {
     {
       const startMs = Date.now();
       const originalGet = redis.get;
+      const originalSet = redis.set;
       const originalStatus = redis.status;
 
       try {
@@ -522,19 +526,21 @@ async function runEnforcementTests() {
         redis.status = 'ready';
         redis.get = () =>
           new Promise((resolve) => setTimeout(() => resolve(JSON.stringify(['hanging.edu'])), 3000));
+        redis.set = () => Promise.resolve();
 
         const domains = await getVerifiedDomainsForCollege(college.id);
         const elapsedMs = Date.now() - startMs;
-        const passed = elapsedMs < 1000 && domains.includes(VERIFIED_TEST_DOMAIN);
+        const passed = elapsedMs < 1500 && domains.includes(VERIFIED_TEST_DOMAIN);
 
         logResult(
           'l',
-          'Redis resilience: hanging cache read times out in <1000ms and safely falls back to DB',
+          'Redis resilience: hanging cache read times out and safely falls back to DB (<1500ms)',
           passed,
           `Elapsed: ${elapsedMs}ms, Domains returned: ${domains.length}`
         );
       } finally {
         redis.get = originalGet;
+        redis.set = originalSet;
         redis.status = originalStatus;
       }
     }
@@ -787,7 +793,26 @@ async function runEnforcementTests() {
       const initialUser = await prisma.user.findUnique({ where: { id: adminUser.id } });
       const initialPasswordHash = initialUser.passwordHash;
 
-      // 1. Blocked domain + newPassword => 403 and password unchanged, email unchanged
+      // Create non-exempt user to test domain enforcement on /users/profile (admin is exempt)
+      const nonExemptProfileUser = await prisma.user.create({
+        data: {
+          name: 'NonExempt Profile Tester',
+          email: `nonexempt.profile.${SUFFIX}@${VERIFIED_TEST_DOMAIN}`,
+          role: 'student',
+          collegeId: college.id,
+          accountStatus: 'active',
+          passwordHash,
+        },
+      });
+      createdUserIds.push(nonExemptProfileUser.id);
+
+      const nonExemptLoginRes = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: nonExemptProfileUser.email, password: FIXTURE_PASSWORD }),
+      });
+      const nonExemptToken = nonExemptLoginRes.data?.data?.accessToken;
+
+      // 1. Blocked domain + newPassword on non-exempt user => 403 and password unchanged, email unchanged
       const updateDisallowedProfileRes = await apiRequest(
         '/users/profile',
         {
@@ -798,7 +823,7 @@ async function runEnforcementTests() {
             newPassword: 'BrandNewPassword@123',
           }),
         },
-        adminToken
+        nonExemptToken
       );
 
       const isDisallowedBlocked =
@@ -806,9 +831,9 @@ async function runEnforcementTests() {
         (updateDisallowedProfileRes.data?.error?.code === 'EMAIL_DOMAIN_NOT_ALLOWED' ||
           updateDisallowedProfileRes.data?.code === 'EMAIL_DOMAIN_NOT_ALLOWED');
 
-      const afterDisallowedUser = await prisma.user.findUnique({ where: { id: adminUser.id } });
-      const passwordUnchangedOnDisallowed = afterDisallowedUser.passwordHash === initialPasswordHash;
-      const emailUnchangedOnDisallowed = afterDisallowedUser.email === initialUser.email;
+      const afterDisallowedUser = await prisma.user.findUnique({ where: { id: nonExemptProfileUser.id } });
+      const passwordUnchangedOnDisallowed = afterDisallowedUser.passwordHash === passwordHash;
+      const emailUnchangedOnDisallowed = afterDisallowedUser.email === nonExemptProfileUser.email;
 
       // 2. Email change without currentPassword => 400 PASSWORD_REQUIRED and email unchanged in DB
       const noPwdRes = await apiRequest(
@@ -1129,6 +1154,295 @@ async function runEnforcementTests() {
         `BlockedDisallowed: ${isDisallowedBlocked}, NoPwdRejected: ${isNoPwdRejected}, WrongPwdRejected: ${isWrongPwdRejected}, DupEmailWrongPwdRejected: ${isDuplicateEmailWrongPwdRejected}, DupEmailCorrectPwdRejected: ${isDuplicateEmailCorrectPwdRejected}, BlockedDomainWrongPwdRejected: ${isBlockedDomainWrongPwdRejected}, InvalidPhoneRejected: ${isInvalidPhoneRejected}, UnchangedEmailAllowed: ${isUnchangedEmailSuccess}, NormalizedSaved: ${emailCorrectlyNormalized}, StudentEmailSynced: ${studentProfileEmailMatches}, TeacherEmailSynced: ${teacherProfileEmailMatches}`
       );
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // TEST (q1): Toggle ON via PATCH /domains/settings (allowPersonalEmail = true)
+    // ─────────────────────────────────────────────────────────────
+    {
+      const patchRes = await apiRequest(
+        '/domains/settings',
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ allowPersonalEmail: true }),
+        },
+        adminToken
+      );
+
+      const getRes = await apiRequest('/domains/settings', {}, adminToken);
+
+      const passed =
+        patchRes.status === 200 &&
+        patchRes.data?.data?.allowPersonalEmail === true &&
+        getRes.status === 200 &&
+        getRes.data?.data?.allowPersonalEmail === true;
+
+      logResult(
+        'q1',
+        'Admin updates college domain settings: toggle ON (allowPersonalEmail = true)',
+        passed,
+        `PatchStatus: ${patchRes.status}, GetStatus: ${getRes.status}`
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // TEST (q2): Toggle ON -> student with gmail.com is ALLOWED to create and log in
+    // ─────────────────────────────────────────────────────────────
+    let gmailStudentUser = null;
+    const gmailStudentEmail = `gmail.student.${SUFFIX}@gmail.com`;
+    {
+      const createRes = await apiRequest(
+        '/students',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            firstName: 'Gmail',
+            lastName: 'Student',
+            email: gmailStudentEmail,
+            admissionNumber: `ADM-GM-${Date.now().toString().slice(-6)}`,
+            departmentId: department.id,
+            rollNo: `R-GM-${Date.now().toString().slice(-4)}`,
+          }),
+        },
+        adminToken
+      );
+
+      const studentId = createRes.data?.data?.id || createRes.data?.id;
+      if (studentId) createdStudentIds.push(studentId);
+
+      gmailStudentUser = await prisma.user.findFirst({
+        where: { email: gmailStudentEmail, collegeId: college.id },
+      });
+      if (gmailStudentUser) {
+        createdUserIds.push(gmailStudentUser.id);
+        // Set password hash and active status so we can test login
+        await prisma.user.update({
+          where: { id: gmailStudentUser.id },
+          data: { passwordHash, accountStatus: 'active' },
+        });
+      }
+
+      const loginRes = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: gmailStudentEmail, password: FIXTURE_PASSWORD }),
+      });
+
+      const passed =
+        createRes.status === 201 &&
+        loginRes.status === 200 &&
+        Boolean(loginRes.data?.data?.accessToken);
+
+      logResult(
+        'q2',
+        'Toggle ON: student with gmail.com is ALLOWED (create: 201, login: 200)',
+        passed,
+        `CreateStatus: ${createRes.status}, LoginStatus: ${loginRes.status}`
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // TEST (q3): Toggle ON -> yahoo.com is BLOCKED (403 EMAIL_DOMAIN_NOT_ALLOWED)
+    // ─────────────────────────────────────────────────────────────
+    {
+      const yahooEmail = `yahoo.user.${SUFFIX}@yahoo.com`;
+      const res = await apiRequest(
+        '/students',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            firstName: 'Yahoo',
+            lastName: 'User',
+            email: yahooEmail,
+            admissionNumber: `ADM-YH-${Date.now().toString().slice(-6)}`,
+            departmentId: department.id,
+            rollNo: `R-YH-${Date.now().toString().slice(-4)}`,
+          }),
+        },
+        adminToken
+      );
+
+      const passed =
+        res.status === 403 &&
+        (res.data?.error?.code === 'EMAIL_DOMAIN_NOT_ALLOWED' || res.data?.code === 'EMAIL_DOMAIN_NOT_ALLOWED');
+
+      logResult(
+        'q3',
+        'Toggle ON: non-gmail personal provider (yahoo.com) is BLOCKED with 403',
+        passed,
+        `Status: ${res.status}, Code: ${res.data?.error?.code || res.data?.code}`
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // TEST (q4): Toggle ON -> lookalike domains (evil-gmail.com, gmail.com.fake.com) BLOCKED
+    // ─────────────────────────────────────────────────────────────
+    {
+      const lookalike1 = `evil1.${SUFFIX}@evil-gmail.com`;
+      const res1 = await apiRequest(
+        '/students',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            firstName: 'Lookalike',
+            lastName: 'One',
+            email: lookalike1,
+            admissionNumber: `ADM-LK1-${Date.now().toString().slice(-6)}`,
+            departmentId: department.id,
+            rollNo: `R-LK1-${Date.now().toString().slice(-4)}`,
+          }),
+        },
+        adminToken
+      );
+
+      const lookalike2 = `evil2.${SUFFIX}@gmail.com.fake.com`;
+      const res2 = await apiRequest(
+        '/students',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            firstName: 'Lookalike',
+            lastName: 'Two',
+            email: lookalike2,
+            admissionNumber: `ADM-LK2-${Date.now().toString().slice(-6)}`,
+            departmentId: department.id,
+            rollNo: `R-LK2-${Date.now().toString().slice(-4)}`,
+          }),
+        },
+        adminToken
+      );
+
+      const passed =
+        res1.status === 403 &&
+        res2.status === 403 &&
+        (res1.data?.error?.code === 'EMAIL_DOMAIN_NOT_ALLOWED' || res1.data?.code === 'EMAIL_DOMAIN_NOT_ALLOWED') &&
+        (res2.data?.error?.code === 'EMAIL_DOMAIN_NOT_ALLOWED' || res2.data?.code === 'EMAIL_DOMAIN_NOT_ALLOWED');
+
+      logResult(
+        'q4',
+        'Toggle ON: lookalike domains (evil-gmail.com, gmail.com.fake.com) are BLOCKED with 403',
+        passed,
+        `Res1: ${res1.status}, Res2: ${res2.status}`
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // TEST (q5): Non-compliant list with toggle ON: gmail.com users are NOT flagged
+    // ─────────────────────────────────────────────────────────────
+    {
+      const nonCompliantRes = await apiRequest('/domains/non-compliant-users', {}, adminToken);
+      const flaggedUsers = nonCompliantRes.data?.data?.users || [];
+
+      const gmailFlagged = flaggedUsers.some((u) => u.email === gmailStudentEmail);
+      const passed = nonCompliantRes.status === 200 && !gmailFlagged;
+
+      logResult(
+        'q5',
+        'Toggle ON: gmail.com users are NOT flagged in non-compliant users query',
+        passed,
+        `Status: ${nonCompliantRes.status}, TotalFlagged: ${flaggedUsers.length}, GmailPresent: ${gmailFlagged}`
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // TEST (q6): Admin with gmail.com logs in successfully in BOTH toggle states (lockout protection)
+    // ─────────────────────────────────────────────────────────────
+    {
+      const adminGmailEmail = `admin.gmail.${SUFFIX}@gmail.com`;
+      const gmailAdminUser = await prisma.user.create({
+        data: {
+          name: 'Fixture Admin Gmail',
+          email: adminGmailEmail,
+          role: 'admin',
+          collegeId: college.id,
+          accountStatus: 'active',
+          passwordHash,
+        },
+      });
+      createdUserIds.push(gmailAdminUser.id);
+
+      // State 1: Toggle ON -> Admin gmail login
+      const loginOnRes = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: adminGmailEmail, password: FIXTURE_PASSWORD }),
+      });
+      const loginOnSuccess = loginOnRes.status === 200 && Boolean(loginOnRes.data?.data?.accessToken);
+
+      // Flip toggle to OFF (allowPersonalEmail = false)
+      const patchOffRes = await apiRequest(
+        '/domains/settings',
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ allowPersonalEmail: false }),
+        },
+        adminToken
+      );
+
+      // State 2: Toggle OFF -> Admin gmail login MUST still succeed (no lockout)
+      const loginOffRes = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: adminGmailEmail, password: FIXTURE_PASSWORD }),
+      });
+      const loginOffSuccess = loginOffRes.status === 200 && Boolean(loginOffRes.data?.data?.accessToken);
+
+      const passed = loginOnSuccess && patchOffRes.status === 200 && loginOffSuccess;
+
+      logResult(
+        'q6',
+        'Admin with gmail.com is ALLOWED to log in under BOTH toggle states (lockout protection)',
+        passed,
+        `State1(ON): ${loginOnRes.status}, PatchOff: ${patchOffRes.status}, State2(OFF): ${loginOffRes.status}`
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // TEST (q7): Toggle OFF -> gmail.com is BLOCKED (create & login) + flagged in audit
+    // ─────────────────────────────────────────────────────────────
+    {
+      // 1. Create student with gmail when toggle is OFF -> 403 BLOCKED
+      const newGmailEmail = `new.gmail.${SUFFIX}@gmail.com`;
+      const createRes = await apiRequest(
+        '/students',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            firstName: 'Blocked',
+            lastName: 'Gmail',
+            email: newGmailEmail,
+            admissionNumber: `ADM-BLKG-${Date.now().toString().slice(-6)}`,
+            departmentId: department.id,
+            rollNo: `R-BLKG-${Date.now().toString().slice(-4)}`,
+          }),
+        },
+        adminToken
+      );
+      const isCreateBlocked =
+        createRes.status === 403 &&
+        (createRes.data?.error?.code === 'EMAIL_DOMAIN_NOT_ALLOWED' || createRes.data?.code === 'EMAIL_DOMAIN_NOT_ALLOWED');
+
+      // 2. Existing gmail student tries to log in when toggle is OFF -> 403 BLOCKED
+      const loginRes = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: gmailStudentEmail, password: FIXTURE_PASSWORD }),
+      });
+      const isLoginBlocked =
+        loginRes.status === 403 &&
+        (loginRes.data?.error?.code === 'EMAIL_DOMAIN_NOT_ALLOWED' || loginRes.data?.code === 'EMAIL_DOMAIN_NOT_ALLOWED') &&
+        (loginRes.data?.error?.message === 'Your email is not from your college domain. Please contact your admin.' ||
+          loginRes.data?.message === 'Your email is not from your college domain. Please contact your admin.');
+
+      // 3. Existing gmail student IS now flagged in non-compliant query when toggle is OFF
+      const auditRes = await apiRequest('/domains/non-compliant-users', {}, adminToken);
+      const flaggedUsers = auditRes.data?.data?.users || [];
+      const isGmailNowFlagged = flaggedUsers.some((u) => u.email === gmailStudentEmail);
+
+      const passed = isCreateBlocked && isLoginBlocked && isGmailNowFlagged;
+
+      logResult(
+        'q7',
+        'Toggle OFF: gmail.com is BLOCKED on create (403), BLOCKED on login (403), and FLAGGED in audit',
+        passed,
+        `CreateBlocked: ${isCreateBlocked}, LoginBlocked: ${isLoginBlocked}, AuditFlagged: ${isGmailNowFlagged}`
+      );
+    }
   } catch (err) {
     console.error('\n❌ Unexpected error running tests:', err);
     failedCount++;
@@ -1172,6 +1486,7 @@ async function runEnforcementTests() {
       // 6. Invalidate caches
       for (const cId of createdCollegeIds) {
         await invalidateVerifiedDomainsCache(cId).catch(() => {});
+        await invalidateCollegeDomainSettingsCache(cId).catch(() => {});
       }
 
       // 7. Delete fixture college

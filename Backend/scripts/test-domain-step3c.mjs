@@ -236,25 +236,24 @@ async function runStep3cTests() {
     console.log('✅ All fixtures successfully initialized.\n');
 
     // =============================================================
-    // TEST (a): Existing mismatched user logs in OK with warning
+    // TEST (a): Existing mismatched user is BLOCKED at login (hard enforcement)
     // =============================================================
     const resA = await apiRequest('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email: mismatchedTeacher.email, password: FIXTURE_PASSWORD }),
     });
 
-    const hasMismatchWarning =
-      resA.status === 200 &&
-      Boolean(resA.data?.data?.accessToken) &&
-      Array.isArray(resA.data?.data?.warnings) &&
-      resA.data.data.warnings.some((w) => w.code === 'EMAIL_DOMAIN_MISMATCH') &&
-      resA.data?.warnings === undefined; // Check warning is in data.warnings, not duplicated at root
+    const isLoginBlocked =
+      resA.status === 403 &&
+      (resA.data?.error?.code === 'EMAIL_DOMAIN_NOT_ALLOWED' || resA.data?.code === 'EMAIL_DOMAIN_NOT_ALLOWED') &&
+      (resA.data?.error?.message === 'Your email is not from your college domain. Please contact your admin.' ||
+        resA.data?.message === 'Your email is not from your college domain. Please contact your admin.');
 
     logResult(
       'a',
-      'Existing mismatched user logs in successfully (200) with non-blocking data.warnings',
-      hasMismatchWarning,
-      `Status: ${resA.status}, Warnings: ${JSON.stringify(resA.data?.data?.warnings)}`
+      'Existing mismatched user is BLOCKED at login (403 EMAIL_DOMAIN_NOT_ALLOWED)',
+      isLoginBlocked,
+      `Status: ${resA.status}, Code: ${resA.data?.error?.code || resA.data?.code}`
     );
 
     // =============================================================

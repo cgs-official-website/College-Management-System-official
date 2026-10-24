@@ -47,6 +47,37 @@ export default function DomainManagementPage() {
 
   const domains = Array.isArray(domainsResponse) ? domainsResponse : [];
 
+  // Fetch domain settings (allowPersonalEmail)
+  const { 
+    data: settingsData, 
+    isLoading: isSettingsLoading 
+  } = useQuery({
+    queryKey: ['college-domain-settings'],
+    queryFn: async () => {
+      const res = await api.get('/domains/settings');
+      return res.data?.data || res.data || { allowPersonalEmail: false };
+    },
+  });
+
+  const allowPersonalEmail = Boolean(settingsData?.allowPersonalEmail);
+
+  // Update domain settings mutation
+  const updateSettingsMutation = useMutation({
+    mutationFn: async (newValue) => {
+      const res = await api.patch('/domains/settings', { allowPersonalEmail: newValue });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data?.message || 'Domain policy settings updated successfully.');
+      queryClient.invalidateQueries({ queryKey: ['college-domain-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['non-compliant-users'] });
+    },
+    onError: (err) => {
+      const msg = err.response?.data?.message || err.message || 'Failed to update domain settings.';
+      toast.error(msg);
+    },
+  });
+
   // Add domain mutation
   const addMutation = useMutation({
     mutationFn: async (domain) => {
@@ -201,6 +232,50 @@ export default function DomainManagementPage() {
         <Info className="w-5 h-5 text-primary-600 dark:text-primary-400 shrink-0 mt-0.5" />
         <div className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
           <strong className="font-semibold text-slate-900 dark:text-white">How Domain Enforcement Works:</strong> Once at least one verified domain is active, all new student and staff accounts (plus profile email updates) must end with an authorized domain. If zero domains are verified, any email domain is permitted.
+        </div>
+      </div>
+
+      {/* Policy Settings Card: Allow Gmail Toggle */}
+      <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                Allow Gmail addresses
+              </h2>
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                allowPersonalEmail 
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' 
+                  : 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20'
+              }`}>
+                {allowPersonalEmail ? 'Allowed' : 'Restricted'}
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+              ON: gmail.com users allowed. OFF: only verified college domain emails allowed.
+            </p>
+          </div>
+
+          <div className="flex items-center">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={allowPersonalEmail}
+              disabled={isSettingsLoading || updateSettingsMutation.isPending}
+              onClick={() => updateSettingsMutation.mutate(!allowPersonalEmail)}
+              className={`relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                allowPersonalEmail ? 'bg-primary-600' : 'bg-slate-200 dark:bg-slate-700'
+              } ${isSettingsLoading || updateSettingsMutation.isPending ? 'opacity-60 cursor-not-allowed' : ''}`}
+              title={allowPersonalEmail ? 'Disable Gmail access' : 'Allow Gmail access'}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                  allowPersonalEmail ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </div>
 

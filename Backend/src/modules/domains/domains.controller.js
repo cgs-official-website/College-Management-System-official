@@ -2,9 +2,14 @@ import crypto from 'crypto';
 import dns from 'dns';
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
-import { redis } from '../../lib/cache.js';
-import { addDomainSchema, domainIdParamSchema } from './domains.schema.js';
-import { invalidateVerifiedDomainsCache, getVerifiedDomainsForCollege, EXEMPT_ROLES } from './domains.service.js';
+import { addDomainSchema, domainIdParamSchema, updateDomainSettingsSchema } from './domains.schema.js';
+import {
+  invalidateVerifiedDomainsCache,
+  getVerifiedDomainsForCollege,
+  invalidateCollegeDomainSettingsCache,
+  getCollegeDomainSettings,
+  EXEMPT_ROLES,
+} from './domains.service.js';
 
 const { resolveTxt } = dns.promises;
 
@@ -284,10 +289,72 @@ export async function deleteDomain(req, res) {
 }
 
 /**
+ * GET /api/v1/domains/settings
+ * Retrieve domain settings (allowPersonalEmail) for the current college.
+ */
+export async function getDomainSettings(req, res) {
+  const collegeId = req.user?.collegeId || req.tenant?.collegeId;
+  if (!collegeId) {
+    return res.status(400).json({ success: false, message: 'College tenant context is required.' });
+  }
+
+  const settings = await getCollegeDomainSettings(collegeId);
+
+  return res.status(200).json({
+    success: true,
+    data: {
+      allowPersonalEmail: Boolean(settings.allowPersonalEmail),
+    },
+  });
+}
+
+/**
+ * PATCH /api/v1/domains/settings
+ * Update domain settings (allowPersonalEmail) for the current college.
+ */
+export async function updateDomainSettings(req, res) {
+  const collegeId = req.user?.collegeId || req.tenant?.collegeId;
+  if (!collegeId) {
+    return res.status(400).json({ success: false, message: 'College tenant context is required.' });
+  }
+
+  const parsed = updateDomainSettingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: parsed.error.issues?.[0]?.message || 'Invalid settings payload.',
+      error: parsed.error.format(),
+    });
+  }
+
+  const updatedCollege = await prisma.college.update({
+    where: { id: collegeId },
+    data: {
+      allowPersonalEmail: parsed.data.allowPersonalEmail,
+    },
+    select: {
+      id: true,
+      allowPersonalEmail: true,
+    },
+  });
+
+  await invalidateCollegeDomainSettingsCache(collegeId);
+
+  return res.status(200).json({
+    success: true,
+    message: `Personal email access has been ${updatedCollege.allowPersonalEmail ? 'allowed' : 'restricted'}.`,
+    data: {
+      allowPersonalEmail: updatedCollege.allowPersonalEmail,
+    },
+  });
+}
+
+/**
  * GET /api/v1/domains/non-compliant-users
  * Returns existing staff and students whose email does not match any verified domain.
  * Filtering is done entirely at the DB query level for 100% accurate count & pagination.
- * Excludes exempt roles (parent, superadmin) and inactive/deleted accounts.
+ * Excludes exempt roles (parent, superadmin, admin) and inactive/deleted accounts.
+ * When allowPersonalEmail is true, exact gmail.com addresses are excluded from non-compliant audit.
  */
 export async function getNonCompliantUsers(req, res) {
   // collegeId comes from tenant context only
@@ -302,8 +369,11 @@ export async function getNonCompliantUsers(req, res) {
   const search = req.query.search ? String(req.query.search).trim() : null;
   const roleFilter = req.query.role ? String(req.query.role).trim().toLowerCase() : null;
 
-  // 1. Fetch verified domains
-  const verifiedDomains = await getVerifiedDomainsForCollege(collegeId);
+  // 1. Fetch verified domains and domain settings
+  const [verifiedDomains, settings] = await Promise.all([
+    getVerifiedDomainsForCollege(collegeId),
+    getCollegeDomainSettings(collegeId),
+  ]);
 
   // If college has 0 verified domains, no users are non-compliant
   if (!verifiedDomains || verifiedDomains.length === 0) {
@@ -318,6 +388,7 @@ export async function getNonCompliantUsers(req, res) {
           totalPages: 0,
         },
         verifiedDomains: [],
+        allowPersonalEmail: Boolean(settings.allowPersonalEmail),
       },
     });
   }
@@ -331,7 +402,18 @@ export async function getNonCompliantUsers(req, res) {
     ],
   }));
 
-  // Exclude exempt roles: parent, superadmin
+  // If allowPersonalEmail is true, exclude exact @gmail.com from non-compliant list
+  const personalEmailExclusion = settings.allowPersonalEmail
+    ? [
+        {
+          NOT: [
+            { email: { endsWith: '@gmail.com', mode: 'insensitive' } },
+          ],
+        },
+      ]
+    : [];
+
+  // Exclude exempt roles: parent, superadmin, admin
   const roleCondition = roleFilter
     ? { equals: roleFilter, notIn: EXEMPT_ROLES }
     : { notIn: EXEMPT_ROLES };
@@ -342,6 +424,7 @@ export async function getNonCompliantUsers(req, res) {
     role: roleCondition,
     AND: [
       ...domainExclusions,
+      ...personalEmailExclusion,
       ...(search
         ? [
             {
@@ -385,6 +468,8 @@ export async function getNonCompliantUsers(req, res) {
         totalPages: Math.ceil(total / limit),
       },
       verifiedDomains,
+      allowPersonalEmail: Boolean(settings.allowPersonalEmail),
     },
   });
 }
+
