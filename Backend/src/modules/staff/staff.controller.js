@@ -4,6 +4,7 @@ import { redis } from '../../lib/cache.js';
 import { sendDynamicMail } from '../../services/email/email.service.js';
 import { deleteTeacherProfile } from '../users/deleteUserRecords.js';
 import { createStaffSetupToken } from '../auth/staffSetupToken.js';
+import { assertEmailAllowedForCollege } from '../domains/domains.service.js';
 
 /**
  * Invalidates the Redis staff list cache for a given college.
@@ -233,6 +234,7 @@ export const createStaff = async (req, res) => {
     }
 
     if (adminProvidedEmail) {
+      await assertEmailAllowedForCollege(collegeId, adminProvidedEmail, accountRole);
       // Only check for duplicate if admin actually provided an email
       const existingUser = await tx.user.findFirst({
         where: { email: adminProvidedEmail, collegeId }
@@ -351,6 +353,12 @@ export const updateStaff = async (req, res) => {
   }
 
   const normalizedEmail = payload.email?.trim().toLowerCase();
+  const currentLoginEmail = (teacher.user?.email || '').trim().toLowerCase();
+  if (normalizedEmail && normalizedEmail !== currentLoginEmail) {
+    const isNonTeaching = payload.staffType === 'non-teaching' || teacher.user?.role === 'staff';
+    const targetRole = payload.role || teacher.user?.role || (isNonTeaching ? 'staff' : 'teacher');
+    await assertEmailAllowedForCollege(collegeId, normalizedEmail, targetRole);
+  }
   if (normalizedEmail && teacher.userId) {
     const duplicateEmail = await prisma.user.findFirst({
       where: { email: normalizedEmail, collegeId, NOT: { id: teacher.userId } },
@@ -568,6 +576,8 @@ export const bulkImportStaff = async (req, res) => {
         departmentsCache[departmentName.toLowerCase()] = dept.id;
         deptId = dept.id;
       }
+
+      await assertEmailAllowedForCollege(collegeId, email, 'teacher');
 
       await prisma.$transaction(async (tx) => {
         const staleTeachers = await tx.teacher.findMany({

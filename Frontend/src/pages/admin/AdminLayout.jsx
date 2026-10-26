@@ -52,6 +52,8 @@ import {
   Store as StoreIcon,
   AlertCircle,
   CalendarDays,
+  Globe,
+  ShieldAlert,
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 import PlaceholderModule from '../../components/ui/PlaceholderModule';
@@ -95,6 +97,9 @@ import { NotificationBell } from '../../components/ui/NotificationBell';
 import StoreDashboard from '../shared/StoreDashboard';
 import StaffSettings from '../shared/StaffSettings';
 import CalendarView from '../calendar/Calendar';
+import DomainWarningBanner from '../../components/common/DomainWarningBanner';
+import DomainManagementPage from './domains/DomainManagementPage';
+import NonCompliantUsersPage from './domains/NonCompliantUsersPage';
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -202,6 +207,10 @@ const AdminLayout = () => {
     icon: FileText,
     moduleKey: 'custom'
     })) || []),
+    { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon, moduleKey: 'settings' },
+    { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck, moduleKey: 'roles' },
+    { name: 'Domain Management', path: '/admin/domains', icon: Globe, adminOnly: true },
+    { name: 'Domain Compliance', path: '/admin/non-compliant-users', icon: ShieldAlert, adminOnly: true },
     { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon, moduleKey: 'settings', adminOnly: true },
     { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck, moduleKey: 'roles', adminOnly: true },
   ]
@@ -228,7 +237,6 @@ const AdminLayout = () => {
     if (activeGroup) {
       setOpenGroups(prev => (prev[activeGroup.name] ? prev : { ...prev, [activeGroup.name]: true }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
   const toggleGroup = (name) => {
@@ -510,6 +518,8 @@ const AdminLayout = () => {
           </div>
         </header>
 
+        <DomainWarningBanner />
+
         <main className="flex-1 overflow-y-auto p-6 md:p-8 relative">
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03] dark:opacity-[0.05] pointer-events-none mix-blend-overlay"></div>
 
@@ -558,6 +568,8 @@ const AdminLayout = () => {
               <Route path="/custom/*" element={hasAccess('custom') ? <CustomDashboard /> : <Navigate to="/404" replace />} />
               {/* TEMP DISABLED: PTM module (PTM is active in Teacher/Student/Parent portals; not mounted in Admin) */}
               {/* <Route path="/ptm/*" element={<Navigate to="/404" replace />} /> */}
+              <Route path="/domains/*" element={isAdmin ? <DomainManagementPage /> : <Navigate to="/404" replace />} />
+              <Route path="/non-compliant-users/*" element={isAdmin ? <NonCompliantUsersPage /> : <Navigate to="/404" replace />} />
               <Route path="/settings/*" element={hasAccess('settings') ? <Settings /> : <Navigate to="/404" replace />} />
               <Route path="/my-settings/*" element={!isAdmin ? <StaffSettings /> : <Navigate to="/admin/settings" replace />} />
               <Route path="*" element={<Navigate to="/404" replace />} />

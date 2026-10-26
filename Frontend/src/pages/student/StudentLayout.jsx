@@ -51,6 +51,7 @@ import StudentDocumentsDashboard from './StudentDocumentsDashboard';
 import StudentSettings from './StudentSettings';
 import CalendarView from '../calendar/Calendar';
 import StudentPtm from './StudentPtm';
+import DomainWarningBanner from '../../components/common/DomainWarningBanner';
 
 const StudentLayout = () => {
   const queryClient = useQueryClient();
@@ -279,6 +280,8 @@ const StudentLayout = () => {
             </button>
           </div>
         </header>
+
+        <DomainWarningBanner />
 
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-6 md:p-8 relative">

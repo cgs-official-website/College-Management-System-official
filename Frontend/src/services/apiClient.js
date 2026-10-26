@@ -146,10 +146,14 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config;
     const status = error.response?.status;
     const errorData = error.response?.data?.error;
-    const message = errorData?.message || error.message || 'An unexpected error occurred';
+    const errorCode = errorData?.code || error.response?.data?.code;
+    const message = errorData?.message || error.response?.data?.message || error.message || 'An unexpected error occurred';
+
+    const session = getAuthSessionForCurrentRoute(originalRequest?.authRole);
 
     // Check if error is 401 Unauthorized and not already retried
-    if (status === 401 && originalRequest && !originalRequest._retry) {
+    // A 401 with code INVALID_PASSWORD must NOT trigger auto-logout or token refresh; session is preserved
+    if (status === 401 && originalRequest && !originalRequest._retry && errorCode !== 'INVALID_PASSWORD') {
       const isAuthEndpoint = originalRequest.url?.includes('/auth/login') ||
                              originalRequest.url?.includes('/auth/refresh') ||
                              originalRequest.url?.includes('/auth/register') ||
@@ -163,7 +167,6 @@ apiClient.interceptors.response.use(
         return Promise.reject(new Error(message));
       }
 
-      const session = getAuthSessionForCurrentRoute(originalRequest.authRole);
       const refreshToken = session?.refreshToken;
       if (!refreshToken) {
         if (session?.role) clearAuthSession(session.role);
@@ -228,7 +231,7 @@ apiClient.interceptors.response.use(
         ? 'This is taking longer than usual. Please try again in a moment.'
         : 'Unable to connect right now. Please check your internet connection and try again.';
     } else if (status === 403) {
-      const serverMsg = (typeof errorData?.error === 'string' ? errorData.error : errorData?.error?.message) || errorData?.message;
+      const serverMsg = (typeof errorData?.error === 'string' ? errorData.error : errorData?.error?.message) || errorData?.message || error.response?.data?.message;
       if (serverMsg && serverMsg !== 'Forbidden' && serverMsg !== 'FORBIDDEN') {
         finalMessage = serverMsg;
       } else {
@@ -253,9 +256,10 @@ apiClient.interceptors.response.use(
     // Return customized error object with status code and code
     const enhancedError = new Error(finalMessage);
     enhancedError.status = status;
-    enhancedError.code = errorData?.code;
+    enhancedError.code = errorCode;
     enhancedError.count = error.response?.data?.count;
     enhancedError.data = error.response?.data;
+    enhancedError.response = error.response;
 
     // Some pages read err.data.error.message first, so keep that friendly too
     if (finalMessage !== message && enhancedError.data?.error) {

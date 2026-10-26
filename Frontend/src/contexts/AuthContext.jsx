@@ -17,6 +17,14 @@ export function AuthProvider({ children }) {
   const [userData, setUserData] = useState(null);
   const [permissions, setPermissions] = useState({});
   const [loading, setLoading] = useState(true);
+  const [domainWarning, setDomainWarning] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('zuna_domain_warning');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const restoreSequence = useRef(0);
 
   const clearAuthState = () => {
@@ -24,6 +32,13 @@ export function AuthProvider({ children }) {
     setUserRole(null);
     setUserData(null);
     setPermissions({});
+    setDomainWarning(null);
+    sessionStorage.removeItem('zuna_domain_warning');
+  };
+
+  const dismissDomainWarning = () => {
+    setDomainWarning(null);
+    sessionStorage.removeItem('zuna_domain_warning');
   };
 
   // =========================
@@ -36,8 +51,22 @@ export function AuthProvider({ children }) {
       ...(collegeSlug ? { collegeSlug } : {})
     });
 
-    const { accessToken, refreshToken, user } =
-      response.data?.data || response.data || {};
+    const payloadData = response.data?.data || response.data || {};
+    const { accessToken, refreshToken, user, warnings } = payloadData;
+
+    if (Array.isArray(warnings)) {
+      const mismatch = warnings.find(w => w.code === 'EMAIL_DOMAIN_MISMATCH');
+      if (mismatch) {
+        setDomainWarning(mismatch);
+        sessionStorage.setItem('zuna_domain_warning', JSON.stringify(mismatch));
+      } else {
+        setDomainWarning(null);
+        sessionStorage.removeItem('zuna_domain_warning');
+      }
+    } else {
+      setDomainWarning(null);
+      sessionStorage.removeItem('zuna_domain_warning');
+    }
 
     storeAuthSession(user?.role, accessToken, refreshToken);
 
@@ -432,7 +461,10 @@ export function AuthProvider({ children }) {
     resetPassword,
 
     updateUserData,
-    restoreSession
+    restoreSession,
+
+    domainWarning,
+    dismissDomainWarning
   };
 
   // =========================

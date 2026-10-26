@@ -93,20 +93,25 @@ const Login = ({ requiredRole }) => {
       // Redirection is handled by useEffect when AuthContext resolves user role
     } catch (err) {
       console.error("Login Error:", err);
-      if (err.code === 'ACCOUNT_PENDING_APPROVAL') {
+      const errCode = err.code || err.response?.data?.error?.code || err.response?.data?.code;
+      const errMsg = err.response?.data?.error?.message || err.response?.data?.message || err.message;
+
+      if (errCode === 'ACCOUNT_PENDING_APPROVAL') {
         setError('Your account is pending administrator approval. Please contact your college admin.');
-      } else if (err.code === 'COLLEGE_PENDING_APPROVAL') {
+      } else if (errCode === 'COLLEGE_PENDING_APPROVAL') {
         navigate('/pending-approval');
         return;
-      } else if (err.code === 'COLLEGE_REJECTED') {
+      } else if (errCode === 'COLLEGE_REJECTED') {
         navigate('/rejected');
         return;
-      } else if (err.code === 'INVALID_CREDENTIALS' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential' || err.status === 401) {
+      } else if (errCode === 'EMAIL_DOMAIN_NOT_ALLOWED') {
+        setError(errMsg || 'Your email is not from your college domain. Please contact your admin.');
+      } else if (errCode === 'INVALID_CREDENTIALS' || errCode === 'auth/user-not-found' || errCode === 'auth/wrong-password' || errCode === 'auth/invalid-credential' || err.status === 401 || err.response?.status === 401) {
         setError('Invalid email address or password.');
-      } else if (err.code === 'auth/too-many-requests' || err.status === 429) {
+      } else if (errCode === 'auth/too-many-requests' || err.status === 429 || err.response?.status === 429) {
         setError('Too many failed attempts. Please try again later.');
       } else {
-        setError(err.message || 'Failed to sign in. Please check your credentials and try again.');
+        setError(errMsg || 'Failed to sign in. Please check your credentials and try again.');
       }
       setIsLoading(false);
     }
