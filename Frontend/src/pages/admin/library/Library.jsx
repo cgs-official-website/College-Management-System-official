@@ -69,6 +69,15 @@ export default function Library() {
     }
   };
 
+  const LIBRARY_IMPORT_FIELDS = [
+  { name: 'Book_Title', required: true, type: 'String', description: 'Title of the book', example: 'Introduction to Algorithms' },
+  { name: 'Author', required: true, type: 'String', description: 'Author name', example: 'Thomas H. Cormen' },
+  { name: 'Price', required: true, type: 'Number', description: 'Price per copy in INR', example: '450' },
+  { name: 'ISBN', required: false, type: 'String', description: 'ISBN-10 or ISBN-13, if available', example: '978-0262033848' },
+  { name: 'Category', required: false, type: 'String', description: 'Book category. Defaults to Textbook if left blank', example: 'Textbook' },
+  { name: 'Total_Copies', required: false, type: 'Number', description: 'Number of copies (whole number). Defaults to 1 if left blank', example: '3' },
+  { name: 'Shelf_Location', required: false, type: 'String', description: 'Shelf or rack location', example: 'Section A, Row 3' },
+];
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -79,6 +88,11 @@ export default function Library() {
         </div>
         <div className="flex gap-2">
           <ExcelUploadButton 
+            title="Import Books"
+            description="Upload an Excel (.xlsx, .xls) or CSV file with book records."
+            fields={LIBRARY_IMPORT_FIELDS}
+            sampleFileName="library_import_template.xlsx"
+            notes="1. Do not delete or rename header columns in row 1. 2. Fields marked with * are required. 3. Leave optional columns blank if not applicable."
             onUpload={bulkImport} 
             isLoading={isAdding} 
           />
