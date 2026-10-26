@@ -90,9 +90,7 @@ const TeacherLayout = () => {
     { name: 'Profile', path: '/teacher/settings', icon: SettingsIcon },
   ];
 
-  const canUseFacilities =
-  permissions?.infrastructure?.canRead === true ||
-  (userData?.role === 'hod' && !userData?.customRoleId);
+  const canUseFacilities = permissions?.infrastructure?.canRead === true;
 
   if (userData?.role === 'hod') {
     navLinks.splice(4, 0, { name: 'Manage Timetable', path: '/teacher/timetable', icon: Calendar });

@@ -133,6 +133,7 @@ import examsRoutes from './modules/exams/exams.routes.js';
 import timetableRoutes from './modules/timetable/timetable.routes.js';
 import calendarRoutes from './modules/calendar/calendar.routes.js';
 import { ensureCalendarTable } from './modules/calendar/calendar.controller.js';
+import { ensurePlatformTicketTable } from './modules/tickets/tickets.controller.js';
 import staffRoutes from './modules/staff/staff.routes.js';
 import studentsRoutes from './modules/students/students.routes.js';
 import rolesRoutes from './modules/roles/roles.routes.js';
@@ -253,6 +254,9 @@ const startServer = (retries = 8, delay = 1000) => {
     connectWithRetry(5, 3000).then(() => {
       ensureCalendarTable().catch(err => {
         logger.warn(`[warn] Failed to initialize CalendarEvent table: ${err.message}`);
+      });
+      ensurePlatformTicketTable().catch(err => {
+        logger.warn(`[warn] Failed to initialize PlatformTicket table: ${err.message}`);
       });
       ensureCollegeCodeSequence().catch(err => {
         logger.warn(`[warn] Failed to initialize college sequence: ${err.message}`);

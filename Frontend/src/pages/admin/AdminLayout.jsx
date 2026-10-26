@@ -211,6 +211,8 @@ const AdminLayout = () => {
     { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck, moduleKey: 'roles' },
     { name: 'Domain Management', path: '/admin/domains', icon: Globe, adminOnly: true },
     { name: 'Domain Compliance', path: '/admin/non-compliant-users', icon: ShieldAlert, adminOnly: true },
+    { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon, moduleKey: 'settings', adminOnly: true },
+    { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck, moduleKey: 'roles', adminOnly: true },
   ]
     .map(link => {
       if (link.children) {

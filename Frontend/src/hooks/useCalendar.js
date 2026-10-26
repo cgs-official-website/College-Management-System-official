@@ -27,13 +27,25 @@ export function useCalendar(initialFilters = {}) {
 
   // Role Rule check: College Admins, Principals, and HODs
   const normalizedRole = String(userRole || userData?.role || '').toLowerCase();
-  const isHod = normalizedRole === 'hod' || Boolean(userData?.isHod) || Boolean(userData?.isHOD);
+  const customRoleName = String(userData?.customRole?.name || userData?.customRoleName || '').toLowerCase();
+  const designation = String(userData?.designation || userData?.teacherProfile?.designation || '').toLowerCase();
+
+  const isHod = normalizedRole === 'hod' ||
+                normalizedRole.includes('hod') ||
+                Boolean(userData?.isHod) ||
+                Boolean(userData?.isHOD) ||
+                customRoleName === 'hod' ||
+                customRoleName.includes('hod') ||
+                designation === 'hod' ||
+                designation.includes('hod') ||
+                designation.includes('head of department');
+
   const isAdmin = normalizedRole === 'admin' || normalizedRole === 'superadmin' || normalizedRole === 'principal';
-  const initialCanManage = isAdmin || isHod;
+  const initialCanManage = isAdmin;
 
   const [backendCanManage, setBackendCanManage] = useState(null);
   const [userDepartment, setUserDepartment] = useState(null);
-  const canManage = backendCanManage !== null ? backendCanManage : initialCanManage;
+  const canManage = backendCanManage !== null ? (isAdmin && backendCanManage) : isAdmin;
 
   const fetchEvents = useCallback(async (customFilters) => {
     setIsLoading(true);

@@ -1,16 +1,27 @@
 import axios from 'axios';
 
-const configuredApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
-const API_BASE_URL = (() => {
-  if (!import.meta.env.DEV) return configuredApiUrl;
+const PROD_API_URL = 'https://college-management-system-official-production.up.railway.app/api/v1';
+const DEV_API_URL = 'http://localhost:5000/api/v1';
 
-  const apiUrl = new URL(configuredApiUrl, window.location.origin);
-  const localHosts = ['localhost', '127.0.0.1'];
-  if (localHosts.includes(apiUrl.hostname) && !localHosts.includes(window.location.hostname)) {
-    apiUrl.hostname = window.location.hostname;
+const getBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  const isBrowser = typeof window !== 'undefined';
+  const isLocalHost = isBrowser && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+  // If explicit environment variable is set and valid for the environment
+  if (envUrl && (!envUrl.includes('localhost') || isLocalHost)) {
+    return envUrl.replace(/\/$/, '');
   }
-  return apiUrl.toString().replace(/\/$/, '');
-})();
+
+  // If running in production or accessed from a remote domain (e.g. Vercel), use production Railway backend
+  if (!import.meta.env.DEV || (isBrowser && !isLocalHost)) {
+    return PROD_API_URL;
+  }
+
+  return DEV_API_URL;
+};
+
+const API_BASE_URL = getBaseUrl();
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,

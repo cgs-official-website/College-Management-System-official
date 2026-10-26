@@ -62,7 +62,12 @@ const STAFF_IMPORT_NOTES =
 
 export default function HRManagement() {
   const confirm = useConfirm();
-  const { userData } = useAuth();
+  const { userData, userRole, permissions } = useAuth();
+  const isAdmin = userRole === 'admin' || userRole === 'superadmin';
+  const canCreateStaff = isAdmin || permissions?.staff?.canCreate === true;
+  const canUpdateStaff = isAdmin || permissions?.staff?.canUpdate === true;
+  const canDeleteStaff = isAdmin || permissions?.staff?.canDelete === true;
+
   const collegeId = userData?.collegeId || 'default_college_id';
   const { staff, isLoading, addStaff, updateStaff, deleteStaff, isAdding, isUpdating, isImporting, bulkImport } = useStaff(collegeId);
   const { departments = [] } = useDepartments();
@@ -242,9 +247,15 @@ export default function HRManagement() {
         const memberRole = String(member.role || '').toLowerCase();
         const memberCustomRoleId = member.customRoleId;
         const memberCustomRoleName = String(member.customRole || '').toLowerCase();
-        const isCustomRoleMatch = memberCustomRoleId === selectedRole || memberCustomRoleName === selectedRole.toLowerCase();
-        const isStandardRoleMatch = memberRole === selectedRole.toLowerCase();
-        if (!isStandardRoleMatch && !isCustomRoleMatch) return false;
+        const memberDesig = String(member.designation || '').toLowerCase();
+        const sel = selectedRole.toLowerCase();
+
+        const isCustomRoleMatch = memberCustomRoleId === selectedRole || memberCustomRoleName === sel;
+        const isStandardRoleMatch = memberRole === sel;
+        const isHodMatch = (sel === 'hod') && (memberRole === 'hod' || memberDesig === 'hod' || memberDesig === 'head of department' || memberCustomRoleName === 'hod');
+        const isDesigMatch = memberDesig === sel;
+
+        if (!isStandardRoleMatch && !isCustomRoleMatch && !isHodMatch && !isDesigMatch) return false;
       }
 
       // 3. Department Filter
@@ -272,7 +283,10 @@ export default function HRManagement() {
 
       // 5. Staff Category / Type Filter
       if (selectedStaffType !== 'all') {
-        const isTeaching = ['teacher', 'hod', 'faculty'].includes(String(member.role || '').toLowerCase()) || member.staffType === 'teaching';
+        const isExplicitNonTeaching = member.staffType === 'non-teaching' ||
+          String(member.role || '').toLowerCase() === 'staff' ||
+          /admin|office|library|account|clerk|reception|driver|peon|warden|security|maintenance|store/i.test(member.designation || member.customRole || '');
+        const isTeaching = !isExplicitNonTeaching;
         if (selectedStaffType === 'teaching' && !isTeaching) return false;
         if (selectedStaffType === 'non-teaching' && isTeaching) return false;
       }
@@ -338,7 +352,7 @@ export default function HRManagement() {
       'Email': s.email || s.emailId || s.user?.email || 'N/A',
       'Department': s.department?.name || s.department || 'General',
       'Designation': s.designation || 'Staff',
-      'Role': s.customRole || s.role || (s.staffType === 'non-teaching' ? 'Non-Teaching' : 'Teaching'),
+      'Role': s.customRole || (s.designation && !['teacher', 'staff'].includes(s.designation.toLowerCase()) ? s.designation : null) || (s.role === 'hod' ? 'HOD' : s.role) || (s.staffType === 'non-teaching' ? 'Non-Teaching' : 'Teaching'),
       'Staff Type': s.staffType === 'non-teaching' ? 'Non-Teaching' : 'Teaching',
       'Employment Type': s.employmentType || 'Permanent',
       'Mobile Number': s.mobileNumber || s.phone || 'N/A',
@@ -356,20 +370,91 @@ export default function HRManagement() {
   };
 
   const getRoleBadge = (role, member) => {
-    if (role === 'staff' || member?.staffType === 'non-teaching') {
-      const customRoleName = member?.customRole || member?.designation || 'Staff';
+    // Determine the specific role display name:
+    // Priority:
+    // 1. member?.customRole (explicit custom role name)
+    // 2. roles lookup if member?.customRoleId is present
+    // 3. member?.designation (if it's not a generic default like 'Teacher' or 'Staff')
+    const roleIdMatch = member?.customRoleId ? roles.find(r => r.id === member.customRoleId) : null;
+    const explicitCustomRole = (member?.customRole || roleIdMatch?.name || '').trim();
+
+    const rawDesig = (member?.designation || '').trim();
+    const isGenericDesig = !rawDesig || ['teacher', 'staff', 'n/a', 'support'].includes(rawDesig.toLowerCase());
+    const specificDesignation = !isGenericDesig ? rawDesig : null;
+
+    const specificRoleName = explicitCustomRole || specificDesignation;
+    const normalizedRole = String(role || member?.role || '').toLowerCase();
+    const effectiveStaffType = member?.staffType || (roleIdMatch?.category === 'non_teaching' ? 'non-teaching' : null);
+
+    // Case 1: HOD (Head of Department)
+    const isHod = normalizedRole === 'hod' || 
+      (specificRoleName && /^(hod|head of department)$/i.test(specificRoleName));
+    if (isHod) {
       return (
-        <span className="px-2.5 py-1 bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 rounded-md text-xs font-bold uppercase tracking-wider w-max flex items-center gap-1">
-          <Shield className="w-3 h-3" /> {customRoleName}
+        <span className="px-2.5 py-1 bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 rounded-md text-xs font-bold uppercase tracking-wider flex items-center gap-1 w-max">
+          <Shield className="w-3 h-3" /> HOD
         </span>
       );
     }
-    switch(role) {
-      case 'hod': return <span className="px-2.5 py-1 bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 rounded-md text-xs font-bold uppercase tracking-wider flex items-center gap-1 w-max"><Shield className="w-3 h-3"/> HOD</span>;
-      case 'teacher': return <span className="px-2.5 py-1 bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-400 rounded-md text-xs font-bold uppercase tracking-wider w-max">Teacher</span>;
-      case 'admin': return <span className="px-2.5 py-1 bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400 rounded-md text-xs font-bold uppercase tracking-wider w-max">Admin</span>;
-      default: return <span className="px-2.5 py-1 bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-400 rounded-md text-xs font-bold uppercase tracking-wider w-max">{member?.customRole || 'Support'}</span>;
+
+    // Case 2: Admin
+    const isAdmin = normalizedRole === 'admin' || 
+      (specificRoleName && /^admin(istrator)?$/i.test(specificRoleName));
+    if (isAdmin) {
+      return (
+        <span className="px-2.5 py-1 bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400 rounded-md text-xs font-bold uppercase tracking-wider flex items-center gap-1 w-max">
+          <Shield className="w-3 h-3" /> Admin
+        </span>
+      );
     }
+
+    // Case 3: Specific role / designation exists (e.g. "admin office", "Library staff", "Assistant Professor", "Accountant")
+    if (specificRoleName) {
+      const isNonTeaching = effectiveStaffType === 'non-teaching' ||
+        normalizedRole === 'staff' ||
+        roleIdMatch?.category === 'non_teaching' ||
+        /admin|office|library|account|clerk|reception|driver|peon|warden|security|maintenance|store|staff/i.test(specificRoleName);
+
+      if (isNonTeaching) {
+        return (
+          <span className="px-2.5 py-1 bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 rounded-md text-xs font-bold uppercase tracking-wider w-max flex items-center gap-1">
+            <Shield className="w-3 h-3" /> {specificRoleName}
+          </span>
+        );
+      }
+
+      // Teaching custom role / academic rank (e.g., "Assistant Professor", "Professor", "Lecturer")
+      return (
+        <span className="px-2.5 py-1 bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-400 rounded-md text-xs font-bold uppercase tracking-wider w-max flex items-center gap-1">
+          {specificRoleName}
+        </span>
+      );
+    }
+
+    // Case 4: Non-teaching staff without specific role name
+    if (normalizedRole === 'staff' || effectiveStaffType === 'non-teaching') {
+      return (
+        <span className="px-2.5 py-1 bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 rounded-md text-xs font-bold uppercase tracking-wider w-max flex items-center gap-1">
+          <Shield className="w-3 h-3" /> Staff
+        </span>
+      );
+    }
+
+    // Case 5: Faculty
+    if (normalizedRole === 'faculty') {
+      return (
+        <span className="px-2.5 py-1 bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-400 rounded-md text-xs font-bold uppercase tracking-wider w-max">
+          Faculty
+        </span>
+      );
+    }
+
+    // Case 6: Standard Teacher
+    return (
+      <span className="px-2.5 py-1 bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-400 rounded-md text-xs font-bold uppercase tracking-wider w-max">
+        Teacher
+      </span>
+    );
   };
 
   return (
@@ -381,15 +466,17 @@ export default function HRManagement() {
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage all college employees and faculty.</p>
         </div>
         <div className="flex gap-2">
-          <ExcelUploadButton
-            onUpload={bulkImport}
-            isLoading={isImporting}
-            title="Import Staff"
-            description="Upload an Excel (.xlsx, .xls) or CSV file. Required: Employee ID, name, email, department, designation and joining date."
-            fields={STAFF_IMPORT_FIELDS}
-            notes={STAFF_IMPORT_NOTES}
-            sampleFileName="staff_import_template.xlsx"
-          />
+          {canCreateStaff && (
+            <ExcelUploadButton
+              onUpload={bulkImport}
+              isLoading={isImporting}
+              title="Import Staff"
+              description="Upload an Excel (.xlsx, .xls) or CSV file. Required: Employee ID, name, email, department, designation and joining date."
+              fields={STAFF_IMPORT_FIELDS}
+              notes={STAFF_IMPORT_NOTES}
+              sampleFileName="staff_import_template.xlsx"
+            />
+          )}
           <Button 
             variant="outline" 
             onClick={handleExportStaff}
@@ -399,10 +486,12 @@ export default function HRManagement() {
             <Download className="w-4 h-4 mr-1.5" />
             Export Staff
           </Button>
-          <Button onClick={handleOpenAdd}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Staff Member
-          </Button>
+          {canCreateStaff && (
+            <Button onClick={handleOpenAdd}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Staff Member
+            </Button>
+          )}
         </div>
       </div>
 
@@ -766,12 +855,16 @@ export default function HRManagement() {
                         <button onClick={() => setViewingStaff(member)} className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="View Profile">
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleOpenEdit(member)} className="p-2 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="Edit">
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleDelete(member.id)} className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="Delete">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canUpdateStaff && (
+                          <button onClick={() => handleOpenEdit(member)} className="p-2 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="Edit">
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canDeleteStaff && (
+                          <button onClick={() => handleDelete(member.id)} className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-lg shadow-sm" title="Delete">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

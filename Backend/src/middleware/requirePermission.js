@@ -35,33 +35,62 @@ export const requirePermission = (moduleKey, action) => async (req, res, next) =
     const { customRoleId, collegeId, userId } = req.user;
     console.log(`[requirePermission] role='${rawRole}', customRoleId='${customRoleId}', module='${moduleKey}', action='${action}'`);
 
-    // 1. System roles (superadmin, admin) have full universal access by default
+    // 1. System roles (superadmin, admin) have full universal access across all modules
     if (rawRole === 'superadmin' || rawRole === 'admin') {
       return next();
     }
-    // Teachers, faculty, hod and staff can read students and notices by default
-    const TEACHER_STAFF_ROLES = ['teacher', 'hod', 'faculty', 'staff'];
-    if (
-      TEACHER_STAFF_ROLES.includes(rawRole) &&
-      (moduleKey === 'students' || moduleKey === 'notices') &&
-      action === 'read'
-    ) {
+
+    // 2. Broadcast / announcements reading is open to all authenticated college members
+    if (moduleKey === 'notices' && action === 'read') {
       return next();
     }
 
-    // 2. If no custom role is assigned, deny access
-    if (!customRoleId) {
+    // 2. Resolve customRoleId or fallback to matching role in this college (e.g., HOD, Teacher, Staff)
+    let effectiveRoleId = customRoleId;
+    if (!effectiveRoleId && collegeId) {
+      const roleNameMap = {
+        hod: 'HOD',
+        teacher: 'Teacher',
+        staff: 'Staff',
+        faculty: 'Teacher'
+      };
+      const targetRoleName = roleNameMap[rawRole] || rawRole;
+      const matchedRole = await prisma.role.findFirst({
+        where: {
+          collegeId,
+          name: { equals: targetRoleName, mode: 'insensitive' }
+        },
+        select: { id: true }
+      });
+
+      if (matchedRole) {
+        effectiveRoleId = matchedRole.id;
+        // Asynchronously link customRoleId on user record for fast future requests
+        const targetUserId = req.user.userId || req.user.id;
+        if (targetUserId) {
+          prisma.user.update({
+            where: { id: targetUserId },
+            data: { customRoleId: matchedRole.id }
+          }).catch((err) => {
+            console.warn('[requirePermission] Background user customRoleId update failed:', err.message);
+          });
+        }
+      }
+    }
+
+    // 3. If no role is assigned or found, deny access
+    if (!effectiveRoleId) {
       return res.status(403).json({
         success: false,
         error: {
           code: 'FORBIDDEN',
-          message: `Access denied. Your role '${rawRole}' does not have permission to ${action} ${moduleKey}.`
+          message: `Access denied. Your role '${rawRole}' does not have permissions assigned by the college administrator.`
         }
       });
     }
 
-    // 3. Fast TTL Cache lookup to avoid redundant DB queries per request
-    const cacheKey = `${collegeId || 'global'}:${customRoleId}`;
+    // 4. Fast TTL Cache lookup to avoid redundant DB queries per request
+    const cacheKey = `${collegeId || 'global'}:${effectiveRoleId}`;
     const now = Date.now();
     const cachedEntry = rolePermissionsCache.get(cacheKey);
 
@@ -71,7 +100,7 @@ export const requirePermission = (moduleKey, action) => async (req, res, next) =
     } else {
       const permissions = await prisma.rolePermission.findMany({
         where: {
-          roleId: customRoleId,
+          roleId: effectiveRoleId,
           role: {
             collegeId: collegeId || undefined
           }
@@ -98,8 +127,29 @@ export const requirePermission = (moduleKey, action) => async (req, res, next) =
 
     req._permissionsCache = permsMap;
 
+    // Default read access for essential operational modules (notices and students) for staff:
+    // Unless explicitly restricted with canRead === false by the College Admin in the permissions matrix
+    const TEACHER_STAFF_ROLES = ['teacher', 'hod', 'faculty', 'staff'];
+    if (TEACHER_STAFF_ROLES.includes(rawRole) && action === 'read') {
+      if (moduleKey === 'notices') {
+        const noticePerm = req._permissionsCache?.['notices'];
+        if (!noticePerm || noticePerm.canRead !== false) {
+          return next();
+        }
+      }
+      if (moduleKey === 'students') {
+        const studentPerm = req._permissionsCache?.['students'];
+        if (!studentPerm || studentPerm.canRead !== false) {
+          return next();
+        }
+      }
+    }
+
     const modulePerm = req._permissionsCache[moduleKey];
     if (!modulePerm) {
+      if (action === 'read' && moduleKey === 'notices' && TEACHER_STAFF_ROLES.includes(rawRole)) {
+        return next();
+      }
       console.error(`[requirePermission] modulePerm not found for ${moduleKey}. customRoleId: ${customRoleId}, permissionsCache keys:`, Object.keys(req._permissionsCache));
       return res.status(403).json({
         success: false,

@@ -1001,9 +1001,79 @@ export const getMe = async (req, res) => {
         }
       });
       if (!user) return res.status(404).json({ success: false, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
+
+      // If user has no explicit customRole assigned, dynamically match their role (e.g. HOD, Teacher, Staff)
+      if (!user.customRole && user.collegeId) {
+        const rawRole = (user.role || '').trim().toLowerCase();
+        const roleNameMap = {
+          hod: 'HOD',
+          teacher: 'Teacher',
+          staff: 'Staff',
+          faculty: 'Teacher'
+        };
+        const targetName = roleNameMap[rawRole] || rawRole;
+        const matchedRole = await prisma.role.findFirst({
+          where: {
+            collegeId: user.collegeId,
+            name: { equals: targetName, mode: 'insensitive' }
+          },
+          include: {
+            permissions: {
+              include: { module: true }
+            }
+          }
+        });
+
+        if (matchedRole) {
+          user.customRole = matchedRole;
+          user.customRoleId = matchedRole.id;
+          prisma.user.update({
+            where: { id: user.id },
+            data: { customRoleId: matchedRole.id }
+          }).catch(() => {});
+        }
+      }
+
       const { passwordHash, ...safeUser } = user;
       const { billingSubscription, ...collegeSafe } = user.college || {};
       const planModules = billingSubscription?.subscriptionPlan?.modules;
+
+      // Accurately resolve HOD status so frontend and calendar know user is an HOD
+      const rawRole = (user.role || '').trim().toLowerCase();
+      const customRoleNameLower = (user.customRole?.name || '').trim().toLowerCase();
+      const designationLower = (user.teacherProfile?.designation || '').trim().toLowerCase();
+      const deptHodId = user.teacherProfile?.department?.hodUserId;
+      const isDeptHod = Boolean(deptHodId && (deptHodId === user.id || deptHodId === user.teacherProfile?.id));
+
+      const isHodUser = rawRole === 'hod' ||
+                        customRoleNameLower === 'hod' ||
+                        customRoleNameLower.includes('hod') ||
+                        designationLower === 'hod' ||
+                        designationLower.includes('hod') ||
+                        designationLower.includes('head of department') ||
+                        isDeptHod;
+
+      if (isHodUser) {
+        safeUser.isHod = true;
+        safeUser.role = 'hod';
+      }
+
+      // Build structured permissions map for frontend
+      const permsMap = {};
+      if (user.customRole?.permissions) {
+        user.customRole.permissions.forEach(p => {
+          if (p.module?.key) {
+            permsMap[p.module.key] = {
+              canCreate: Boolean(p.canCreate),
+              canRead: Boolean(p.canRead),
+              canUpdate: Boolean(p.canUpdate),
+              canDelete: Boolean(p.canDelete),
+            };
+          }
+        });
+      }
+      safeUser.permissions = permsMap;
+
       return res.json({
         success: true,
         data: {
@@ -1015,7 +1085,7 @@ export const getMe = async (req, res) => {
       });
     }
 
-    // Admin / SuperAdmin: full query with billing
+    // Admin / SuperAdmin: full query with billing & full permissions
     const user = await prisma.user.findUnique({
       where: { id: req.user.userId },
       include: {
@@ -1037,6 +1107,39 @@ export const getMe = async (req, res) => {
     if (safeUser.college?.billingSubscription?.subscriptionPlan) {
       safeUser.allowedModules = safeUser.college.billingSubscription.subscriptionPlan.modules;
     }
+
+    // College Admin has full universal permissions across all modules
+    const allModules = await prisma.module.findMany({ select: { id: true, key: true, label: true } });
+    const fullPermissions = {};
+    const fullPermissionsList = [];
+    allModules.forEach(m => {
+      fullPermissions[m.key] = { canCreate: true, canRead: true, canUpdate: true, canDelete: true };
+      fullPermissionsList.push({
+        moduleId: m.id,
+        moduleKey: m.key,
+        moduleLabel: m.label,
+        canCreate: true,
+        canRead: true,
+        canUpdate: true,
+        canDelete: true
+      });
+    });
+    safeUser.permissions = fullPermissions;
+
+    if (!safeUser.customRole) {
+      safeUser.customRole = {
+        name: 'College Administrator',
+        isSystemRole: true,
+        permissions: fullPermissionsList.map(p => ({
+          canCreate: true,
+          canRead: true,
+          canUpdate: true,
+          canDelete: true,
+          module: { id: p.moduleId, key: p.moduleKey, label: p.moduleLabel }
+        }))
+      };
+    }
+
     res.json({ success: true, data: safeUser });
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
