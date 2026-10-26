@@ -16,12 +16,20 @@ const formatFeeRecord = (fee) => {
   const transaction = fee.transactions?.[0];
   const paymentMethod = transaction?.gateway || '';
   const feeType = fee.feeType || 'Tuition Fee';
-  const dueDateStr = fee.feeStructure?.dueDate
-    ? new Date(fee.feeStructure.dueDate).toISOString().split('T')[0]
-    : new Date(fee.createdAt).toISOString().split('T')[0];
+
+  const dueDateRaw = fee.feeStructure?.dueDate || fee.createdAt;
+  const dueDateStr = new Date(dueDateRaw).toISOString().split('T')[0];
+
+  let effectiveStatus = fee.status;
+  if (fee.status !== 'paid' && fee.feeStructure?.dueDate) {
+    const dueEnd = new Date(fee.feeStructure.dueDate);
+    dueEnd.setHours(23, 59, 59, 999);
+    if (dueEnd < new Date()) effectiveStatus = 'overdue';
+  }
 
   return {
     ...fee,
+    status: effectiveStatus,
     amount: fee.amountDue,
     amountDue: fee.amountDue,
     amountPaid: fee.amountPaid,
@@ -41,7 +49,6 @@ export const getFees = async (req, res) => {
   if (collegeId && collegeId !== 'default_college_id') {
     where.collegeId = collegeId;
   }
-  if (status) where.status = status;
   if (studentId) where.studentId = studentId;
 
   // If student is logged in, restrict to their own fees
@@ -68,8 +75,11 @@ export const getFees = async (req, res) => {
     orderBy: { createdAt: 'desc' }
   });
 
-  const formatted = fees.map(formatFeeRecord);
-  res.json({ success: true, data: formatted });
+const formatted = fees.map(formatFeeRecord);
+const result = status ? formatted.filter(f => f.status === status) : formatted;
+res.json({ success: true, data: result });
+
+  
 };
 
 export const createFee = async (req, res) => {

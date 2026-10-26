@@ -68,8 +68,9 @@ export default function Fees() {
   // Calculate summary stats
   const totalCollected = fees.filter(f => f.status === 'paid').reduce((sum, f) => sum + f.amount, 0);
   const totalPending = fees.filter(f => f.status === 'pending').reduce((sum, f) => sum + f.amount, 0);
-  const totalOverdue = fees.filter(f => f.status === 'overdue').reduce((sum, f) => sum + f.amount, 0);
-
+  const totalOverdue = fees.filter(f => f.status === 'overdue')
+  .reduce((sum, f) => sum + (Number(f.amountDue) - Number(f.amountPaid || 0)), 0);
+  
   return (
     <div className="space-y-6">
       {/* Header */}
