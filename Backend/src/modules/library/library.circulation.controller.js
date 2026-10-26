@@ -51,6 +51,7 @@ const withLiveFine = (txn, settings, now = new Date()) => {
 const studentSelect = {
   id: true,
   rollNumber: true,
+  registerNumber: true,    
   admissionNumber: true,
   yearOfStudy: true,
   batchYear: true,
@@ -58,6 +59,12 @@ const studentSelect = {
   department: { select: { name: true } },
   course: { select: { name: true } },
   section: { select: { name: true } },
+};
+
+const withRegNo = (s) => {
+  if (!s) return s;
+  const reg = s.registerNumber || s.rollNumber || '';
+  return { ...s, registerNumber: reg, rollNumber: reg };
 };
 
 // ---------- ISSUE ----------
@@ -235,7 +242,7 @@ export const listTransactions = handle(async (req, res) => {
 
   res.json({
     success: true,
-    data: rows.map((r) => withLiveFine(r, settings)),
+    data: rows.map((r) => withLiveFine({ ...r, student: withRegNo(r.student) }, settings)),
     meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
   });
 });
@@ -276,7 +283,7 @@ export const getStudentSummary = handle(async (req, res) => {
   res.json({
     success: true,
     data: {
-      student,
+      student: withRegNo(student),
       activeLoans,
       overdueCount,
       pendingFines: Number(fines._sum.fineAmount || 0),
@@ -336,6 +343,7 @@ export const searchStudents = handle(async (req, res) => {
   const where = { collegeId, deletedAt: null };
   if (q) {
     where.OR = [
+      { registerNumber: { contains: q, mode: 'insensitive' } },
       { rollNumber: { contains: q, mode: 'insensitive' } },
       { admissionNumber: { contains: q, mode: 'insensitive' } },
       { user: { name: { contains: q, mode: 'insensitive' } } },
@@ -345,9 +353,9 @@ export const searchStudents = handle(async (req, res) => {
   const students = await prisma.student.findMany({
     where,
     select: studentSelect,
-    orderBy: [{ user: { name: 'asc' } }, { rollNumber: 'asc' }],
+    orderBy: [{ user: { name: 'asc' } }, { registerNumber: 'asc' }],
     take: 50,
   });
 
-  res.json({ success: true, data: students });
+  res.json({ success: true, data: students.map(withRegNo) });
 });
