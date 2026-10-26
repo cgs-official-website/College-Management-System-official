@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Search, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
@@ -9,14 +9,20 @@ export function IssueBookModal({ isOpen, onClose, books, initialBook = null, onI
 
   const [studentQuery, setStudentQuery] = useState('');
   const [studentResults, setStudentResults] = useState([]);
+  const [showStudentList, setShowStudentList] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const [summary, setSummary] = useState(null);
   const [bookQuery, setBookQuery] = useState('');
   const [selectedBook, setSelectedBook] = useState(null);
+
+  const studentBoxRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
       setStudentQuery('');
       setStudentResults([]);
+      setShowStudentList(false);
+      setIsSearching(false);
       setSummary(null);
       setBookQuery('');
       setSelectedBook(initialBook);
@@ -24,17 +30,43 @@ export function IssueBookModal({ isOpen, onClose, books, initialBook = null, onI
   }, [isOpen, initialBook]);
 
   useEffect(() => {
-    if (summary || studentQuery.trim().length < 2) {
-      setStudentResults([]);
-      return;
-    }
-    const t = setTimeout(async () => {
-      setStudentResults(await searchStudents(studentQuery.trim()));
-    }, 300);
-    return () => clearTimeout(t);
-  }, [studentQuery, summary, searchStudents]);
+    if (summary || !showStudentList) return;
+
+    let cancelled = false;
+    setIsSearching(true);
+
+    const t = setTimeout(
+      async () => {
+        try {
+          const results = await searchStudents(studentQuery.trim());
+          if (!cancelled) setStudentResults(results || []);
+        } catch {
+          if (!cancelled) setStudentResults([]);
+        } finally {
+          if (!cancelled) setIsSearching(false);
+        }
+      },
+      studentQuery.trim() ? 300 : 0
+    );
+
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [studentQuery, summary, showStudentList, searchStudents]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (studentBoxRef.current && !studentBoxRef.current.contains(e.target)) {
+        setShowStudentList(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const pickStudent = async (student) => {
+    setShowStudentList(false);
     setStudentResults([]);
     setStudentQuery('');
     const data = await getStudentSummary(student.id);
@@ -106,27 +138,41 @@ export function IssueBookModal({ isOpen, onClose, books, initialBook = null, onI
               )}
             </div>
           ) : (
-            <div className="relative">
+            <div className="relative" ref={studentBoxRef}>
               <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
               <input
                 className={inputCls}
-                placeholder="Search by name, roll number or admission number..."
+                placeholder="Select or search by name, roll number or admission number..."
                 value={studentQuery}
-                onChange={(e) => setStudentQuery(e.target.value)}
+                onFocus={() => setShowStudentList(true)}
+                onChange={(e) => {
+                  setStudentQuery(e.target.value);
+                  setShowStudentList(true);
+                }}
               />
-              {studentResults.length > 0 && (
-                <div className="absolute z-10 mt-1 w-full bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg overflow-hidden">
-                  {studentResults.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => pickStudent(s)}
-                      className="w-full text-left px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-white/5 text-sm"
-                    >
-                      <span className="font-semibold text-slate-900 dark:text-white">{s.user?.name || 'Student'}</span>
-                      <span className="text-xs text-slate-500 ml-2">{s.rollNumber} · {s.admissionNumber}</span>
-                    </button>
-                  ))}
+              {showStudentList && (
+                <div className="absolute z-10 mt-1 w-full max-h-64 overflow-y-auto bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg">
+                  {isSearching && studentResults.length === 0 ? (
+                    <p className="p-4 text-sm text-slate-500">Loading students...</p>
+                  ) : studentResults.length === 0 ? (
+                    <p className="p-4 text-sm text-slate-500">
+                      {studentQuery.trim() ? 'No students match your search.' : 'No students available.'}
+                    </p>
+                  ) : (
+                    studentResults.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => pickStudent(s)}
+                        className="w-full text-left px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-white/5 text-sm border-b last:border-0 border-slate-100 dark:border-white/5"
+                      >
+                        <span className="font-semibold text-slate-900 dark:text-white">{s.user?.name || 'Student'}</span>
+                        <span className="block text-xs text-slate-500">
+                          Roll: {s.rollNumber} · Adm: {s.admissionNumber}
+                        </span>
+                      </button>
+                    ))
+                  )}
                 </div>
               )}
             </div>

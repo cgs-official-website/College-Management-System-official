@@ -332,20 +332,21 @@ export const updateLibrarySettings = handle(async (req, res) => {
 export const searchStudents = handle(async (req, res) => {
   const { collegeId } = ctx(req);
   const q = String(req.query.q || '').trim();
-  if (q.length < 2) return res.json({ success: true, data: [] });
+
+  const where = { collegeId, deletedAt: null };
+  if (q) {
+    where.OR = [
+      { rollNumber: { contains: q, mode: 'insensitive' } },
+      { admissionNumber: { contains: q, mode: 'insensitive' } },
+      { user: { name: { contains: q, mode: 'insensitive' } } },
+    ];
+  }
 
   const students = await prisma.student.findMany({
-    where: {
-      collegeId,
-      deletedAt: null,
-      OR: [
-        { rollNumber: { contains: q, mode: 'insensitive' } },
-        { admissionNumber: { contains: q, mode: 'insensitive' } },
-        { user: { name: { contains: q, mode: 'insensitive' } } },
-      ],
-    },
+    where,
     select: studentSelect,
-    take: 10,
+    orderBy: [{ user: { name: 'asc' } }, { rollNumber: 'asc' }],
+    take: 50,
   });
 
   res.json({ success: true, data: students });
