@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import { redis, redisKeys } from '../lib/cache.js';
 import { prisma } from '../lib/prisma.js';
 import { logger } from '../lib/logger.js';
+import { isEmailAllowedForCollege, isExemptRole } from '../modules/domains/domains.service.js';
 
 if (!process.env.JWT_SECRET) {
   throw new Error('FATAL: JWT_SECRET environment variable is required but missing.');
@@ -23,7 +24,7 @@ export const authenticate = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    
+
     // Check if token/session is revoked in Redis (with fail-open safety)
     if (decoded.jti) {
       if (redis.status === 'ready') {
@@ -44,11 +45,28 @@ export const authenticate = async (req, res, next) => {
       return res.status(403).json({ success: false, error: { code: 'ACCOUNT_INACTIVE', message: 'Account is disabled or deleted' } });
     }
 
-    // If not superadmin, ensure college is active or trial
     if (user.role !== 'superadmin' && user.college) {
       const blockedStatuses = ['rejected'];
       if (blockedStatuses.includes(user.college.status)) {
         return res.status(403).json({ success: false, error: { code: 'COLLEGE_REJECTED', message: 'College was rejected' } });
+      }
+    }
+
+    if (user.collegeId && !isExemptRole(user.role)) {
+      let domainCheck = null;
+      try {
+        domainCheck = await isEmailAllowedForCollege(user.collegeId, user.email, user.role);
+      } catch (domainErr) {
+        logger.warn(`[warn] Domain check failed in authenticate for user ${user.id}: ${domainErr.message}`);
+      }
+      if (domainCheck && !domainCheck.allowed) {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'EMAIL_DOMAIN_NOT_ALLOWED',
+            message: "Please sign in with your institution's email address."
+          }
+        });
       }
     }
 

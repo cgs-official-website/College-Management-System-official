@@ -1545,4 +1545,4 @@ model CollegeDomain {
   @@unique([collegeId, domain])
   @@index([domain])
   @@index([collegeId])
-}
+}

@@ -207,10 +207,15 @@ const AdminLayout = () => {
     icon: FileText,
     moduleKey: 'custom'
     })) || []),
-    { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon, moduleKey: 'settings' },
-    { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck, moduleKey: 'roles' },
-    { name: 'Domain Management', path: '/admin/domains', icon: Globe, adminOnly: true },
-    { name: 'Domain Compliance', path: '/admin/non-compliant-users', icon: ShieldAlert, adminOnly: true },
+    {
+      name: 'Domains',
+      icon: Globe,
+      adminOnly: true,
+      children: [
+        { name: 'Domain Management', path: '/admin/domains', icon: Globe, moduleKey: null },
+        { name: 'Domain Compliance', path: '/admin/non-compliant-users', icon: ShieldAlert, moduleKey: null },
+      ]
+    },
     { name: 'Environment Setup', path: '/admin/settings', icon: SettingsIcon, moduleKey: 'settings', adminOnly: true },
     { name: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck, moduleKey: 'roles', adminOnly: true },
   ]

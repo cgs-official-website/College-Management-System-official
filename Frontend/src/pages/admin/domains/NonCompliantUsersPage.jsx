@@ -50,13 +50,6 @@ export default function NonCompliantUsersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <Link
-              to="/admin/domains"
-              className="p-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0A0F1C] text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white transition-colors"
-              title="Back to Domain Management"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
             <div>
               <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
                 <span>Non-Compliant Email Audit</span>
@@ -76,13 +69,7 @@ export default function NonCompliantUsersPage() {
             <Globe className="w-4 h-4 text-primary-500" />
             <span>Manage Domains</span>
           </Link>
-          <button
-            onClick={() => refetch()}
-            className="p-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0A0F1C] text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
+          
         </div>
       </div>
 
@@ -144,11 +131,9 @@ export default function NonCompliantUsersPage() {
             }}
             className="px-3.5 py-2.5 bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all shadow-sm"
           >
-            <option value="">All Roles</option>
+            <option value="">All</option>
             <option value="student">Students</option>
-            <option value="teacher">Teachers</option>
-            <option value="staff">Staff</option>
-            <option value="hod">HOD</option>
+            <option value="staff">Employees</option>
           </select>
         </div>
       </div>
@@ -210,13 +195,11 @@ export default function NonCompliantUsersPage() {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                 {users.map((u) => {
-                  const roleCls = 
-                    u.role === 'student'
-                      ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/20'
-                      : u.role === 'teacher' || u.role === 'hod'
-                      ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-500/20'
-                      : 'bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10';
-
+                  const isStudent = u.role === 'student';
+                  const roleLabel = isStudent ? 'Student' : (u.designation || 'Staff');
+                  const roleCls = isStudent
+                    ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/20'
+                    : 'bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-500/20';
                   return (
                     <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
                       <td className="py-4 px-6">
@@ -237,7 +220,7 @@ export default function NonCompliantUsersPage() {
 
                       <td className="py-4 px-6">
                         <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold border uppercase ${roleCls}`}>
-                          {u.role}
+                          {roleLabel}
                         </span>
                       </td>
 

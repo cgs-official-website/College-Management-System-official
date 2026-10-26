@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { redis } from '../../lib/cache.js';
 import dns from 'dns';
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
@@ -413,10 +414,14 @@ export async function getNonCompliantUsers(req, res) {
       ]
     : [];
 
-  // Exclude exempt roles: parent, superadmin, admin
-  const roleCondition = roleFilter
-    ? { equals: roleFilter, notIn: EXEMPT_ROLES }
-    : { notIn: EXEMPT_ROLES };
+  let roleCondition;
+  if (roleFilter === 'student') {
+    roleCondition = { equals: 'student' };
+  } else if (roleFilter === 'staff') {
+    roleCondition = { notIn: [...EXEMPT_ROLES, 'student'] };
+  } else {
+    roleCondition = { notIn: EXEMPT_ROLES };
+  }
 
   const where = {
     collegeId,
@@ -441,7 +446,7 @@ export async function getNonCompliantUsers(req, res) {
   // 3. Query DB with pagination
   const [total, users] = await Promise.all([
     prisma.user.count({ where }),
-    prisma.user.findMany({
+        prisma.user.findMany({
       where,
       skip,
       take: limit,
@@ -452,15 +457,22 @@ export async function getNonCompliantUsers(req, res) {
         role: true,
         accountStatus: true,
         createdAt: true,
+        teacherProfile: { select: { designation: true } },
+        customRole: { select: { name: true } },
       },
       orderBy: { createdAt: 'desc' },
     }),
   ]);
 
+  const formattedUsers = users.map(({ teacherProfile, customRole, ...u }) => ({
+    ...u,
+    designation: teacherProfile?.designation || customRole?.name || null,
+  }));
+
   return res.status(200).json({
     success: true,
     data: {
-      users,
+      users: formattedUsers,
       pagination: {
         total,
         page,

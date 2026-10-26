@@ -200,7 +200,7 @@ export default function DomainManagementPage() {
             </div>
             <div>
               <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                College Domain Management
+                Domain Management
               </h1>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                 Authorize and verify institutional email domains to enforce email compliance across staff and students.
@@ -217,13 +217,7 @@ export default function DomainManagementPage() {
             <Users className="w-4 h-4 text-primary-500 group-hover:scale-110 transition-transform" />
             <span>Audit Non-Compliant Users</span>
           </Link>
-          <button
-            onClick={() => refetch()}
-            className="p-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0A0F1C] text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white transition-colors"
-            title="Refresh domains"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
+          
         </div>
       </div>
 
@@ -285,7 +279,7 @@ export default function DomainManagementPage() {
           Add New Institution Domain
         </h2>
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-5">
-          Enter your college or university's primary email domain (e.g., <code className="bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 rounded text-primary-600 dark:text-primary-400 font-mono">stanford.edu</code> or <code className="bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 rounded text-primary-600 dark:text-primary-400 font-mono">bits-pilani.ac.in</code>).
+          Enter your college or university's primary email domain
         </p>
 
         <form onSubmit={handleAddDomain} className="space-y-4">
@@ -427,7 +421,7 @@ export default function DomainManagementPage() {
                           <span>{isVerifying ? 'Verifying DNS...' : 'Verify DNS Record'}</span>
                         </button>
                       )}
-                      <button
+                       <button
                         type="button"
                         onClick={() => handleDelete(dom.id, dom.domain)}
                         disabled={isDeleting}
@@ -447,7 +441,7 @@ export default function DomainManagementPage() {
                           Step: Add DNS TXT Record to Verify Ownership
                         </h4>
                         <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                          Log in to your DNS provider (e.g. Cloudflare, GoDaddy, Route53, Namecheap) and create the following TXT record for <strong className="text-slate-800 dark:text-slate-200">{dom.domain}</strong>:
+                          Log in to your DNS provider and create the following TXT record for <strong className="text-slate-800 dark:text-slate-200">{dom.domain}</strong>:
                         </p>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">

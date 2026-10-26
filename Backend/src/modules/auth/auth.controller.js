@@ -60,20 +60,15 @@ export const login = async (req, res) => {
       }
       matchingUsers = await prisma.user.findMany({
         where: { email: normalizedEmail, collegeId: college.id },
-        include: {
-          college: true,
-          studentProfile: true
-        }
+        include: { college: true, studentProfile: true }
       });
     } else {
       matchingUsers = await prisma.user.findMany({
         where: { email: normalizedEmail },
-        include: {
-          college: true,
-          studentProfile: true
-        }
+        include: { college: true, studentProfile: true }
       });
     }
+
     // Generic 401 on missing user or invalid password (zero account enumeration)
     const user = await findUserWithMatchingPassword(matchingUsers, password);
     if (!user) {
@@ -81,7 +76,6 @@ export const login = async (req, res) => {
     }
 
     // Block login for accounts that are not active.
-    // Pending students get a specific, user-friendly error code.
     if (user.accountStatus !== 'active') {
       if (user.role === 'student' && user.accountStatus === 'pending') {
         return res.status(403).json({
@@ -98,6 +92,20 @@ export const login = async (req, res) => {
     if (user.role !== 'superadmin' && user.college) {
       if (user.college.status === 'rejected') {
         return res.status(403).json({ success: false, error: { code: 'COLLEGE_REJECTED', message: 'Your college registration was rejected.' } });
+      }
+    }
+
+    if (user.collegeId && !isExemptRole(user.role)) {
+      const domainCheck = await isEmailAllowedForCollege(user.collegeId, user.email, user.role);
+      if (!domainCheck.allowed) {
+        logger.warn(`[LoginDomainCheck] Blocked login for ${user.email} (role=${user.role}, college=${user.collegeId}): ${domainCheck.code}`);
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'EMAIL_DOMAIN_NOT_ALLOWED',
+            message: "Please sign in with your institution's email address."
+          }
+        });
       }
     }
 
@@ -156,27 +164,6 @@ export const login = async (req, res) => {
       status: 'SUCCESS'
     }).catch(() => { });
 
-    // Soft-warning check: domain mismatch warning (non-blocking, grandfather existing accounts)
-    // parent & superadmin are never warned; all other users with unaligned domains receive a warning banner
-    let warnings;
-    try {
-      const normalizedRole = (user.role || '').trim().toLowerCase();
-      const isNeverWarned = ['parent', 'superadmin'].includes(normalizedRole);
-      if (user.collegeId && !isNeverWarned) {
-        const domainCheck = await isEmailAllowedForCollege(user.collegeId, user.email, null);
-        if (!domainCheck.allowed && domainCheck.code === 'EMAIL_DOMAIN_NOT_ALLOWED') {
-          warnings = [
-            {
-              code: 'EMAIL_DOMAIN_MISMATCH',
-              message: `Your account email '${user.email}' does not match your institution's verified email domain. Please update your profile with an official institutional email address.`
-            }
-          ];
-        }
-      }
-    } catch (checkErr) {
-      logger.warn(`[LoginDomainCheck] Domain warning check failed: ${checkErr.message}`);
-    }
-
     res.json({
       success: true,
       data: {
@@ -188,8 +175,7 @@ export const login = async (req, res) => {
           collegeId: user.collegeId,
           email: user.email,
           name: user.name
-        },
-        ...(warnings ? { warnings } : {})
+        }
       }
     });
   } catch (error) {
@@ -918,6 +904,19 @@ export const refreshToken = async (req, res) => {
         success: false,
         error: { code: 'COLLEGE_REJECTED', message: 'College registration was rejected' }
       });
+    }
+
+    if (user.collegeId && !isExemptRole(user.role)) {
+      const domainCheck = await isEmailAllowedForCollege(user.collegeId, user.email, user.role);
+      if (!domainCheck.allowed) {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'EMAIL_DOMAIN_NOT_ALLOWED',
+            message: "Please sign in with your institution's email address."
+          }
+        });
+      }
     }
 
     // 4. Issue new fresh access token (15m)
