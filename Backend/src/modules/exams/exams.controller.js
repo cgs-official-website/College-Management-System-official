@@ -205,10 +205,11 @@ export const getExams = async (req, res) => {
     }
   }
 
-  const formatted = exams.map(exam => {
-    const totalStudentsAppeared = exam.marks.length;
+    const formatted = exams.map(exam => {
+    const scored = exam.marks.filter(m => m.obtainedMarks !== null && m.obtainedMarks !== undefined);
+    const totalStudentsAppeared = scored.length;
     const avgScore = totalStudentsAppeared > 0
-      ? (exam.marks.reduce((acc, m) => acc + m.obtainedMarks, 0) / totalStudentsAppeared).toFixed(1)
+      ? (scored.reduce((acc, m) => acc + m.obtainedMarks, 0) / totalStudentsAppeared).toFixed(1)
       : '0.0';
 
     const roomVal = roomMap[exam.id] ?? exam.room ?? 'Main Hall';
@@ -221,6 +222,7 @@ export const getExams = async (req, res) => {
       courseName: exam.course?.name || 'General Program',
       courseCode: exam.course?.code || null,
       courseId: exam.courseId,
+      examTypeId: exam.examTypeId || null,
       departmentId: exam.course?.departmentId || null,
       departmentName: exam.course?.department?.name || 'General',
       departmentCode: exam.course?.department?.code || null,
@@ -422,6 +424,10 @@ export const updateExam = async (req, res) => {
     return res.status(404).json({ success: false, error: { code: 'EXAM_NOT_FOUND', message: 'Exam not found' } });
   }
 
+  if (existing.examTypeId) {
+    return res.status(409).json({ success: false, error: { code: 'USE_EXAM_CENTER', message: 'Use the Internal Exams tab to change this exam.' } });
+  }
+
   const effectiveDate = payload.date !== undefined ? payload.date : existing.date;
   const effectiveRoom = payload.room !== undefined ? payload.room : existing.room;
   const effectiveStartTime = payload.startTime !== undefined ? payload.startTime : existing.startTime;
@@ -619,6 +625,10 @@ export const deleteExam = async (req, res) => {
     return res.status(404).json({ success: false, error: { code: 'EXAM_NOT_FOUND', message: 'Exam not found' } });
   }
 
+  if (existing.examTypeId) {
+    return res.status(409).json({ success: false, error: { code: 'USE_EXAM_CENTER', message: 'Use the Exam Center to remove this exam.' } });
+  }
+
   await prisma.mark.deleteMany({ where: { examId: id } });
   await prisma.exam.delete({ where: { id } });
 
@@ -647,6 +657,10 @@ export const enterMarks = async (req, res) => {
 
   if (!exam) {
     return res.status(404).json({ success: false, error: { code: 'EXAM_NOT_FOUND', message: 'Exam not found' } });
+  }
+
+  if (exam.examTypeId) {
+    return res.status(409).json({ success: false, error: { code: 'USE_EXAM_CENTER', message: 'Marks for this exam are entered through the Exam Center.' } });
   }
 
   if (obtainedMarks > exam.maxMarks) {
@@ -733,6 +747,10 @@ export const batchEnterMarks = async (req, res) => {
         ]
       }
     });
+  }
+
+  if (exam?.examTypeId) {
+    return res.status(409).json({ success: false, error: { code: 'USE_EXAM_CENTER', message: 'Marks for this exam are entered through the Exam Center.' } });
   }
 
   if (!exam) {

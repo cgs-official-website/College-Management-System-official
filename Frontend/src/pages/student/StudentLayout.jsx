@@ -110,7 +110,7 @@ const StudentLayout = () => {
   const allNavLinks = [
     { name: 'Dashboard', path: '/student', icon: LayoutDashboard },
     { name: 'Calendar', path: '/student/calendar', icon: CalendarDays },
-    { name: 'My Courses', path: '/student/courses', icon: BookOpen },
+    { name: 'Curriculum Overview', path: '/student/courses', icon: BookOpen },
     { name: 'Assignments', path: '/student/assignments', icon: FileBarChart },
     { name: 'Attendance', path: '/student/attendance', icon: CheckSquare },
     { name: 'Timetable', path: '/student/timetable', icon: Calendar },
@@ -379,17 +379,19 @@ const StudentDashboardHome = ({ isHosteller, isDayScholar, studentFullName: prop
         {[
           { 
             title: 'Attendance Rate', 
-            value: metrics ? `${metrics.attendancePercentage}%` : '100%', 
-            trend: `${metrics?.presentDays || 0} / ${metrics?.totalDays || 0} sessions present`, 
+            value: metrics?.attendancePercentage != null ? `${metrics.attendancePercentage}%` : 'N/A', 
+            trend: metrics?.totalDays > 0 
+              ? `${metrics.presentDays} / ${metrics.totalDays} sessions present` 
+              : 'No attendance marked yet', 
             icon: CheckSquare, 
             color: 'text-emerald-500', 
             bg: 'bg-emerald-50 dark:bg-emerald-500/10',
             path: '/student/attendance'
           },
           { 
-            title: 'Enrolled Courses', 
-            value: metrics ? String(metrics.coursesCount) : '0', 
-            trend: 'Current Semester', 
+            title: 'Current Semester', 
+            value: profile?.currentSemester ? `Sem ${profile.currentSemester}` : '-', 
+            trend: metrics ? `${metrics.coursesCount} subjects this semester` : 'Curriculum overview', 
             icon: BookOpen, 
             color: 'text-blue-500', 
             bg: 'bg-blue-50 dark:bg-blue-500/10',

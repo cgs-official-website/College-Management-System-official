@@ -27,6 +27,7 @@ export const createStudentSchema = z.object({
   registerNumber: z.string().nullish(),
   studentRegNo: z.string().nullish(),
   regNo: z.string().nullish(),
+  currentSemester: z.number().int().min(1).nullish(),
   // UUID fields — empty string is treated as null (no section/course selected)
   departmentId: uuidOrNull,
   courseId:     uuidOrNull,

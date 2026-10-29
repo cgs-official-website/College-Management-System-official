@@ -26,6 +26,8 @@ export const resolveStudent = async (req, res, next) => {
         departmentId: true,
         sectionId: true,
         courseId: true,
+        currentSemester: true,  
+        hostelRoomId: true,
         admissionNumber: true,
         rollNumber: true,
         batchYear: true,

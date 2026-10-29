@@ -6,6 +6,21 @@ import { deleteStudentProfile } from '../users/deleteUserRecords.js';
 import { releaseTransportFees } from '../transport/transportFees.js';
 import { assertEmailAllowedForCollege } from '../domains/domains.service.js';
 
+
+const resolveCurrentSemester = async (db, collegeId, courseId, requested) => {
+  if (!courseId) return { value: requested ?? null };
+  const course = await db.course.findFirst({
+    where: { id: courseId, collegeId },
+    select: { semester: true, name: true }
+  });
+  if (!course) return { error: 'Program not found' };
+  const value = requested ?? 1;
+  if (value < 1 || value > course.semester) {
+    return { error: `Semester must be between 1 and ${course.semester} for ${course.name}` };
+  }
+  return { value };
+};
+
 export const getStudents = async (req, res) => {
   const collegeId = req.tenant?.collegeId || req.user?.collegeId || req.query.collegeId;
 
@@ -18,7 +33,8 @@ export const getStudents = async (req, res) => {
   const where = {
     deletedAt: null,
     ...(collegeId ? { collegeId } : {}),
-    ...(sectionId ? { sectionId } : {})
+    ...(sectionId ? { sectionId } : {}),
+    ...(req.query.currentSemester ? { currentSemester: parseInt(req.query.currentSemester, 10) } : {})
   };
 
   const page = req.query.page ? Math.max(1, parseInt(req.query.page)) : null;
@@ -84,7 +100,7 @@ export const getStudents = async (req, res) => {
 
     return {
       id: s.id,
-      admissionNo: s.admissionNumber || s.rollNumber,
+      admissionNo: s.admissionNumber || '',
       admissionNumber: s.admissionNumber,
       rollNumber: s.rollNumber,
       registerNumber:s.registerNumber || custom.registerNumber || '',
@@ -104,9 +120,11 @@ export const getStudents = async (req, res) => {
       departmentId: s.departmentId,
       course: s.course?.name || s.department?.name || '',
       courseId: s.courseId,
+      courseCode: s.course?.code || '',
       class: s.course?.name || s.department?.name || '',
       section: s.section?.name || '',
       sectionId: s.sectionId,
+      currentSemester: s.currentSemester,
       batchYear: s.batchYear,
       bloodGroup: s.bloodGroup,
       emergencyContact: s.emergencyContact,
@@ -238,11 +256,11 @@ export const getStudentById = async (req, res) => {
     success: true,
     data: {
       id: student.id,
-      admissionNo: student.admissionNumber || student.rollNumber,
+      admissionNo: student.admissionNumber || '',
       admissionNumber: student.admissionNumber,
       rollNumber: student.rollNumber,
-      registerNumber: student.registerNumber || custom.registerNumber || student.rollNumber || '',
-      studentRegNo: student.registerNumber || custom.registerNumber || student.rollNumber || '',
+      registerNumber: student.registerNumber || custom.registerNumber || '',
+      studentRegNo: student.registerNumber || custom.registerNumber || '',
       firstName: fName || '',
       lastName: lName || '',
       name: fullName,
@@ -261,6 +279,7 @@ export const getStudentById = async (req, res) => {
       class: student.course?.name || student.department?.name || '',
       section: student.section?.name || '',
       sectionId: student.sectionId,
+      currentSemester: student.currentSemester,
       batchYear: student.batchYear,
       bloodGroup: student.bloodGroup,
       emergencyContact: student.emergencyContact,
@@ -361,8 +380,21 @@ export const createStudent = async (req, res) => {
   }
 
   const admissionNo = admissionNumber;
-  const rollNo = (payload.rollNo || payload.rollNumber || `R-${Date.now().toString().slice(-4)}`).trim();
+  const rollNo = (payload.rollNo || payload.rollNumber || '').trim();
+  if (!rollNo) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'ROLL_NUMBER_REQUIRED', message: 'Roll number is required.' }
+    });
+  }
   const registerNumber = (payload.registerNumber || payload.studentRegNo || payload.regNo || '').trim() || null;
+
+  if (!registerNumber) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'REGISTER_NUMBER_REQUIRED', message: 'University Reg.No is required.' }
+    });
+  }
 
   if (registerNumber) {
     const existingStudentByReg = await prisma.student.findFirst({
@@ -380,6 +412,11 @@ export const createStudent = async (req, res) => {
   }
 
   await assertEmailAllowedForCollege(collegeId, email, 'student');
+
+  const semResult = await resolveCurrentSemester(prisma, collegeId, payload.courseId || null, payload.currentSemester);
+  if (semResult.error) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_SEMESTER', message: semResult.error } });
+  }
 
   const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
 
@@ -456,6 +493,7 @@ export const createStudent = async (req, res) => {
           admissionNumber: admissionNo,
           rollNumber: rollNo,
           registerNumber: registerNumber || null,
+          currentSemester: semResult.value,
           batchYear: payload.batchYear || `${new Date().getFullYear()}`,
           bloodGroup: payload.bloodGroup,
           studentMobile: payload.phone || null,
@@ -549,6 +587,13 @@ export const updateStudent = async (req, res) => {
     ? (payload.registerNumber?.trim() || null)
     : (payload.studentRegNo !== undefined ? (payload.studentRegNo?.trim() || null) : (payload.regNo !== undefined ? (payload.regNo?.trim() || null) : undefined));
 
+  if (registerNumber === null) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'REGISTER_NUMBER_REQUIRED', message: 'University Reg.No cannot be empty.' }
+    });
+  }
+
   if (registerNumber) {
     const duplicateReg = await prisma.student.findFirst({
       where: { collegeId, registerNumber, deletedAt: null, NOT: { id } },
@@ -578,6 +623,17 @@ export const updateStudent = async (req, res) => {
         error: { code: 'STUDENT_EMAIL_ALREADY_EXISTS', message: 'A student with this email already exists in this college.' }
       });
     }
+  }
+
+  let currentSemesterUpdate;
+  const effectiveCourseId = payload.courseId !== undefined ? (payload.courseId || null) : student.courseId;
+  if (payload.currentSemester !== undefined || effectiveCourseId !== student.courseId) {
+    const requested = payload.currentSemester !== undefined ? payload.currentSemester : student.currentSemester;
+    const semResult = await resolveCurrentSemester(prisma, collegeId, effectiveCourseId, requested);
+    if (semResult.error) {
+      return res.status(400).json({ success: false, error: { code: 'INVALID_SEMESTER', message: semResult.error } });
+    }
+    currentSemesterUpdate = semResult.value;
   }
 
   const effectiveResidence = payload.residenceType ?? student.residenceType;
@@ -644,6 +700,7 @@ export const updateStudent = async (req, res) => {
           ...(normalizedEmail ? { emailId: normalizedEmail } : {}),
           ...(payload.rollNo || payload.rollNumber ? { rollNumber: payload.rollNo || payload.rollNumber } : {}),
           ...(registerNumber !== undefined ? { registerNumber } : {}),
+          ...(currentSemesterUpdate !== undefined ? { currentSemester: currentSemesterUpdate } : {}),
           ...(payload.batchYear !== undefined ? { batchYear: payload.batchYear } : {}),
           ...(payload.bloodGroup !== undefined ? { bloodGroup: payload.bloodGroup || null } : {}),
           ...(payload.phone !== undefined ? { studentMobile: payload.phone || null } : {}),
@@ -730,6 +787,7 @@ export const bulkImportStudents = async (req, res) => {
 
   const departmentsCache = {};
   const coursesCache = {};
+  const courseTotals = {};
   const sectionsCache = {};
   const defaultHashedPassword = await bcrypt.hash('Student@123', 10);
 
@@ -778,9 +836,7 @@ export const bulkImportStudents = async (req, res) => {
         row,
         'Admission_No*', 'Admission_No', 'Admission No', 'Admission Number', 'Admission_Number',
         'admissionNo', 'admissionNumber', 'admission_number', 'adm_no', 'admNo', 'Adm_No', 'Adm No',
-        'Admission ID', 'Admission_ID', 'admissionId', 'Student_ID', 'Student ID', 'studentId', 'StudentID',
-        'Register_No', 'Register No', 'Student_Reg_No', 'Student Reg No', 'Reg_No', 'Reg No',
-        'Roll_No', 'Roll No', 'rollNo', 'rollNumber', 'Roll_Number'
+        'Admission ID', 'Admission_ID', 'admissionId'
       );
 
       let studentName = getVal(
@@ -807,7 +863,7 @@ export const bulkImportStudents = async (req, res) => {
       }
 
       if (!admissionNo) {
-        admissionNo = `ADM-${new Date().getFullYear()}-${String(index + 1).padStart(3, '0')}`;
+        throw new Error('Admission number is required');
       }
 
       const departmentName = getVal(
@@ -825,13 +881,20 @@ export const bulkImportStudents = async (req, res) => {
         'Section*', 'Section', 'Section_Name', 'Section Name', 'section'
       );
 
-      const rollNo = getVal(row, 'Roll_No', 'Roll No', 'rollNo', 'rollNumber', 'Roll_Number') || `R-${Date.now().toString().slice(-4)}`;
+      const rollNo = getVal(row, 'Roll_No', 'Roll No', 'rollNo', 'rollNumber', 'Roll_Number');
+      if (!rollNo) {
+        throw new Error('Roll number is required');
+      }
       const rawRegisterNumber = getVal(
         row,
         'Student_Reg_No', 'Student Reg No', 'Register_No', 'Register No', 'Reg_No', 'Reg No',
         'registerNumber', 'studentRegNo', 'Register_Number'
       );
+
       const registerNumber = rawRegisterNumber ? String(rawRegisterNumber).trim() : null;
+      if (!registerNumber) {
+        throw new Error('University Reg.No is required');
+      }
 
       // Sequential Department lookup or creation
       let deptId = departmentsCache[departmentName.toLowerCase()];
@@ -879,8 +942,11 @@ export const bulkImportStudents = async (req, res) => {
               }
             });
           }
+
           coursesCache[courseKey] = course.id;
+          courseTotals[course.id] = course.semester;
           courseId = course.id;
+         
         }
       }
 
@@ -913,15 +979,27 @@ export const bulkImportStudents = async (req, res) => {
           }
         }
       }
+      const semRaw = getVal(row, 'Current_Semester*', 'Current_Semester', 'Current Semester', 'Semester', 'Sem');
+      let currentSemester = null;
+      if (semRaw) {
+        currentSemester = Number(semRaw);
+        if (!Number.isInteger(currentSemester) || currentSemester < 1) {
+          throw new Error(`Semester must be a whole number of 1 or more (got "${semRaw}")`);
+        }
+        if (courseId && courseTotals[courseId] && currentSemester > courseTotals[courseId]) {
+          throw new Error(`Semester ${currentSemester} is above the program's ${courseTotals[courseId]} total semesters. Fix Total Semesters in Programs first`);
+        }
+      }
 
       const nameParts = studentName.split(' ');
       const fName = firstName || nameParts[0] || 'Student';
       const lName = lastName || nameParts.slice(1).join(' ') || '';
 
       const rawEmail = getVal(row, 'Email_ID', 'Email ID', 'Email', 'email', 'emailId', 'Email_Address', 'Email Address');
-      const cleanEmail = rawEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)
-        ? rawEmail.toLowerCase().trim()
-        : `${admissionNo.toLowerCase().replace(/[^a-z0-9]/g, '') || 'std_' + (index + 1)}@college.local`;
+      if (!rawEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
+        throw new Error('A valid email address is required');
+      }
+      const cleanEmail = rawEmail.toLowerCase().trim();
 
       const rawDob = getVal(row, 'Date_of_Birth*', 'Date_of_Birth', 'Date of Birth', 'DOB', 'dob', 'dateOfBirth', 'Birth_Date');
       const dateOfBirth = parseDate(rawDob);
@@ -955,6 +1033,7 @@ export const bulkImportStudents = async (req, res) => {
         fName,
         lName,
         cleanEmail,
+        currentSemester,
         dobFormatted,
         dateOfAdmission,
         studentMobile,
@@ -1034,7 +1113,7 @@ export const bulkImportStudents = async (req, res) => {
     const batch = deduplicatedRows.slice(i, i + BATCH_SIZE);
 
     await Promise.all(batch.map(async (row) => {
-      const { index, admissionNo, studentName, fName, lName, cleanEmail, dobFormatted, dateOfAdmission, studentMobile, parentMobile, parentName, motherName, gender, address, city, district, state, pincode, bloodGroup, batchYear, residenceType, transportRequired, rollNo, registerNumber, deptId, courseId, sectionId } = row;
+      const { index, admissionNo, studentName, fName, lName, cleanEmail, dobFormatted, dateOfAdmission, studentMobile, parentMobile, parentName, motherName, gender, address, city, district, state, pincode, bloodGroup, batchYear, residenceType, transportRequired, rollNo, registerNumber, deptId, courseId, sectionId, currentSemester } = row;
 
       try {
         await assertEmailAllowedForCollege(collegeId, cleanEmail, 'student');
@@ -1127,7 +1206,7 @@ export const bulkImportStudents = async (req, res) => {
               }
             });
             if (duplicateReg) {
-              safeRegisterNumber = null;
+              throw new Error(`Register number '${safeRegisterNumber}' already belongs to another student`);
             }
           }
 
@@ -1168,6 +1247,7 @@ export const bulkImportStudents = async (req, res) => {
             state: state || null,
             pincode: pincode || null,
             dateOfAdmission: dateOfAdmission || null,
+            ...(currentSemester ? { currentSemester } : {}),
             customFields
           };
 
@@ -1182,6 +1262,7 @@ export const bulkImportStudents = async (req, res) => {
                 ...studentData,
                 collegeId,
                 userId: user.id,
+                currentSemester: currentSemester ?? (courseId ? 1 : null),
               }
             });
           }

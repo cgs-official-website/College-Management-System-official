@@ -62,6 +62,20 @@ export const useSections = (courseId = null) => {
     }
   });
 
+  const changeSemester = useMutation({
+    mutationFn: async ({ id, data }) => (await api.post(`/sections/${id}/semester`, data)).data,
+    onSuccess: (res) => {
+      const r = res?.data ?? res ?? {};
+      let msg = `${r.updated || 0} student(s) updated`;
+      if (r.skippedAtFinalSemester) msg += `, ${r.skippedAtFinalSemester} already in final semester`;
+      if (r.skippedNotSet) msg += `, ${r.skippedNotSet} have no semester set`;
+      toast.success(msg, { duration: 6000 });
+      queryClient.invalidateQueries({ queryKey: ['sections'] });
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+    },
+    onError: (err) => toast.error(err.response?.data?.error?.message || err.message || 'Failed to update semester')
+  });
+
   return {
     sections: getSections.data || [],
     isLoading: getSections.isLoading,
@@ -69,6 +83,7 @@ export const useSections = (courseId = null) => {
     createSection,
     updateSection,
     deleteSection,
-    bulkImport
+    bulkImport,
+    changeSemester
   };
 };

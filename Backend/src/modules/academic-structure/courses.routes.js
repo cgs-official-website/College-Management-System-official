@@ -42,7 +42,6 @@ router.get('/my-classes', staffOnly, async (req, res) => {
       return res.json({ data: [] });
     }
 
-    // A class is typically a Section in this architecture. 
     const sections = await prisma.section.findMany({
       where: {
         collegeId,
@@ -66,10 +65,10 @@ router.get('/my-classes', staffOnly, async (req, res) => {
       credits: sec.course?.credits || 0,
       semester: sec.course?.semester || 1,
       students: sec.students.length || 0,
-      timing: 'TBA', // Or fetch from timetable
+      timing: 'TBA', 
       room: 'TBA',
-      attendance: 85, // Mock attendance
-      performance: 78 // Mock performance
+      attendance: 85, 
+      performance: 78 
     }));
 
     res.json({ data: classes });
@@ -100,7 +99,6 @@ router.post('/', adminOnly, async (req, res) => {
   try {
     const data = courseSchema.parse(req.body);
     
-    // Verify department exists and belongs to this college
     const department = await prisma.department.findFirst({
       where: { id: data.departmentId, collegeId: req.tenant.collegeId }
     });
@@ -227,7 +225,6 @@ router.put('/:id', adminOnly, async (req, res) => {
     });
     if (!existing) return res.status(404).json({ error: { message: 'Course not found' } });
     
-    // Check if new department belongs to college
     if (data.departmentId !== existing.departmentId) {
       const newDept = await prisma.department.findFirst({
         where: { id: data.departmentId, collegeId: req.tenant.collegeId }

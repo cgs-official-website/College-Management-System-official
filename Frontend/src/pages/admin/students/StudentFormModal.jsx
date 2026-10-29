@@ -15,8 +15,10 @@ const getInitialValues = (initialData) => ({
   email: initialData?.email || '',
   admissionNumber: initialData?.admissionNumber || initialData?.admissionNo || '',
   registerNumber: initialData?.registerNumber || initialData?.studentRegNo || initialData?.regNo || '',
+  rollNumber: initialData?.rollNumber || '',
   phone: initialData?.phone || initialData?.studentMobile || '',
   dob: initialData?.dob || (initialData?.dateOfBirth ? (typeof initialData.dateOfBirth === 'string' ? initialData.dateOfBirth.split('T')[0] : new Date(initialData.dateOfBirth).toISOString().split('T')[0]) : ''),
+  currentSemester: initialData?.currentSemester ? String(initialData.currentSemester) : '',
   gender: initialData?.gender || '',
   courseId: initialData?.courseId || '',
   sectionId: initialData?.sectionId || '',
@@ -43,6 +45,20 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
   }, [isOpen, initialData, reset]);
 
   const selectedCourseId = watch('courseId');
+  const selectedCourse = courses.find((c) => c.id === selectedCourseId);
+  const semesterOptions = selectedCourse
+    ? Array.from({ length: selectedCourse.semester }, (_, i) => ({ value: String(i + 1), label: `Semester ${i + 1}` }))
+    : [];
+  const currentSemesterValue = watch('currentSemester');
+
+  useEffect(() => {
+     if (!selectedCourse) return;
+     const current = parseInt(currentSemesterValue, 10);
+     if (!current || current > selectedCourse.semester) {
+       setValue('currentSemester', '1');
+     }
+  }, [selectedCourseId]); 
+
   const residenceType = watch('residenceType');
   const { sections } = useSections(selectedCourseId);
 
@@ -60,7 +76,8 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
     const finalData = {
       ...sanitized,
       transportRequired: data.residenceType === 'Hosteller' ? 'No' : (data.transportRequired || 'No'),
-      collegeId: userData?.collegeId || 'default_college_id'
+      collegeId: userData?.collegeId || 'default_college_id',
+      currentSemester: data.currentSemester ? parseInt(data.currentSemester, 10) : undefined,
     };
     onSubmit(finalData);
   };
@@ -103,16 +120,22 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
               error={errors.email?.message}
             />
             <Input
-              label="Admission ID / Number *"
+              label="Admission No *"
               placeholder="e.g. ADM-2026-001"
               {...register('admissionNumber', { required: 'Admission ID / Number is required' })}
               error={errors.admissionNumber?.message}
             />
             <Input
-              label="Student Reg No / Unique ID"
-              placeholder="e.g. REG-2026-089"
-              {...register('registerNumber')}
+              label="University Reg.No *"
+              placeholder="e.g. 737821CSR001"
+              {...register('registerNumber', { required: 'University Reg.No is required' })}
               error={errors.registerNumber?.message}
+            />
+            <Input
+              label="Roll No *"
+              placeholder="e.g. 21CSR001"
+              {...register('rollNumber', { required: 'Roll number is required' })}
+              error={errors.rollNumber?.message}
             />
             <Input
               label="Phone Number"
@@ -155,7 +178,7 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Select
-              label="Class / Course"
+              label="Course *"
               {...register('courseId', { required: "Course is required" })}
               error={errors.courseId?.message}
               options={[{ value: '', label: 'Select a course' }, ...courses.map(c => ({ value: c.id, label: c.name }))]}
@@ -174,6 +197,12 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
               </select>
               {errors.sectionId && <p className="text-red-500 text-sm mt-1">{errors.sectionId.message}</p>}
             </div>
+            <Select
+                label="Current Semester"
+                {...register('currentSemester')}
+                disabled={!selectedCourseId}
+                options={[{ value: '', label: 'Select semester' }, ...semesterOptions]}
+            />
           </div>
         </div>
 

@@ -230,7 +230,7 @@ export default function StudentList() {
       cell: (row) => <span className="font-medium text-primary-600 dark:text-primary-400">{row.admissionNo}</span>
     },
     {
-      header: 'Student Reg No',
+      header: 'Register No',
       accessorKey: 'registerNumber',
       cell: (row) => (
         <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 font-medium">
@@ -254,9 +254,19 @@ export default function StudentList() {
       )
     },
     {
-      header: 'Class',
-      accessorKey: 'class',
-      cell: (row) => `${row.class || '-'} ${row.section ? `(${row.section})` : ''}`
+      header: 'Program',
+      accessorKey: 'courseCode',
+      cell: (row) => row.courseCode || '-'
+    },
+    {
+      header: 'Section',
+      accessorKey: 'section',
+      cell: (row) => row.section || '-'
+    },
+    {
+      header: 'Current Sem',
+      accessorKey: 'currentSemester',
+      cell: (row) => row.currentSemester ? `Sem ${row.currentSemester}` : '-'
     },
     {
       header: 'Parent/Guardian',

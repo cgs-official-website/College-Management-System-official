@@ -27,7 +27,8 @@ const StudentAttendanceDashboard = () => {
     reason: ''
   });
   const [proofFile, setProofFile] = useState(null);
-  const attendance = attendanceData?.data || { percentage: 100, totalDays: 0, presentDays: 0, absentDays: 0, records: [] };
+  const attendance = attendanceData?.data || { percentage: null, totalDays: 0, presentDays: 0, absentDays: 0, records: [] };
+  const hasAttendance = attendance.percentage != null;  
   const leaveRequests = leaveData?.data || [];
     const ALLOWED_PROOF_TYPES = [
     'image/jpeg', 'image/png', 'image/webp', 'application/pdf',
@@ -112,10 +113,10 @@ const StudentAttendanceDashboard = () => {
         {[
           { 
             title: 'Overall Attendance', 
-            value: `${attendance.percentage}%`, 
+            value: hasAttendance ? `${attendance.percentage}%` : 'N/A', 
             icon: CheckSquare, 
-            color: attendance.percentage >= 75 ? 'text-emerald-500' : 'text-rose-500', 
-            bg: attendance.percentage >= 75 ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-rose-50 dark:bg-rose-500/10' 
+            color: !hasAttendance ? 'text-slate-400' : attendance.percentage >= 75 ? 'text-emerald-500' : 'text-rose-500', 
+            bg: !hasAttendance ? 'bg-slate-100 dark:bg-white/5' : attendance.percentage >= 75 ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-rose-50 dark:bg-rose-500/10' 
           },
           { title: 'Total Sessions', value: attendance.totalDays, icon: Calendar, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-500/10' },
           { title: 'Days Present', value: attendance.presentDays, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },

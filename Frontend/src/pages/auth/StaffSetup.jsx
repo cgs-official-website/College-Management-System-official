@@ -118,7 +118,7 @@ export default function StaffSetup() {
           </div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Staff Account Setup</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-2">
-            Create your password to activate your account and access your staff dashboard.
+            Create your password to activate your account and access your dashboard.
           </p>
         </div>
 

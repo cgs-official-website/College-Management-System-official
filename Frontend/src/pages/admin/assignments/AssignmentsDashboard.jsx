@@ -17,8 +17,8 @@ import {
   Loader2
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import AssignmentTarget from '../../../components/common/AssignmentTarget';
 import { api } from '../../../services/apiClient';
-import { useCourses } from '../../../hooks/useCourses';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { Pagination } from '../../../components/ui/Pagination';
 import toast from 'react-hot-toast';
@@ -26,7 +26,6 @@ import toast from 'react-hot-toast';
 export default function AssignmentsDashboard() {
   const queryClient = useQueryClient();
   const confirm = useConfirm();
-  const { courses } = useCourses();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // all, active, closed
@@ -36,13 +35,8 @@ export default function AssignmentsDashboard() {
   const pageSize = 8;
 
   // Form state
-  const [formData, setFormData] = useState({
-    courseId: '',
-    title: '',
-    description: '',
-    dueDate: '',
-    maxScore: 100
-  });
+  const emptyForm = { courseId: '', sectionId: '', subjectId: '', title: '', description: '', dueDate: '', maxScore: 100 };
+  const [formData, setFormData] = useState(emptyForm);
 
   // Query assignments
   const { data: assignments = [], isLoading } = useQuery({
@@ -76,10 +70,10 @@ export default function AssignmentsDashboard() {
       queryClient.invalidateQueries({ queryKey: ['admin-assignments'] });
       toast.success('Assignment created successfully!');
       setIsCreateModalOpen(false);
-      setFormData({ courseId: '', title: '', description: '', dueDate: '', maxScore: 100 });
+      setFormData(emptyForm);
     },
     onError: (err) => {
-      toast.error(err.response?.data?.error || err.message || 'Failed to create assignment');
+      toast.error(err?.data?.error?.message || err.message || 'Failed to create assignment');
     }
   });
 
@@ -111,13 +105,17 @@ export default function AssignmentsDashboard() {
 
   const handleCreateSubmit = (e) => {
     e.preventDefault();
-    if (!formData.courseId) return toast.error('Please select a course/subject');
+    if (!formData.subjectId) return toast.error('Choose a course, section and subject');
     if (!formData.title.trim()) return toast.error('Please enter a title');
     if (!formData.dueDate) return toast.error('Please select a due date');
 
     createMutation.mutate({
-      ...formData,
-      maxScore: Number(formData.maxScore) || 100
+      sectionId: formData.sectionId,
+      subjectId: formData.subjectId,
+      title: formData.title,
+      description: formData.description,
+      dueDate: formData.dueDate,
+      maxScore: Number(formData.maxScore) || 100,
     });
   };
 
@@ -242,9 +240,8 @@ export default function AssignmentsDashboard() {
             <tbody className="divide-y divide-slate-100 dark:divide-white/5 text-sm">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
-                    <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary-500 mb-2" />
-                    Loading assignments...
+                  <td colSpan={7} className="py-12">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary-500" />
                   </td>
                 </tr>
               ) : paginated.length === 0 ? (
@@ -271,6 +268,9 @@ export default function AssignmentsDashboard() {
                       </td>
                       <td className="py-4 px-6">
                         <span className="font-semibold text-slate-700 dark:text-slate-300">{a.subject}</span>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {[a.courseName, a.sectionName && `Section ${a.sectionName}`].filter(Boolean).join(' | ')}
+                        </p>
                       </td>
                       <td className="py-4 px-6">
                         <span className="text-slate-600 dark:text-slate-400 font-medium">{a.teacherName}</span>
@@ -362,24 +362,10 @@ export default function AssignmentsDashboard() {
               </p>
 
               <form onSubmit={handleCreateSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                    Course / Class *
-                  </label>
-                  <select
-                    value={formData.courseId}
-                    onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
-                    required
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-white"
-                  >
-                    <option value="">Select a Course / Subject</option>
-                    {courses.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.code || 'Course'})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <AssignmentTarget
+                  value={formData}
+                  onChange={(t) => setFormData((f) => ({ ...f, ...t }))}
+                />
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
@@ -416,6 +402,7 @@ export default function AssignmentsDashboard() {
                     </label>
                     <input
                       type="date"
+                      min={new Date().toLocaleDateString('en-CA')}
                       value={formData.dueDate}
                       onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
                       required
@@ -493,7 +480,6 @@ export default function AssignmentsDashboard() {
                 {isLoadingSubmissions ? (
                   <div className="py-12 text-center text-slate-400">
                     <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary-500 mb-2" />
-                    Loading student submissions...
                   </div>
                 ) : submissions.length === 0 ? (
                   <div className="py-12 text-center text-slate-400">
@@ -520,7 +506,7 @@ export default function AssignmentsDashboard() {
 
                       <div className="flex items-center gap-3">
                         <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400">
-                          {sub.status || 'Submitted'}
+                          {sub.score !== null && sub.score !== undefined ? 'Graded' : 'Submitted'}
                         </span>
                         {sub.fileUrl && (
                           <a

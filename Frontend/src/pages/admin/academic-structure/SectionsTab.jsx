@@ -3,13 +3,14 @@ import { useSections } from '../../../hooks/useSections';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Pagination } from '../../../components/ui/Pagination';
-import { Search, Plus, Trash2, Edit2, Users, ChevronLeft } from 'lucide-react';
+import { Search, Plus, Trash2, Edit2, Users, ChevronLeft, ArrowUpCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useCourses } from '../../../hooks/useCourses';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useStaff } from '../../../hooks/useStaff';
 import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
+import { Modal } from '../../../components/ui/Modal';
 
 const SECTION_IMPORT_FIELDS = [
   {
@@ -35,12 +36,17 @@ const SECTION_IMPORT_FIELDS = [
   }
 ];
 
+const TH = 'py-4 px-6 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider';
+
 export default function SectionsTab({ courseId, courseName, onClearFilter }) {
   const { userData } = useAuth();
-  const { sections, isLoading, createSection, updateSection, deleteSection, bulkImport } = useSections(courseId);
+  const {
+    sections, isLoading, createSection, updateSection,
+    deleteSection, bulkImport, changeSemester
+  } = useSections(courseId);
   const { courses } = useCourses(); // needed for dropdown if no course selected
   const { staff } = useStaff(userData?.collegeId);
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSection, setEditingSection] = useState(null);
@@ -49,9 +55,15 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
   const [pageSize, setPageSize] = useState(10);
   const confirm = useConfirm();
 
+  // Semester promote / set modal state
+  const [semTarget, setSemTarget] = useState(null);
+  const [semMode, setSemMode] = useState('promote');
+  const [semValue, setSemValue] = useState(1);
+  const [onlyEmpty, setOnlyEmpty] = useState(false);
+
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
 
-  const filtered = sections.filter(s => 
+  const filtered = sections.filter(s =>
     s.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -72,8 +84,8 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
   };
 
   const onSubmit = async (data) => {
-    const payload = { 
-      ...data, 
+    const payload = {
+      ...data,
       capacity: parseInt(data.capacity, 10),
       teacherIds: selectedTeachers
     };
@@ -88,6 +100,25 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
   const handleDelete = async (id) => {
     if (await confirm({ message: "Are you sure you want to delete this class section?" })) {
       await deleteSection.mutateAsync(id);
+    }
+  };
+
+  const openSemModal = (section) => {
+    setSemTarget(section);
+    setSemMode('promote');
+    setSemValue(1);
+    setOnlyEmpty(false);
+  };
+
+  const submitSemester = async () => {
+    const payload = semMode === 'promote'
+      ? { action: 'promote' }
+      : { action: 'set', semester: parseInt(semValue, 10), onlyEmpty };
+    try {
+      await changeSemester.mutateAsync({ id: semTarget.id, data: payload });
+      setSemTarget(null);
+    } catch {
+      // toast is shown by the mutation's onError
     }
   };
 
@@ -106,17 +137,17 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
       <div className="flex flex-col sm:flex-row justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <Input 
-            placeholder="Search classes..." 
+          <Input
+            placeholder="Search classes..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10 mb-0"
           />
         </div>
         <div className="flex gap-2">
-          <ExcelUploadButton 
-            onUpload={bulkImport.mutateAsync} 
-            isLoading={bulkImport.isPending} 
+          <ExcelUploadButton
+            onUpload={bulkImport.mutateAsync}
+            isLoading={bulkImport.isPending}
             title="Import Classes / Sections"
             label="Bulk Import"
             sampleFileName="classes_sections_template.xlsx"
@@ -135,21 +166,21 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
           </h3>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input 
-                label="Class Name" 
+              <Input
+                label="Class Name"
                 placeholder="e.g. Year 1 - Section A"
-                {...register('name', { required: 'Name is required' })} 
-                error={errors.name?.message} 
+                {...register('name', { required: 'Name is required' })}
+                error={errors.name?.message}
               />
-              <Input 
-                label="Student Capacity" 
+              <Input
+                label="Student Capacity"
                 type="number"
-                {...register('capacity', { required: 'Capacity is required', min: 1 })} 
-                error={errors.capacity?.message} 
+                {...register('capacity', { required: 'Capacity is required', min: 1 })}
+                error={errors.capacity?.message}
               />
               <div className="space-y-1">
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Program / Course</label>
-                <select 
+                <select
                   {...register('courseId', { required: 'Program is required' })}
                   className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white"
                 >
@@ -162,7 +193,7 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
               </div>
               <div className="space-y-1 col-span-1 md:col-span-2">
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Assigned Staff / Class Teachers</label>
-                <select 
+                <select
                   multiple
                   value={selectedTeachers}
                   onChange={(e) => {
@@ -204,11 +235,12 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10">
-                  <th className="py-4 px-6 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Class Name</th>
-                  <th className="py-4 px-6 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Program</th>
-                  <th className="py-4 px-6 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Capacity</th>
-                  <th className="py-4 px-6 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Assigned Staff</th>
-                  <th className="py-4 px-6 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Actions</th>
+                  <th className={TH}>Class Name</th>
+                  <th className={TH}>Program</th>
+                  <th className={TH}>Capacity</th>
+                  <th className={TH}>Semesters</th>
+                  <th className={TH}>Assigned Staff</th>
+                  <th className={`${TH} text-right`}>Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-white/10">
@@ -228,6 +260,26 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex flex-wrap gap-1">
+                        {(section.semesterCounts || []).length === 0 ? (
+                          <span className="text-xs text-slate-400">No students</span>
+                        ) : (
+                          section.semesterCounts.map(c => (
+                            <span
+                              key={c.semester ?? 'none'}
+                              className={`inline-block px-2 py-1 text-xs font-medium rounded-md ${
+                                c.semester == null
+                                  ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'
+                                  : 'bg-slate-100 text-slate-700 dark:bg-white/5 dark:text-slate-300'
+                              }`}
+                            >
+                              {c.semester == null ? 'Not set' : `Sem ${c.semester}`}: {c.count}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-4 px-6">
+                      <div className="flex flex-wrap gap-1">
                         {section.teachers && section.teachers.length > 0 ? (
                           section.teachers.map(t => (
                             <span key={t.id} className="inline-block px-2 py-1 text-xs font-medium bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 rounded-md">
@@ -241,6 +293,13 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
                     </td>
                     <td className="py-4 px-6 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => openSemModal(section)}
+                          title="Promote / set semester"
+                          className="p-2 text-slate-400 hover:text-primary-600 transition-colors"
+                        >
+                          <ArrowUpCircle className="w-4 h-4" />
+                        </button>
                         <button onClick={() => handleOpenEdit(section)} className="p-2 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
                           <Edit2 className="w-4 h-4" />
                         </button>
@@ -266,6 +325,46 @@ export default function SectionsTab({ courseId, courseName, onClearFilter }) {
           </div>
         )}
       </div>
+
+      {semTarget && (
+        <Modal
+          isOpen={!!semTarget}
+          onClose={() => setSemTarget(null)}
+          title={`Semester: ${semTarget.course?.name || courseName || ''} / ${semTarget.name}`}
+        >
+          <div className="space-y-4">
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
+              <input type="radio" checked={semMode === 'promote'} onChange={() => setSemMode('promote')} />
+              Promote every student by one semester
+            </label>
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
+              <input type="radio" checked={semMode === 'set'} onChange={() => setSemMode('set')} />
+              Set a specific semester (use this for existing students)
+            </label>
+            {semMode === 'set' && (
+              <div className="space-y-3 pl-6">
+                <select
+                  value={semValue}
+                  onChange={(e) => setSemValue(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl dark:text-white"
+                >
+                  {Array.from({ length: semTarget.course?.semester || 8 }, (_, i) => i + 1).map(n => (
+                    <option key={n} value={n}>Semester {n}</option>
+                  ))}
+                </select>
+                <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                  <input type="checkbox" checked={onlyEmpty} onChange={(e) => setOnlyEmpty(e.target.checked)} />
+                  Only students with no semester set
+                </label>
+              </div>
+            )}
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="outline" onClick={() => setSemTarget(null)}>Cancel</Button>
+              <Button onClick={submitSemester} isLoading={changeSemester.isPending}>Apply</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

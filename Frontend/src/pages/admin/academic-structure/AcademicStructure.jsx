@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, GraduationCap, Users } from 'lucide-react';
+import { Building2, GraduationCap, Users, BookOpen, UserCheck } from 'lucide-react';
 import DepartmentsTab from './DepartmentsTab';
 import CoursesTab from './CoursesTab';
 import SectionsTab from './SectionsTab';
+import SubjectsTab from './SubjectsTab';
+import TeachingTab from './TeachingTab';
 
 export default function AcademicStructure() {
   const [activeTab, setActiveTab] = useState('departments');
@@ -25,13 +27,15 @@ export default function AcademicStructure() {
     { id: 'departments', name: 'Departments', icon: Building2 },
     { id: 'courses', name: 'Programs / Courses', icon: GraduationCap },
     { id: 'sections', name: 'Classes / Sections', icon: Users },
+    { id: 'subjects', name: 'Subjects', icon: BookOpen },
+    { id: 'teaching', name: 'Teaching', icon: UserCheck },
   ];
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white">Academic Structure</h1>
-        <p className="text-slate-500 dark:text-slate-400 mt-1">Configure your college's departments, programs, and classes.</p>
+        <p className="text-slate-500 dark:text-slate-400 mt-1">Configure your college's departments, programs, classes, subjects and teaching.</p>
       </div>
 
       <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl p-1 flex overflow-x-auto">
@@ -64,20 +68,24 @@ export default function AcademicStructure() {
               <DepartmentsTab onSelect={handleDepartmentSelect} />
             )}
             {activeTab === 'courses' && (
-              <CoursesTab 
-                departmentId={selectedDepartment?.id} 
+              <CoursesTab
+                departmentId={selectedDepartment?.id}
                 departmentName={selectedDepartment?.name}
-                onSelect={handleCourseSelect} 
+                onSelect={handleCourseSelect}
                 onClearFilter={() => setSelectedDepartment(null)}
               />
             )}
             {activeTab === 'sections' && (
-              <SectionsTab 
-                courseId={selectedCourse?.id} 
+              <SectionsTab
+                courseId={selectedCourse?.id}
                 courseName={selectedCourse?.name}
                 onClearFilter={() => setSelectedCourse(null)}
               />
             )}
+            {activeTab === 'subjects' && (
+              <SubjectsTab courseId={selectedCourse?.id} />
+            )}
+            {activeTab === 'teaching' && <TeachingTab />}
           </motion.div>
         </AnimatePresence>
       </div>

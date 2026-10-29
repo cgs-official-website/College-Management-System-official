@@ -370,92 +370,17 @@ export default function HRManagement() {
   };
 
   const getRoleBadge = (role, member) => {
-    // Determine the specific role display name:
-    // Priority:
-    // 1. member?.customRole (explicit custom role name)
-    // 2. roles lookup if member?.customRoleId is present
-    // 3. member?.designation (if it's not a generic default like 'Teacher' or 'Staff')
-    const roleIdMatch = member?.customRoleId ? roles.find(r => r.id === member.customRoleId) : null;
-    const explicitCustomRole = (member?.customRole || roleIdMatch?.name || '').trim();
+  const roleName =
+    member?.customRole ||
+    roles.find((r) => r.id === member?.customRoleId)?.name ||
+    '-';
 
-    const rawDesig = (member?.designation || '').trim();
-    const isGenericDesig = !rawDesig || ['teacher', 'staff', 'n/a', 'support'].includes(rawDesig.toLowerCase());
-    const specificDesignation = !isGenericDesig ? rawDesig : null;
-
-    const specificRoleName = explicitCustomRole || specificDesignation;
-    const normalizedRole = String(role || member?.role || '').toLowerCase();
-    const effectiveStaffType = member?.staffType || (roleIdMatch?.category === 'non_teaching' ? 'non-teaching' : null);
-
-    // Case 1: HOD (Head of Department)
-    const isHod = normalizedRole === 'hod' || 
-      (specificRoleName && /^(hod|head of department)$/i.test(specificRoleName));
-    if (isHod) {
-      return (
-        <span className="px-2.5 py-1 bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 rounded-md text-xs font-bold uppercase tracking-wider flex items-center gap-1 w-max">
-          <Shield className="w-3 h-3" /> HOD
-        </span>
-      );
-    }
-
-    // Case 2: Admin
-    const isAdmin = normalizedRole === 'admin' || 
-      (specificRoleName && /^admin(istrator)?$/i.test(specificRoleName));
-    if (isAdmin) {
-      return (
-        <span className="px-2.5 py-1 bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400 rounded-md text-xs font-bold uppercase tracking-wider flex items-center gap-1 w-max">
-          <Shield className="w-3 h-3" /> Admin
-        </span>
-      );
-    }
-
-    // Case 3: Specific role / designation exists (e.g. "admin office", "Library staff", "Assistant Professor", "Accountant")
-    if (specificRoleName) {
-      const isNonTeaching = effectiveStaffType === 'non-teaching' ||
-        normalizedRole === 'staff' ||
-        roleIdMatch?.category === 'non_teaching' ||
-        /admin|office|library|account|clerk|reception|driver|peon|warden|security|maintenance|store|staff/i.test(specificRoleName);
-
-      if (isNonTeaching) {
-        return (
-          <span className="px-2.5 py-1 bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 rounded-md text-xs font-bold uppercase tracking-wider w-max flex items-center gap-1">
-            <Shield className="w-3 h-3" /> {specificRoleName}
-          </span>
-        );
-      }
-
-      // Teaching custom role / academic rank (e.g., "Assistant Professor", "Professor", "Lecturer")
-      return (
-        <span className="px-2.5 py-1 bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-400 rounded-md text-xs font-bold uppercase tracking-wider w-max flex items-center gap-1">
-          {specificRoleName}
-        </span>
-      );
-    }
-
-    // Case 4: Non-teaching staff without specific role name
-    if (normalizedRole === 'staff' || effectiveStaffType === 'non-teaching') {
-      return (
-        <span className="px-2.5 py-1 bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 rounded-md text-xs font-bold uppercase tracking-wider w-max flex items-center gap-1">
-          <Shield className="w-3 h-3" /> Staff
-        </span>
-      );
-    }
-
-    // Case 5: Faculty
-    if (normalizedRole === 'faculty') {
-      return (
-        <span className="px-2.5 py-1 bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-400 rounded-md text-xs font-bold uppercase tracking-wider w-max">
-          Faculty
-        </span>
-      );
-    }
-
-    // Case 6: Standard Teacher
     return (
-      <span className="px-2.5 py-1 bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-400 rounded-md text-xs font-bold uppercase tracking-wider w-max">
-        Teacher
-      </span>
-    );
-  };
+    <span className="inline-block w-max px-2.5 py-1 rounded-md text-xs font-semibold bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">
+      {roleName}
+    </span>
+  );
+};
 
   return (
     <div className="space-y-6">
@@ -759,23 +684,14 @@ export default function HRManagement() {
                   <tr key={member.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors group">
                     <td className="p-4 pl-6">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-emerald-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
-                          {member.firstName?.charAt(0) || member.name?.charAt(0) || 'U'}{member.lastName?.charAt(0) || ''}
+                        <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-500/20 text-primary-600 dark:text-primary-400 flex items-center justify-center font-bold text-xs shrink-0">
+                          {(member.firstName?.[0] || member.name?.[0] || 'U').toUpperCase()}
+                          {(member.lastName?.[0] || '').toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900 dark:text-white text-sm">{member.firstName || member.name} {member.lastName || ''}</p>
-                          <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex-wrap">
-                            {member.designation && member.designation !== 'Teacher' && member.designation !== 'Staff' && (
-                              <>
-                                <span className="font-medium text-slate-700 dark:text-slate-300">{member.designation}</span>
-                                <span className="text-slate-300 dark:text-slate-600">•</span>
-                              </>
-                            )}
-                            <span className="inline-flex items-center gap-1">
-                              <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
-                              Joined: {formatJoiningDate(member.joiningDate || member.joinDate || member.createdAt)}
-                            </span>
-                          </div>
+                          <p className="font-bold text-slate-900 dark:text-white text-sm">
+                            {member.firstName || member.name} {member.lastName || ''}
+                          </p>
                         </div>
                       </div>
                     </td>
@@ -834,21 +750,15 @@ export default function HRManagement() {
                             <button
                               onClick={() => handleSendSetupMail(member)}
                               disabled={sendingMailId === member.id || !!mailCooldowns[member.id]}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 border border-indigo-200 dark:border-indigo-500/30 rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex items-center p-2 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 border border-indigo-200 dark:border-indigo-500/30 rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                               title={mailCooldowns[member.id] ? `Please wait ${mailCooldowns[member.id]}s before resending` : "Send Setup Email"}
+                              aria-label="Send Setup Email"
                             >
                               {sendingMailId === member.id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <Loader2 className="w-4 h-4 animate-spin" />
                               ) : (
-                                <Mail className="w-3.5 h-3.5" />
+                                <Mail className="w-4 h-4" />
                               )}
-                              <span>
-                                {sendingMailId === member.id
-                                  ? 'Sending...'
-                                  : mailCooldowns[member.id]
-                                    ? `Sent (${mailCooldowns[member.id]}s)`
-                                    : 'Send Mail'}
-                              </span>
                             </button>
                           </>
                         )}

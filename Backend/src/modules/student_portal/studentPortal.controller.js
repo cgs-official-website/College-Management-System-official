@@ -3,6 +3,15 @@ import { redis, redisKeys } from '../../lib/cache.js';
 import { processStudentProfileImageBuffer, extractBufferFromBase64Payload } from '../../lib/imageProcessor.js';
 import { parseProofMeta, buildProofPayload, toSafeLeave, discardProof } from '../leaves/leaves.controller.js';
 import { notify } from '../notifications/notify.service.js';
+import { isPastDeadline } from '../../lib/assignmentDeadline.js';
+
+const assignmentScope = (student) => ({
+  collegeId: student.collegeId,
+  OR: [
+    ...(student.sectionId ? [{ sectionId: student.sectionId }] : []),
+    ...(student.courseId ? [{ sectionId: null, courseId: student.courseId }] : []),
+  ],
+});
 
 export const getStudentProfile = async (req, res) => {
   try {
@@ -21,6 +30,7 @@ export const getStudentProfile = async (req, res) => {
         rollNumber: student.rollNumber,
         firstName,
         lastName,
+        currentSemester: student.currentSemester,
         name: student.user?.name || `${firstName} ${lastName}`.trim(),
         email: student.user?.email || student.emailId,
         mobile: student.studentMobile || student.emergencyContact,
@@ -74,27 +84,29 @@ export const getStudentDashboard = async (req, res) => {
         }
       })
     ]);
-    const attendancePercentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 100;
 
-    const coursesCount = await prisma.course.count({
-      where: {
-        collegeId,
-        departmentId: student.departmentId,
-        deletedAt: null
-      }
-    });
+    const attendancePercentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : null;
 
-    const assignments = await prisma.assignment.findMany({
-      where: {
-        collegeId,
-        ...(student.courseId ? { courseId: student.courseId } : {})
-      },
+    const coursesCount = student.courseId && student.currentSemester
+      ? await prisma.subject.count({
+          where: {
+            collegeId,
+            courseId: student.courseId,
+            semester: student.currentSemester,
+            isActive: true
+          }
+        })
+      : 0;
+
+     const assignments = await prisma.assignment.findMany({
+      where: assignmentScope(student),
       include: {
         submissions: {
           where: { studentId }
         }
       }
     });
+
     const pendingAssignments = assignments.filter(a => a.submissions.length === 0).length;
 
     const upcomingExams = await prisma.exam.count({
@@ -161,19 +173,54 @@ export const getStudentDashboard = async (req, res) => {
 export const getStudentCourses = async (req, res) => {
   try {
     const student = req.student;
-    const courses = await prisma.course.findMany({
-      where: {
-        collegeId: student.collegeId,
-        departmentId: student.departmentId,
-        deletedAt: null
-      },
-      include: {
-        department: true
-      },
-      orderBy: { semester: 'asc' }
-    });
+    const { collegeId, courseId, sectionId } = student;
+    const currentSemester = student.currentSemester ?? 1;
 
-    res.json({ success: true, data: courses });
+    const subjects = courseId
+      ? await prisma.subject.findMany({
+          where: { collegeId, courseId, isActive: true, semester: { lte: currentSemester } },
+          orderBy: [{ semester: 'asc' }, { code: 'asc' }]
+        })
+      : [];
+
+    const assignments = sectionId && subjects.length
+      ? await prisma.teachingAssignment.findMany({
+          where: { collegeId, sectionId, subjectId: { in: subjects.map((s) => s.id) } },
+          include: { teacher: { select: { user: { select: { name: true } } } } }
+        })
+      : [];
+    const staffBySubject = new Map(assignments.map((a) => [a.subjectId, a.teacher?.user?.name || null]));
+
+    const semesters = [];
+    for (let sem = 1; sem <= currentSemester; sem++) {
+      const list = subjects
+        .filter((s) => s.semester === sem)
+        .map((s) => ({
+          id: s.id,
+          code: s.code,
+          name: s.name,
+          type: s.type,
+          credits: s.credits,
+          staffName: staffBySubject.get(s.id) || null
+        }));
+      semesters.push({
+        semester: sem,
+        totalCredits: list.reduce((sum, s) => sum + (s.credits || 0), 0),
+        subjects: list
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        department: student.department ? { name: student.department.name, code: student.department.code } : null,
+        program: student.course ? { name: student.course.name, code: student.course.code } : null,
+        section: student.section?.name || null,
+        batchYear: student.batchYear,
+        currentSemester,
+        semesters
+      }
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
   }
@@ -183,31 +230,39 @@ export const getStudentAssignments = async (req, res) => {
   try {
     const student = req.student;
     const assignments = await prisma.assignment.findMany({
-      where: {
-        collegeId: student.collegeId
-      },
+      where: assignmentScope(student),
       include: {
         course: true,
-        submissions: {
-          where: { studentId: student.id }
-        }
+        subject: true,
+        submissions: { where: { studentId: student.id } }
       },
       orderBy: { dueDate: 'asc' }
     });
 
     const formatted = assignments.map(a => {
       const sub = a.submissions[0];
+      const closed = isPastDeadline(a.dueDate);
+      const graded = !!sub && sub.score !== null && sub.score !== undefined;
+
+      let lockReason = null;
+      if (graded) lockReason = 'Graded. Resubmission is closed';
+      else if (closed) lockReason = 'Deadline passed';
+
       return {
         id: a.id,
         title: a.title,
         description: a.description,
         courseName: a.course?.name || 'General Course',
         courseCode: a.course?.code || '',
+        subjectName: a.subject?.name || null,
+        maxScore: a.maxScore,
         dueDate: a.dueDate,
         attachmentUrl: a.attachmentUrl || null,
-        status: sub ? (sub.score !== null ? 'Graded' : 'Submitted') : (new Date(a.dueDate) < new Date() ? 'Overdue' : 'Pending'),
+        status: graded ? 'Graded' : sub ? 'Submitted' : closed ? 'Overdue' : 'Pending',
+        canSubmit: !closed && !graded,
+        lockReason,
         submittedAt: sub?.submittedAt || null,
-        score: sub?.score || null,
+        score: sub?.score ?? null,
         feedback: sub?.feedback || null,
         submissionFileUrl: sub?.fileUrl || null
       };
@@ -223,37 +278,50 @@ export const submitStudentAssignment = async (req, res) => {
   try {
     const student = req.student;
     const { id } = req.params;
-    const { fileUrl } = req.body;
+    const rawUrl = String(req.body?.fileUrl || '').trim();
 
-    if (!fileUrl) {
-      return res.status(400).json({ success: false, error: { message: 'Submission file URL is required' } });
+    if (!rawUrl) {
+      return res.status(400).json({ success: false, error: { message: 'Submission link is required' } });
+    }
+
+    let parsed = null;
+    try { parsed = new URL(rawUrl); } catch { parsed = null; }
+    if (!parsed || !['http:', 'https:'].includes(parsed.protocol)) {
+      return res.status(400).json({ success: false, error: { message: 'Submission link must start with http:// or https://' } });
     }
 
     const assignment = await prisma.assignment.findFirst({
-      where: { id, collegeId: student.collegeId }
+      where: { id, ...assignmentScope(student) }
     });
-
     if (!assignment) {
       return res.status(404).json({ success: false, error: { message: 'Assignment not found' } });
     }
 
+    if (isPastDeadline(assignment.dueDate)) {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'ASSIGNMENT_CLOSED', message: 'The deadline for this assignment has passed.' }
+      });
+    }
+
+    const existing = await prisma.assignmentSubmission.findUnique({
+      where: { assignmentId_studentId: { assignmentId: id, studentId: student.id } }
+    });
+    if (existing && existing.score !== null && existing.score !== undefined) {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'ALREADY_GRADED', message: 'This submission has already been graded and cannot be changed.' }
+      });
+    }
+
     const submission = await prisma.assignmentSubmission.upsert({
-      where: {
-        assignmentId_studentId: {
-          assignmentId: id,
-          studentId: student.id
-        }
-      },
-      update: {
-        fileUrl,
-        submittedAt: new Date(),
-        status: 'submitted'
-      },
+      where: { assignmentId_studentId: { assignmentId: id, studentId: student.id } },
+      update: { fileUrl: parsed.href, submittedAt: new Date(), status: 'submitted' },
       create: {
         collegeId: student.collegeId,
         assignmentId: id,
         studentId: student.id,
-        fileUrl,
+        fileUrl: parsed.href,
         status: 'submitted'
       }
     });
@@ -281,7 +349,7 @@ export const getStudentAttendance = async (req, res) => {
     const totalDays = attendance.length;
     const presentDays = attendance.filter(a => a.status === 'present' || a.status === 'late').length;
     const absentDays = attendance.filter(a => a.status === 'absent').length;
-    const percentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 100;
+    const percentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : null;
 
     res.json({
       success: true,
@@ -458,37 +526,32 @@ export const getStudentExams = async (req, res) => {
     const student = req.student;
     const exams = await prisma.exam.findMany({
       where: {
-        collegeId: student.collegeId
+        collegeId: student.collegeId,
+        OR: [
+          { examTypeId: null },
+          ...(student.courseId && student.currentSemester
+            ? [{ examTypeId: { not: null }, courseId: student.courseId, semester: student.currentSemester }]
+            : [])
+        ]
       },
-      include: {
-        course: true
-      },
-      orderBy: { date: 'asc' }
+      include: { course: true, subjectRef: { select: { code: true, name: true } } },
+      orderBy: [{ date: 'asc' }, { startTime: 'asc' }]
     });
-
-    const examIds = exams.map(e => e.id);
-    const roomMap = {};
-    if (examIds.length > 0) {
-      try {
-        const rows = await prisma.$queryRawUnsafe(
-          `SELECT "id", "room" FROM "Exam" WHERE "id"::text = ANY($1)`,
-          examIds
-        );
-        for (const row of rows) {
-          roomMap[row.id] = row.room;
-        }
-      } catch (_) {}
-    }
 
     const formatted = exams.map(e => ({
       id: e.id,
       name: e.name,
-      title: e.name,
+      title: e.subjectRef ? `${e.subjectRef.name} (${e.subjectRef.code})` : e.name,
+      examName: e.name,
+      subjectCode: e.subjectRef?.code || null,
+      subjectName: e.subjectRef?.name || e.subject || null,
       date: e.date,
+      startTime: e.startTime,
+      endTime: e.endTime,
       type: e.type,
       maxMarks: e.maxMarks,
-      room: roomMap[e.id] ?? e.room ?? 'Main Hall',
-      hall: roomMap[e.id] ?? e.room ?? 'Main Hall',
+      room: e.room ?? 'Main Hall',
+      hall: e.room ?? 'Main Hall',
       course: e.course
     }));
 
@@ -502,9 +565,7 @@ export const getStudentResults = async (req, res) => {
   try {
     const student = req.student;
     const marks = await prisma.mark.findMany({
-      where: {
-        studentId: student.id
-      },
+      where: { studentId: student.id, exam: { examTypeId: null } },
       include: {
         exam: {
           include: { course: true }
@@ -1320,6 +1381,123 @@ export const getStudentBookHistory = async (req, res) => {
       })),
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentSubjects = async (req, res) => {
+  try {
+    const student = req.student;
+    const { collegeId, courseId, currentSemester, sectionId } = student;
+
+    if (!courseId || !currentSemester) {
+      return res.json({ success: true, data: { semester: currentSemester ?? null, subjects: [] } });
+    }
+
+    const subjects = await prisma.subject.findMany({
+      where: { collegeId, courseId, semester: currentSemester, isActive: true },
+      orderBy: { code: 'asc' }
+    });
+
+    const assignments = sectionId
+      ? await prisma.teachingAssignment.findMany({
+          where: { collegeId, sectionId, subjectId: { in: subjects.map((s) => s.id) } },
+          include: { teacher: { select: { user: { select: { name: true } } } } }
+        })
+      : [];
+    const teacherBySubject = new Map(assignments.map((a) => [a.subjectId, a.teacher?.user?.name || null]));
+
+    res.json({
+      success: true,
+      data: {
+        semester: currentSemester,
+        subjects: subjects.map((s) => ({
+          id: s.id, code: s.code, name: s.name, type: s.type, credits: s.credits,
+          teacher: teacherBySubject.get(s.id) || null
+        }))
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getStudentInternalResults = async (req, res) => {
+  try {
+    const { collegeId, courseId, sectionId, currentSemester, id: studentId } = req.student;
+    if (!courseId) return res.json({ success: true, data: { exams: [] } });
+
+    const exams = await prisma.exam.findMany({
+      where: { collegeId, courseId, examTypeId: { not: null }, semester: { not: null } },
+      include: { examTypeRef: { select: { id: true, name: true } } },
+      orderBy: { date: 'desc' }
+    });
+    if (!exams.length) return res.json({ success: true, data: { exams: [] } });
+
+    const semesters = [...new Set(exams.map((e) => e.semester))];
+    const examIds = exams.map((e) => e.id);
+
+    const [subjects, statuses, marks] = await Promise.all([
+      prisma.subject.findMany({
+        where: { collegeId, courseId, semester: { in: semesters }, isActive: true },
+        orderBy: { code: 'asc' }
+      }),
+      sectionId
+        ? prisma.examSectionStatus.findMany({
+            where: { examId: { in: examIds }, sectionId, status: 'PUBLISHED' },
+            select: { examId: true }
+          })
+        : Promise.resolve([]),
+      prisma.mark.findMany({ where: { examId: { in: examIds }, studentId } })
+    ]);
+
+    const published = new Set(statuses.map((s) => s.examId));
+    const markByExam = new Map(marks.map((m) => [m.examId, m]));
+
+    const picked = new Map();
+    for (const e of exams) {
+      const key = `${e.examTypeId}:${e.subjectId}`;
+      const cur = picked.get(key);
+      if (!cur || (published.has(e.id) && !published.has(cur.id))) picked.set(key, e);
+    }
+
+    const groups = new Map();
+    for (const e of exams) {
+      const key = `${e.examTypeId}:${e.semester}`;
+      if (!groups.has(key)) {
+        groups.set(key, { examTypeId: e.examTypeId, examTypeName: e.examTypeRef?.name || e.type, semester: e.semester });
+      }
+    }
+
+    const semestersWithMarks = new Set(
+      exams.filter((e) => published.has(e.id) && markByExam.has(e.id)).map((e) => e.semester)
+    );
+
+    const result = [...groups.values()]
+      .filter((g) => g.semester === currentSemester || semestersWithMarks.has(g.semester))
+      .sort((a, b) => b.semester - a.semester || a.examTypeName.localeCompare(b.examTypeName, undefined, { numeric: true }))
+      .map((g) => ({
+        ...g,
+        rows: subjects
+          .filter((s) => s.semester === g.semester)
+          .map((s) => {
+            const e = picked.get(`${g.examTypeId}:${s.id}`);
+            const isPub = !!e && published.has(e.id);
+            const m = isPub ? markByExam.get(e.id) : null;
+            return {
+              subjectId: s.id,
+              code: s.code,
+              name: s.name,
+              maxMarks: e?.maxMarks ?? null,
+              published: isPub,
+              isAbsent: !!m?.isAbsent,
+              obtainedMarks: m?.obtainedMarks ?? null
+            };
+          })
+      }));
+
+    res.json({ success: true, data: { exams: result } });
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
   }
