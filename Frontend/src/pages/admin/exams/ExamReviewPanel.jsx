@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, Undo2, Eye } from 'lucide-react';
 import { useCourses } from '../../../hooks/useCourses';
-import { useExamTypes, useReview } from '../../../hooks/useExamCenter';
+import { useExamTypes, useReview, useSchedulePreview } from '../../../hooks/useExamCenter';
 import { api } from '../../../services/apiClient';
 import { Modal } from '../../../components/ui/Modal';
 
@@ -76,8 +76,10 @@ export default function ExamReviewPanel() {
   const [courseId, setCourseId] = useState('');
   const [semester, setSemester] = useState('');
   const [viewing, setViewing] = useState(null);
-  const { review, isLoading, act, publishAll } = useReview({ examTypeId, courseId, semester });
-
+  const [batchYear, setBatchYear] = useState('');
+  const { preview } = useSchedulePreview({ examTypeId, courseId, semester });
+  const batches = preview?.batches || [];
+  const { review, isLoading, act, publishAll } = useReview({ examTypeId, courseId, semester, batchYear });
   const course = courses.find((c) => c.id === courseId);
   const semesterOptions = course ? Array.from({ length: course.semester }, (_, i) => i + 1) : [];
 
@@ -91,7 +93,9 @@ export default function ExamReviewPanel() {
   };
 
   const doPublishAll = async (sectionId) => {
-    try { await publishAll({ examTypeId, courseId, semester: Number(semester), sectionId }); } catch { /* toast shown */ }
+    try { 
+      await publishAll({ examTypeId, courseId, semester: Number(semester), batchYear, sectionId });
+   } catch { /* toast shown */ }
   };
 
   return (
@@ -103,18 +107,22 @@ export default function ExamReviewPanel() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <select className={sel} value={examTypeId} onChange={(e) => setExamTypeId(e.target.value)}>
           <option value="">Select exam type</option>
           {examTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
-        <select className={sel} value={courseId} onChange={(e) => { setCourseId(e.target.value); setSemester(''); }}>
+        <select className={sel} value={courseId} onChange={(e) => { setCourseId(e.target.value); setSemester(''); setBatchYear(''); }}>
           <option value="">Select program</option>
           {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <select className={sel} value={semester} disabled={!courseId} onChange={(e) => setSemester(e.target.value)}>
+        <select className={sel} value={semester} disabled={!courseId} onChange={(e) => { setSemester(e.target.value); setBatchYear(''); }}>
           <option value="">Select semester</option>
           {semesterOptions.map((n) => <option key={n} value={n}>Semester {n}</option>)}
+        </select>
+        <select className={sel} value={batchYear} disabled={!semester || batches.length === 0} onChange={(e) => setBatchYear(e.target.value)}>
+          <option value="">Select batch</option>
+          {batches.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
       </div>
 

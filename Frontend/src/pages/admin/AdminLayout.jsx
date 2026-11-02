@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ChatWidget from '../../components/ui/ChatWidget';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDashboardStats } from '../../hooks/useDashboardStats';
+import { api } from '../../services/apiClient';
 import { 
   LayoutDashboard, 
   Users,
@@ -107,7 +108,7 @@ const AdminLayout = () => {
   const [openGroups, setOpenGroups] = useState({});
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout, userData, userRole, permissions } = useAuth();
+  const { logout, userData, userRole, permissions, updateUserData} = useAuth();
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
   // TEMP DISABLED: Custom module
   const { data: customEntitiesData } = useGetEntities({
@@ -144,6 +145,8 @@ const AdminLayout = () => {
   const initials = isAdmin
     ? 'AD'
     : (displayName.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || 'ST');
+
+  const avatarSrc = isAdmin ? userData?.collegeLogo : userData?.profileImage;
 
   const roleLabel = isAdmin ? 'ADMIN' : (userData?.customRole?.name || 'Staff').toUpperCase();
 
@@ -249,7 +252,13 @@ const AdminLayout = () => {
   };
 
   const searchableLinks = navLinks.flatMap(link => (link.children ? link.children : [link]));
-
+ 
+  useEffect(() => {
+  if (isAdmin || !userData?.uid || userData?.profileImage !== undefined) return;
+  api.get('/staff-profile')
+    .then((res) => updateUserData({ profileImage: res.data?.profileImage || null }))
+    .catch(() => updateUserData({ profileImage: null }));
+  }, [isAdmin, userData?.uid]);
 
   if (userData?.college?.status === 'pending') {
     return (
@@ -426,8 +435,8 @@ const AdminLayout = () => {
           <div className="flex items-center justify-between group cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 p-2 rounded-xl transition-colors" onClick={handleLogout}>
             <div className="flex items-center gap-3 overflow-hidden">
               <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-400 flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
-                {userData?.collegeLogo ? (
-                  <img src={userData.collegeLogo} alt="Logo" className="w-full h-full object-contain p-1 rounded-full" />
+                {avatarSrc ? (
+                  <img src={avatarSrc} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
                   <span>{initials}</span>
                 )}
@@ -513,10 +522,10 @@ const AdminLayout = () => {
                 </p>
               </div>
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-teal-600 flex items-center justify-center text-white font-bold shadow-md overflow-hidden">
-                {userData?.collegeLogo ? (
-                  <img src={userData.collegeLogo} alt="Logo" className="w-full h-full object-contain p-1" />
-                ) : (
-                  <span>{initials}</span>
+                {avatarSrc ? (
+                    <img src={avatarSrc} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{initials}</span>
                 )}
               </div>
             </button>

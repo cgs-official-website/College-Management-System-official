@@ -325,57 +325,123 @@ export const getDashboardInsights = async (req, res) => {
   }
 };
 
+// Most common currentSemester among each section's active students (same rule as exams and assignments)
+async function getSectionSemesterMap(collegeId, sectionIds) {
+  if (!sectionIds.length) return new Map();
+  const rows = await prisma.student.groupBy({
+    by: ['sectionId', 'currentSemester'],
+    where: { collegeId, sectionId: { in: sectionIds }, deletedAt: null, currentSemester: { not: null } },
+    _count: { _all: true },
+  });
+  const best = new Map();
+  for (const r of rows) {
+    const cur = best.get(r.sectionId);
+    if (!cur || r._count._all > cur.count) {
+      best.set(r.sectionId, { semester: r.currentSemester, count: r._count._all });
+    }
+  }
+  return new Map([...best].map(([id, v]) => [id, v.semester]));
+}
+
+const EMPTY_TEACHER_STATS = {
+  totalClasses: 0,
+  studentsTaught: 0,
+  attendanceRate: null,
+  attendanceMarked: 0,
+  pendingGrades: 0,
+  pendingMarkSheets: 0,
+  ungradedSubmissions: 0,
+};
+
 export const getTeacherStats = async (req, res) => {
   try {
     const { collegeId } = req.tenant;
     const { userId } = req.user;
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { teacherProfile: true }
+    const teacher = await prisma.teacher.findFirst({
+      where: { userId, collegeId, deletedAt: null },
+      select: { id: true },
     });
 
-    if (!user || !user.teacherProfile) {
-      return res.json({
-        data: {
-          totalClasses: 0,
-          studentsTaught: 0,
-          attendanceRate: 0,
-          pendingGrades: 0
-        }
-      });
+    if (!teacher) {
+      return res.json({ data: EMPTY_TEACHER_STATS });
     }
 
-    const teacherId = user.teacherProfile.id;
+    const teacherId = teacher.id;
 
-    const [totalClasses, studentsTaught] = await Promise.all([
-      prisma.section.count({
-        where: { collegeId, teachers: { some: { id: teacherId } } }
-      }),
-      prisma.student.count({
-        where: { collegeId, section: { teachers: { some: { id: teacherId } } } }
-      })
-    ]);
+    const [totalClasses, studentsTaught, attendanceMarked, attendancePresent, assignments, ungradedSubmissions] =
+      await Promise.all([
+        prisma.section.count({
+          where: { collegeId, teachers: { some: { id: teacherId } } },
+        }),
+        prisma.student.count({
+          where: { collegeId, section: { teachers: { some: { id: teacherId } } } },
+        }),
+        prisma.attendance.count({ where: { collegeId, teacherId } }),
+        prisma.attendance.count({
+          where: { collegeId, teacherId, status: { in: ['present', 'late'] } },
+        }),
+        prisma.teachingAssignment.findMany({
+          where: { collegeId, teacherId },
+          include: { subject: { select: { id: true, semester: true, isActive: true } } },
+        }),
+        prisma.assignmentSubmission.count({
+          where: { collegeId, score: null, assignment: { teacherId } },
+        }),
+      ]);
+
+    const attendanceRate =
+      attendanceMarked > 0 ? Math.round((attendancePresent / attendanceMarked) * 100) : null;
+
+    let pendingMarkSheets = 0;
+    const sectionIds = [...new Set(assignments.map((a) => a.sectionId))];
+    const semMap = await getSectionSemesterMap(collegeId, sectionIds);
+    const current = assignments.filter(
+      (a) => a.subject.isActive && semMap.get(a.sectionId) === a.subject.semester
+    );
+
+    if (current.length) {
+      const todayIST = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+      const exams = await prisma.exam.findMany({
+        where: {
+          collegeId,
+          examTypeId: { not: null },
+          subjectId: { in: [...new Set(current.map((a) => a.subjectId))] },
+          date: { lte: new Date(todayIST) }, 
+        },
+        include: { sectionStatuses: { where: { sectionId: { in: sectionIds } } } },
+        orderBy: { date: 'desc' },
+      });
+
+      for (const a of current) {
+        const sem = semMap.get(a.sectionId);
+        const picked = new Map();
+        for (const e of exams) {
+          if (e.subjectId !== a.subjectId || e.semester !== sem) continue;
+          const hasStatus = e.sectionStatuses.some((s) => s.sectionId === a.sectionId);
+          const cur = picked.get(e.examTypeId);
+          if (!cur || (hasStatus && !cur.hasStatus)) picked.set(e.examTypeId, { e, hasStatus });
+        }
+        for (const { e } of picked.values()) {
+          const st = e.sectionStatuses.find((s) => s.sectionId === a.sectionId);
+          if (!st || st.status === 'DRAFT') pendingMarkSheets++;
+        }
+      }
+    }
 
     res.json({
       data: {
         totalClasses,
         studentsTaught,
-        attendanceRate: 92,
-        pendingGrades: 5
-      }
+        attendanceRate,
+        attendanceMarked,
+        pendingGrades: pendingMarkSheets + ungradedSubmissions,
+        pendingMarkSheets,
+        ungradedSubmissions,
+      },
     });
-
   } catch (error) {
     console.warn('[Dashboards] Warning in getTeacherStats (transient DB issue):', error.message);
-    res.json({
-      success: true,
-      data: {
-        totalClasses: 0,
-        studentsTaught: 0,
-        attendanceRate: 0,
-        pendingGrades: 0
-      }
-    });
+    res.json({ success: true, data: EMPTY_TEACHER_STATS });
   }
 };

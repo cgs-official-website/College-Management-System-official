@@ -17,8 +17,11 @@ export function useStudents(collegeId) {
 
   const addStudent = useMutation({
     mutationFn: (newStudent) => api.post('/students', newStudent),
-    onSuccess: () => {
-      toast.success('Student added successfully!');
+    onSuccess: (res) => {
+      const queued = res?.data?.setupEmailQueued ?? res?.setupEmailQueued;
+      toast.success(queued
+        ? 'Student added. A password setup link is being emailed.'
+        : 'Student added.');
       queryClient.invalidateQueries({ queryKey: ['students', collegeId] });
     },
     onError: (err) => {

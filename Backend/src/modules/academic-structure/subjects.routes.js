@@ -9,7 +9,9 @@ const router = express.Router();
 const adminOnly = authorize('admin', 'superadmin');
 const readAccess = authorize('admin', 'superadmin', 'teacher', 'hod', 'faculty', 'staff', 'student', 'parent');
 
-const SUBJECT_TYPES = ['THEORY', 'LAB', 'PROJECT'];
+const DEFAULT_SUBJECT_TYPES = ['THEORY', 'LAB', 'PROJECT'];
+
+const normalizeType = (v) => String(v ?? '').trim().replace(/\s+/g, ' ').toUpperCase();
 
 const subjectSchema = z.object({
   courseId: z.string().uuid(),
@@ -17,7 +19,11 @@ const subjectSchema = z.object({
   code: z.string().trim().min(2, 'Subject code must be at least 2 characters'),
   name: z.string().trim().min(2, 'Subject name must be at least 2 characters'),
   credits: z.number().int().min(0).default(0),
-  type: z.enum(SUBJECT_TYPES).default('THEORY'),
+  type: z
+    .string()
+    .transform(normalizeType)
+    .refine((v) => v.length >= 2 && v.length <= 30, 'Type must be 2 to 30 characters')
+    .default('THEORY'),
   isActive: z.boolean().default(true),
 });
 
@@ -38,6 +44,20 @@ async function validateCourseAndSemester(collegeId, courseId, semester) {
   }
   return { course };
 }
+
+router.get('/types', readAccess, async (req, res) => {
+  try {
+    const rows = await prisma.subject.findMany({
+      where: { collegeId: req.tenant.collegeId },
+      distinct: ['type'],
+      select: { type: true },
+    });
+    const types = [...new Set([...DEFAULT_SUBJECT_TYPES, ...rows.map((r) => r.type)])];
+    res.json({ data: types });
+  } catch (error) {
+    res.status(500).json({ error: { message: error.message } });
+  }
+});
 
 router.get('/', readAccess, async (req, res) => {
   try {
@@ -122,7 +142,7 @@ router.post('/bulk', adminOnly, async (req, res) => {
         const code = cell(row, 'Subject_Code', 'Code');
         const name = cell(row, 'Subject_Name', 'Name');
         const creditsRaw = cell(row, 'Credits') || '0';
-        const typeRaw = (cell(row, 'Type', 'Subject_Type') || 'THEORY').toUpperCase();
+        const typeRaw = normalizeType(cell(row, 'Type', 'Subject_Type') || 'THEORY');
 
         const missing = [];
         if (!programRaw) missing.push('Program_Code');
@@ -141,8 +161,6 @@ router.post('/bulk', adminOnly, async (req, res) => {
 
         const credits = Number(creditsRaw);
         if (!Number.isInteger(credits) || credits < 0) return fail(`Credits must be a whole number (got "${creditsRaw}")`);
-
-        if (!SUBJECT_TYPES.includes(typeRaw)) return fail(`Type must be THEORY, LAB or PROJECT (got "${typeRaw}")`);
 
         const key = `${course.id}:${code.toLowerCase()}`;
         if (seen.has(key)) return fail(`Subject_Code ${code} appears twice for ${course.code} in the file`);

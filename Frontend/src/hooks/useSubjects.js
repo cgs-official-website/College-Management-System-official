@@ -17,6 +17,14 @@ export const useSubjects = (courseId = null, semester = null) => {
     },
   });
 
+const getTypes = useQuery({
+  queryKey: ['subjects', 'types'],
+  queryFn: async () => {
+    const response = await api.get('/subjects/types');
+    return response.data || [];
+  },
+});
+
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['subjects'] });
   const errMsg = (err, fallback) => err.response?.data?.error?.message || err.message || fallback;
 
@@ -59,6 +67,7 @@ export const useSubjects = (courseId = null, semester = null) => {
 
   return {
     subjects: getSubjects.data || [],
+    subjectTypes: getTypes.data || ['THEORY', 'LAB', 'PROJECT'],
     isLoading: getSubjects.isLoading,
     error: getSubjects.error,
     createSubject,

@@ -29,6 +29,13 @@ export const registerAdminSchema = z.object({
   logoBase64: z.string().trim().optional().nullable()
 });
 
+const emptyToNull = (v) => (typeof v === 'string' && v.trim() === '' ? null : v);
+const optText = z.preprocess(emptyToNull, z.string().trim().nullable().optional());
+const optDigits = (len, msg) => z.preprocess(
+  emptyToNull,
+  z.string().regex(new RegExp(`^[0-9]{${len}}$`), msg).nullable().optional()
+);
+
 export const studentRegisterSchema = z.object({
   token: z.string().trim().min(1, 'Registration token cannot be empty').optional(),
   collegeId: z.string().uuid('Invalid college ID').optional(),
@@ -36,13 +43,27 @@ export const studentRegisterSchema = z.object({
   email: z.string().trim().email('Valid email is required').toLowerCase(),
   firstName: z.string().trim().min(1, 'First name is required'),
   lastName: z.string().trim().optional().default(''),
-  phone: z.string().trim().optional().nullable(),
+  phone: optDigits(10, 'Phone must be 10 digits'),
   dob: z.string({ required_error: 'Date of birth is required' }).trim().min(1, 'Date of birth is required'),
-  gender: z.string().trim().optional().nullable(),
-  course: z.string().trim().optional().nullable(),   // free-text course name from student
-  section: z.string().trim().optional().nullable(),  // free-text section from student
-  parentName: z.string().trim().optional().nullable(),
-  parentPhone: z.string().trim().optional().nullable(),
+  gender: z.string().trim().min(1, 'Gender is required'),
+  courseId: z.string({ required_error: 'Course is required' }).uuid('Course is required'),
+  sectionId: z.string({ required_error: 'Section is required' }).uuid('Section is required'),
+  registerNumber: z.string().trim().min(1, 'University Reg.No is required'),
+  rollNumber: optText,
+  currentSemester: z.number({ required_error: 'Current semester is required' }).int().min(1, 'Current semester is required'),
+  batchYear: z.string().regex(/^\d{4}$/, 'Batch year is required'),
+  parentName: z.string().trim().min(1, 'Parent/guardian name is required'),
+  parentPhone: z.string().regex(/^[0-9]{10}$/, 'Parent phone must be 10 digits'),
+  emergencyContact: optDigits(10, 'Emergency contact must be 10 digits'),
+  bloodGroup: optText,
+  motherName: optText,
+  nationality: optText,
+  communityCategory: optText,
+  city: optText,
+  district: optText,
+  state: optText,
+  pincode: optDigits(6, 'Pincode must be 6 digits'),
+  aadhaarNumber: optDigits(12, 'Aadhaar must be 12 digits'),
   address: z.string().trim().optional().nullable(),
   residenceType: z.string().trim().optional().default('Day Scholar'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
@@ -56,7 +77,6 @@ export const studentRegisterSchema = z.object({
     message: "Passwords do not match",
     path: ['confirmPassword']
   });
-
 
 export const studentActivationSchema = z.object({
   token: z.string().trim().min(1).optional(),

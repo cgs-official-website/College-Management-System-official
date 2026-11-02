@@ -10,7 +10,8 @@ import {
   getCollege, 
   updateCollege,
   getMyCollegeStatus,
-  updateCollegeSubscription
+  updateCollegeSubscription,
+  getCollegePublicSections
 } from './colleges.controller.js';
 import { authenticate } from '../../middleware/authenticate.js';
 import { authorize } from '../../middleware/authorize.js';
@@ -39,5 +40,6 @@ router.delete('/:id', authenticate, superadminOnly, deleteCollege);
 // Admin & Superadmin accessible routes
 router.get('/:id', authenticate, adminOrSuperadmin, getCollege);
 router.put('/:id', authenticate, adminOrSuperadmin, updateCollege);
+router.get('/registration-context/:identifier/courses/:courseId/sections', getCollegePublicSections);
 
 export default router;

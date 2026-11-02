@@ -61,3 +61,14 @@ export const verifyStaffSetupToken = (token) => {
   }
   return claims;
 };
+
+export const createStudentSetupToken = ({ studentId, userId, collegeId, email }) =>
+  jwt.sign({ type: 'student-setup', studentId, userId, collegeId, email }, getJwtSecret(), { expiresIn: '7d' });
+
+export const verifyStudentSetupToken = (token) => {
+  const c = jwt.verify(token, getJwtSecret());
+  if (c.type !== 'student-setup' || ['studentId', 'userId', 'collegeId', 'email'].some((k) => typeof c[k] !== 'string')) {
+    throw new Error('Invalid student setup token.');
+  }
+  return c;
+};

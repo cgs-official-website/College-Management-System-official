@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardList, Award, Calendar, Loader2 } from 'lucide-react';
+import { ClipboardList, Award, Calendar, Loader2, Download } from 'lucide-react';
+import { downloadMarksPdf } from '../../utils/generateMarksPdf';
 import { useStudentExams, useStudentResults } from '../../hooks/useStudentPortal';
 import { api } from '../../services/apiClient';
 
@@ -28,14 +29,24 @@ function MarkCell({ row }) {
   return <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">{row.obtainedMarks}</span>;
 }
 
-function ExamTypeTable({ group }) {
+function ExamTypeTable({ group, student }) {
   return (
     <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm overflow-hidden">
       <div className="p-5 border-b border-slate-100 dark:border-white/5 flex items-center justify-between gap-3">
         <h3 className="text-lg font-bold text-slate-900 dark:text-white">{group.examTypeName}</h3>
-        <span className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-white/5 px-3 py-1.5 rounded-lg">
-          Semester {group.semester}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-white/5 px-3 py-1.5 rounded-lg">
+            Semester {group.semester}
+          </span>
+          <button
+            onClick={() => downloadMarksPdf({ student, exam: group })}
+            disabled={!student}
+            title="Download PDF"
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white"
+          >
+            <Download className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
@@ -84,6 +95,7 @@ const StudentExamsDashboard = () => {
 
   const exams = examsData?.data || [];
   const groups = internalData?.exams || [];
+  const studentInfo = internalData?.student || null;
   const legacyResults = resultsData?.data || [];
 
   if (isExamsLoading || isResultsLoading || isInternalLoading) {
@@ -140,7 +152,7 @@ const StudentExamsDashboard = () => {
           )}
 
           {groups.map((g) => (
-            <ExamTypeTable key={`${g.examTypeId}-${g.semester}`} group={g} />
+            <ExamTypeTable key={`${g.examTypeId}-${g.semester}`} group={g} student={studentInfo} />
           ))}
 
           {legacyResults.length > 0 && (

@@ -325,7 +325,24 @@ const FALLBACK_TEMPLATES = {
         </p>
       </div>
     `
+  },
+  'Student Account Setup': {
+  subject: (vars) => vars?.collegeName ? `Set up your student account - ${vars.collegeName}` : 'Set up your student account',
+  buildHtml: (vars) => {
+    const url = escapeHtml(vars.setupUrl);
+    return `
+    <h2 style="color: #0f172a; margin-top: 0;">Welcome, ${escapeHtml(vars.name || 'Student')}!</h2>
+    <p><strong>${escapeHtml(vars.collegeName || 'Your college')}</strong> has created a student account for you. Use the button below to create your password and activate it.</p>
+    <div class="highlight" style="text-align: left; font-family: sans-serif; font-size: 14px; letter-spacing: normal;">
+      <div style="margin-bottom: 8px;"><strong>Admission No:</strong> ${escapeHtml(vars.admissionNumber)}</div>
+      <div><strong>Login email:</strong> ${escapeHtml(vars.email)}</div>
+    </div>
+    <div style="text-align: center;"><a href="${url}" class="button">Set Up Your Account</a></div>
+    <p style="font-size: 13px; color: #64748b;">This link expires in ${escapeHtml(vars.expiresIn || '7 days')} and can only be used once. Please don't share it.</p>
+    <p style="font-size: 12px; color: #94a3b8; word-break: break-all;">Button not working? Copy and paste this link into your browser:<br><a href="${url}" style="color: #94a3b8;">${url}</a></p>`;
   }
+}
+ 
 };
 
 // ---------------------------------------------------------------------------

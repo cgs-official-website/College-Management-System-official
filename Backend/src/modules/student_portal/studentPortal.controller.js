@@ -4,6 +4,7 @@ import { processStudentProfileImageBuffer, extractBufferFromBase64Payload } from
 import { parseProofMeta, buildProofPayload, toSafeLeave, discardProof } from '../leaves/leaves.controller.js';
 import { notify } from '../notifications/notify.service.js';
 import { isPastDeadline } from '../../lib/assignmentDeadline.js';
+import bcrypt from 'bcryptjs';
 
 const assignmentScope = (student) => ({
   collegeId: student.collegeId,
@@ -109,10 +110,16 @@ export const getStudentDashboard = async (req, res) => {
 
     const pendingAssignments = assignments.filter(a => a.submissions.length === 0).length;
 
-    const upcomingExams = await prisma.exam.count({
+        const upcomingExams = await prisma.exam.count({
       where: {
         collegeId,
-        date: { gte: new Date() }
+        date: { gte: new Date() },
+        OR: [
+          { examTypeId: null },
+          ...(student.courseId && student.currentSemester
+            ? [{ examTypeId: { not: null }, courseId: student.courseId, semester: student.currentSemester, batchYear: student.batchYear }]
+            : [])
+        ]
       }
     });
 
@@ -530,7 +537,7 @@ export const getStudentExams = async (req, res) => {
         OR: [
           { examTypeId: null },
           ...(student.courseId && student.currentSemester
-            ? [{ examTypeId: { not: null }, courseId: student.courseId, semester: student.currentSemester }]
+            ? [{ examTypeId: { not: null }, courseId: student.courseId, semester: student.currentSemester, batchYear: student.batchYear }]
             : [])
         ]
       },
@@ -1425,15 +1432,43 @@ export const getStudentSubjects = async (req, res) => {
 
 export const getStudentInternalResults = async (req, res) => {
   try {
-    const { collegeId, courseId, sectionId, currentSemester, id: studentId } = req.student;
-    if (!courseId) return res.json({ success: true, data: { exams: [] } });
+    const student = req.student;
+    const { collegeId, courseId, sectionId, currentSemester, batchYear, id: studentId } = student;
+    let sectionTeacher = '';
+    if (sectionId) {
+      const sec = await prisma.section.findUnique({
+        where: { id: sectionId },
+        select: {
+          teachers: {
+            select: { user: { select: { name: true } } },
+          },
+        },
+      });
+      sectionTeacher = (sec?.teachers || []).map((t) => t.user?.name).filter(Boolean).join(', ');
+    }
+
+    const studentInfo = {
+      name: student.user?.name || '',
+      admissionNumber: student.admissionNumber,
+      rollNumber: student.rollNumber,
+      registerNumber: student.registerNumber || null,
+      department: student.department?.name || '',
+      program: student.course?.name || '',
+      batchYear: student.batchYear,
+      section: student.section?.name || '',
+      sectionTeacher,
+      collegeName: student.college?.name || '',
+      collegeLogo: student.college?.logoUrl || '',
+    };
+
+    if (!courseId) return res.json({ success: true, data: { exams: [], student: studentInfo } });
 
     const exams = await prisma.exam.findMany({
-      where: { collegeId, courseId, examTypeId: { not: null }, semester: { not: null } },
+      where: { collegeId, courseId, batchYear, examTypeId: { not: null }, semester: { not: null } },
       include: { examTypeRef: { select: { id: true, name: true } } },
       orderBy: { date: 'desc' }
     });
-    if (!exams.length) return res.json({ success: true, data: { exams: [] } });
+    if (!exams.length) return res.json({ success: true, data: { exams: [], student: studentInfo } });
 
     const semesters = [...new Set(exams.map((e) => e.semester))];
     const examIds = exams.map((e) => e.id);
@@ -1481,23 +1516,192 @@ export const getStudentInternalResults = async (req, res) => {
         ...g,
         rows: subjects
           .filter((s) => s.semester === g.semester)
+          .filter((s) => picked.has(`${g.examTypeId}:${s.id}`))
           .map((s) => {
             const e = picked.get(`${g.examTypeId}:${s.id}`);
-            const isPub = !!e && published.has(e.id);
+            const isPub = published.has(e.id);
             const m = isPub ? markByExam.get(e.id) : null;
             return {
               subjectId: s.id,
               code: s.code,
               name: s.name,
-              maxMarks: e?.maxMarks ?? null,
+              maxMarks: e.maxMarks,
               published: isPub,
               isAbsent: !!m?.isAbsent,
               obtainedMarks: m?.obtainedMarks ?? null
             };
           })
-      }));
+      }))
+      .filter((g) => g.rows.length > 0);
 
-    res.json({ success: true, data: { exams: result } });
+    res.json({ success: true, data: { exams: result, student: studentInfo } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+const GENDERS = ['male', 'female', 'other'];
+const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
+const settingsSelect = {
+  id: true, userId: true, collegeId: true,
+  admissionNumber: true, rollNumber: true, registerNumber: true,
+  batchYear: true, currentSemester: true,
+  studentMobile: true, bloodGroup: true, aadhaarNumber: true,
+  communityCategory: true, nationality: true,
+  fatherName: true, motherName: true, parentMobile: true,
+  address: true, city: true, district: true, state: true, pincode: true,
+  emergencyContact: true, customFields: true, profileImageMimeType: true,
+  user: { select: { name: true, email: true } },
+  department: { select: { name: true } },
+  course: { select: { name: true } },
+  section: { select: { name: true } },
+};
+
+const formatSettings = (s) => {
+  const custom = (s.customFields && typeof s.customFields === 'object' && !Array.isArray(s.customFields)) ? s.customFields : {};
+  const nameParts = (s.user?.name || '').split(' ');
+  const dob = custom.dob || custom.dateOfBirth || '';
+  return {
+    editable: {
+      firstName: custom.firstName || nameParts[0] || '',
+      lastName: custom.lastName ?? nameParts.slice(1).join(' '),
+      mobileNumber: s.studentMobile || '',
+      gender: custom.gender || '',
+      dateOfBirth: typeof dob === 'string' ? dob.split('T')[0] : '',
+      bloodGroup: s.bloodGroup || '',
+      aadhaarNumber: s.aadhaarNumber || '',
+      communityCategory: s.communityCategory || '',
+      nationality: s.nationality || '',
+      fatherName: s.fatherName || '',
+      motherName: s.motherName || '',
+      parentMobile: s.parentMobile || '',
+      address: s.address || '',
+      city: s.city || '',
+      district: s.district || '',
+      state: s.state || '',
+      pincode: s.pincode || '',
+      emergencyContact: s.emergencyContact || '',
+    },
+    locked: {
+      email: s.user?.email || '',
+      admissionNumber: s.admissionNumber || '',
+      rollNumber: s.rollNumber || '',
+      registerNumber: s.registerNumber || '',
+      department: s.department?.name || '',
+      course: s.course?.name || '',
+      section: s.section?.name || '',
+      currentSemester: s.currentSemester ? `Semester ${s.currentSemester}` : '',
+    },
+    hasProfileImage: Boolean(s.profileImageMimeType),
+  };
+};
+
+export const getStudentSettings = async (req, res) => {
+  try {
+    const s = await prisma.student.findUnique({ where: { id: req.student.id }, select: settingsSelect });
+    if (!s) return res.status(404).json({ success: false, error: { message: 'Student not found' } });
+    res.json({ success: true, data: formatSettings(s) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const updateStudentSettings = async (req, res) => {
+  try {
+    const b = req.body || {};
+    const str = (v) => (typeof v === 'string' ? v.trim() : '');
+    const bad = (message) => res.status(400).json({ success: false, error: { message } });
+
+    const firstName = str(b.firstName);
+    if (!firstName) return bad('First name is required.');
+    if (b.mobileNumber && !/^\d{10}$/.test(str(b.mobileNumber))) return bad('Mobile number must be 10 digits.');
+    if (b.parentMobile && !/^\d{10}$/.test(str(b.parentMobile))) return bad('Parent mobile must be 10 digits.');
+    if (b.emergencyContact && !/^\d{10}$/.test(str(b.emergencyContact))) return bad('Emergency contact number must be 10 digits.');
+    if (b.pincode && !/^\d{6}$/.test(str(b.pincode))) return bad('Pincode must be 6 digits.');
+    if (b.aadhaarNumber && !/^\d{12}$/.test(str(b.aadhaarNumber))) return bad('Aadhaar must be 12 digits.');
+    if (b.bloodGroup && !BLOOD_GROUPS.includes(str(b.bloodGroup))) return bad('Invalid blood group.');
+    if (b.gender && !GENDERS.includes(str(b.gender))) return bad('Invalid gender.');
+    if (b.dateOfBirth) {
+      const d = new Date(str(b.dateOfBirth));
+      if (isNaN(d) || d > new Date()) return bad('Enter a valid date of birth.');
+    }
+
+    const current = await prisma.student.findUnique({
+      where: { id: req.student.id },
+      select: { customFields: true, userId: true }
+    });
+    if (!current) return res.status(404).json({ success: false, error: { message: 'Student not found' } });
+
+    const existingCustom = (current.customFields && typeof current.customFields === 'object' && !Array.isArray(current.customFields)) ? current.customFields : {};
+    const lastName = str(b.lastName);
+    const dob = str(b.dateOfBirth) || null;
+    const orNull = (v) => str(v) || null;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.student.update({
+        where: { id: req.student.id },
+        data: {
+          studentMobile: orNull(b.mobileNumber),
+          bloodGroup: orNull(b.bloodGroup),
+          aadhaarNumber: orNull(b.aadhaarNumber),
+          communityCategory: orNull(b.communityCategory),
+          nationality: orNull(b.nationality),
+          fatherName: orNull(b.fatherName),
+          motherName: orNull(b.motherName),
+          parentMobile: orNull(b.parentMobile),
+          address: orNull(b.address),
+          city: orNull(b.city),
+          district: orNull(b.district),
+          state: orNull(b.state),
+          pincode: orNull(b.pincode),
+          emergencyContact: orNull(b.emergencyContact),
+          customFields: {
+            ...existingCustom,
+            firstName,
+            lastName,
+            gender: orNull(b.gender),
+            dob,
+            dateOfBirth: dob,
+          },
+        }
+      });
+      await tx.user.update({
+        where: { id: current.userId },
+        data: { name: `${firstName} ${lastName}`.trim() }
+      });
+    });
+
+    if (redis.status === 'ready') {
+      await redis.del(`student:dashboard:${req.student.collegeId}:${req.student.id}`).catch(() => {});
+    }
+
+    const fresh = await prisma.student.findUnique({ where: { id: req.student.id }, select: settingsSelect });
+    res.json({ success: true, data: formatSettings(fresh) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const changeStudentPassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, error: { message: 'Current and new password are required.' } });
+    }
+    if (String(newPassword).length < 8) {
+      return res.status(400).json({ success: false, error: { message: 'New password must be at least 8 characters.' } });
+    }
+    const user = await prisma.user.findUnique({ where: { id: req.student.userId } });
+    if (!user?.passwordHash || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      // 400, not 401, so the API client doesn't treat it as an expired session
+      return res.status(400).json({ success: false, error: { message: 'Current password is incorrect.' } });
+    }
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: await bcrypt.hash(newPassword, 10) }
+    });
+    res.json({ success: true, message: 'Password updated successfully.' });
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
   }

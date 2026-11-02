@@ -16,6 +16,8 @@ import {
   getAllStudentDocuments,
   activateStudent
 } from './students.controller.js';
+import { generateStudentSetupLink } from './students.controller.js';
+import { sendStudentSetupMail } from './students.controller.js';
 
 const router = Router();
 
@@ -36,5 +38,8 @@ router.post('/bulk', requirePermission('students', 'create'), catchAsync(bulkImp
 router.put('/:id', requirePermission('students', 'update'), catchAsync(updateStudent));
 router.patch('/:id/activate', requirePermission('students', 'update'), catchAsync(activateStudent));
 router.delete('/:id', requirePermission('students', 'delete'), catchAsync(deleteStudent));
+
+router.post('/:id/setup-link', requirePermission('students', 'update'), catchAsync(generateStudentSetupLink));
+router.post('/:id/send-setup-mail', requirePermission('students', 'update'), catchAsync(sendStudentSetupMail));
 
 export default router;

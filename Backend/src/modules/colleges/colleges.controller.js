@@ -68,7 +68,7 @@ export const getCollegePublicCourses = async (req, res) => {
     const isCollegeId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(identifier);
     const college = await prisma.college.findUnique({
       where: isCollegeId ? { id: identifier } : { slug: identifier },
-      select: { id: true, status: true }
+      select: { id: true, status: true, semester: true }
     });
 
     if (!college || college.status === 'rejected') {
@@ -76,8 +76,8 @@ export const getCollegePublicCourses = async (req, res) => {
     }
 
     const courses = await prisma.course.findMany({
-      where: { collegeId: college.id },
-      select: { id: true, name: true, code: true },
+      where: { collegeId: college.id, deletedAt: null },
+      select: { id: true, name: true, code: true, semester: true },
       orderBy: { name: 'asc' }
     });
 
@@ -87,6 +87,32 @@ export const getCollegePublicCourses = async (req, res) => {
   }
 };
 
+export const getCollegePublicSections = async (req, res) => {
+  try {
+    const { identifier, courseId } = req.params;
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRe.test(courseId)) {
+      return res.status(400).json({ success: false, error: { message: 'Invalid course' } });
+    }
+
+    const college = await prisma.college.findUnique({
+      where: uuidRe.test(identifier) ? { id: identifier } : { slug: identifier },
+      select: { id: true, status: true }
+    });
+    if (!college || college.status === 'rejected') {
+      return res.status(404).json({ success: false, error: { message: 'College not found' } });
+    }
+
+    const sections = await prisma.section.findMany({
+      where: { collegeId: college.id, courseId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' }
+    });
+    return res.json({ success: true, data: sections });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
 
 export const getAllColleges = async (req, res) => {
   try {

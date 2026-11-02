@@ -22,6 +22,7 @@ import ParentLayout from './pages/parent/ParentLayout';
 import TeacherLayout from './pages/teacher/TeacherLayout';
 import NotFound from './pages/error/NotFound';
 import { Toaster } from 'react-hot-toast';
+import StudentSetup from './pages/auth/StudentSetup';
 
 // Create an optimized client for React Query
 const queryClient = new QueryClient({
@@ -92,7 +93,8 @@ function App() {
               <Route path="/pending-approval" element={<PendingApproval />} />
               <Route path="/rejected" element={<RejectedApproval />} />
               <Route path="/dashboard" element={<ProtectedRoute><DashboardRedirect /></ProtectedRoute>} />
-
+              <Route path="/student/setup" element={<StudentSetup />} />
+              
               {/* Super Admin Routes */}
               <Route path="/super/*" element={<ProtectedRoute allowedRoles={['superadmin']}><SuperAdminLayout /></ProtectedRoute>} />
 

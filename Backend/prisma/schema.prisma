@@ -298,7 +298,7 @@ model Teacher {
   sections               Section[]            @relation("TeacherSections")
   ptmSlots               PtmSlot[]
   ptmMeetings            PtmMeeting[]
-  teacherId              String? 
+  teacherId              String?
   gender                 String?
   dateOfBirth            DateTime?
   employmentType         String?
@@ -511,9 +511,10 @@ model Exam {
   examTypeId      String?             @db.Uuid
   examTypeRef     ExamType?           @relation(fields: [examTypeId], references: [id])
   semester        Int?
+  batchYear       String?
   sectionStatuses ExamSectionStatus[]
 
-  @@index([collegeId, examTypeId, courseId, semester])
+  @@index([collegeId, examTypeId, courseId, semester, batchYear])
   @@index([collegeId, courseId])
 }
 
@@ -1575,24 +1576,18 @@ model CollegeDomain {
   @@index([collegeId])
 }
 
-enum SubjectType {
-  THEORY
-  LAB
-  PROJECT
-}
-
 model Subject {
-  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collegeId String      @db.Uuid
-  courseId  String      @db.Uuid
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collegeId String   @db.Uuid
+  courseId  String   @db.Uuid
   semester  Int
   code      String
   name      String
-  credits   Int         @default(0)
-  type      SubjectType @default(THEORY)
-  isActive  Boolean     @default(true)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  credits   Int      @default(0)
+  type      String   @default("THEORY")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   college             College              @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   course              Course               @relation(fields: [courseId], references: [id])

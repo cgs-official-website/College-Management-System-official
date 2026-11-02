@@ -1,584 +1,456 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { api } from '../../services/api';
-import { toast } from 'react-hot-toast';
-import { 
-  Loader2, 
-  Save, 
-  User, 
-  Mail, 
-  Phone, 
-  Book, 
-  Camera, 
-  Trash2, 
-  Upload, 
-  ShieldCheck,
-  AlertCircle,
-  Lock
+import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  User, Shield, Lock, Save, Camera, Upload, Trash2, Eye, EyeOff, Loader2,
 } from 'lucide-react';
-import { 
-  useStudentProfile, 
-  useUploadStudentProfileImage, 
-  useDeleteStudentProfileImage 
-} from '../../hooks/useStudentPortal';
+import { useAuth } from '../../contexts/AuthContext';
+import { api } from '../../services/apiClient';
 
-export const StudentSettings = () => {
-  const { userData, user, updateUserData } = useAuth();
-  const { data: profileData, refetch: refetchProfile } = useStudentProfile();
-  const uploadImageMutation = useUploadStudentProfileImage();
-  const deleteImageMutation = useDeleteStudentProfileImage();
+const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-  const fileInputRef = useRef(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [imageError, setImageError] = useState('');
-  const [imageTimestamp, setImageTimestamp] = useState(() => Date.now());
+const TABS = [
+  { id: 'personal', label: 'Personal Info', icon: User },
+  { id: 'security', label: 'Security', icon: Shield },
+];
 
-  const profile = profileData?.data ?? profileData;
-  const initialEmail = (profile?.email || profile?.emailId || user?.email || userData?.email || '').trim().toLowerCase();
+const inputCls =
+  'w-full px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 transition-all';
 
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    currentPassword: '',
-    phone: '',
-    emergencyContact: '',
-    bloodGroup: ''
-  });
+const Field = ({ label, hint, children }) => (
+  <div>
+    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+      {label}
+      {hint && <span className="ml-2 text-[11px] font-normal text-slate-400">{hint}</span>}
+    </label>
+    {children}
+  </div>
+);
 
-  const [fieldErrors, setFieldErrors] = useState({});
-  const isEmailChanged = Boolean(formData.email && formData.email.trim().toLowerCase() !== initialEmail);
+const LockedField = ({ label, value }) => (
+  <div>
+    <div className="flex items-center justify-between mb-1.5">
+      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">{label}</label>
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/10 px-2 py-0.5 rounded-md">
+        <Lock className="w-3 h-3" /> Locked
+      </span>
+    </div>
+    <div className="w-full px-4 py-3 bg-slate-100/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-500 dark:text-slate-400 cursor-not-allowed truncate min-h-[46px]">
+      {value || '—'}
+    </div>
+  </div>
+);
 
-  useEffect(() => {
-    if (profile) {
-      setFormData(prev => ({
-        ...prev,
-        firstName: profile.firstName || '',
-        lastName: profile.lastName || '',
-        email: prev.email || profile.email || profile.emailId || user?.email || userData?.email || '',
-        phone: profile.mobile || '',
-        emergencyContact: profile.emergencyContact || '',
-        bloodGroup: profile.bloodGroup || ''
-      }));
-    } else if (userData) {
-      setFormData(prev => ({
-        ...prev,
-        firstName: userData.firstName || userData.name || '',
-        lastName: userData.lastName || '',
-        email: prev.email || userData.email || '',
-        phone: userData.phone || '',
-        emergencyContact: '',
-        bloodGroup: ''
-      }));
-    }
-  }, [profile, userData, user]);
+const SectionTitle = ({ children }) => (
+  <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-4">{children}</h3>
+);
 
-  // Clean up object URL on unmount or file change
-  useEffect(() => {
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-    };
-  }, [previewUrl]);
+export default function StudentSettings() {
+  const { userData, updateUserData } = useAuth();
+  const queryClient = useQueryClient();
+  const [tab, setTab] = useState('personal');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [form, setForm] = useState(null);
+  const [locked, setLocked] = useState(null);
+  const [photo, setPhoto] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const fileRef = useRef(null);
 
-  const handleFileSelect = (e) => {
-    setImageError('');
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const [pw, setPw] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [showPw, setShowPw] = useState(false);
+  const [savingPw, setSavingPw] = useState(false);
 
-    // Validate format
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      setImageError('Unsupported format. Please select a JPEG, PNG, or WebP photo.');
-      toast.error('Unsupported format. Allowed: JPEG, PNG, WebP');
-      return;
-    }
-
-    // Validate size (max 2 MB)
-    const maxBytes = 2 * 1024 * 1024;
-    if (file.size > maxBytes) {
-      setImageError('Image size exceeds 2 MB limit. Please select a smaller photo.');
-      toast.error('Image exceeds 2 MB limit');
-      return;
-    }
-
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
-
-    setSelectedFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
-  };
-
-  const handleUploadPhoto = async () => {
-    if (!selectedFile) return;
-
+  // Photo is fetched as a blob because the endpoint needs the auth header
+  const loadPhoto = async () => {
     try {
-      await uploadImageMutation.mutateAsync(selectedFile);
-      toast.success('Profile photo uploaded and updated!');
-      setSelectedFile(null);
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-        setPreviewUrl(null);
-      }
-      setImageTimestamp(Date.now());
-      refetchProfile();
-    } catch (error) {
-      const errMsg = error.response?.data?.error?.message || error.message || 'Failed to upload photo';
-      setImageError(errMsg);
-      toast.error(errMsg);
-    }
-  };
-
-  const handleDeletePhoto = async () => {
-    if (!window.confirm('Are you sure you want to remove your profile photo?')) return;
-
-    try {
-      await deleteImageMutation.mutateAsync();
-      toast.success('Profile photo removed');
-      setSelectedFile(null);
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-        setPreviewUrl(null);
-      }
-      setImageTimestamp(Date.now());
-      refetchProfile();
-    } catch (error) {
-      toast.error(error.message || 'Failed to remove photo');
-    }
-  };
-
-  const handleCancelSelection = () => {
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
-    setSelectedFile(null);
-    setPreviewUrl(null);
-    setImageError('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    if (fieldErrors[name]) {
-      setFieldErrors(prev => {
-        const next = { ...prev };
-        delete next[name];
-        return next;
+      const blob = await api.get('/student/profile/image', { responseType: 'blob' });
+      setPhoto((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(blob);
       });
+    } catch {
+      setPhoto(null);
     }
-
-    if (name === 'phone') {
-      const digitsOnly = value.replace(/\D/g, '').slice(0, 10);
-      setFormData(prev => ({ ...prev, phone: digitsOnly }));
-      return;
-    }
-    setFormData(prev => ({ ...prev, [name]: value }));
   };
+
+  const load = async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const res = await api.get('/student/settings');
+      const data = res?.data ?? res;
+      setForm(data.editable);
+      setLocked(data.locked);
+      if (data.hasProfileImage) loadPhoto(); else setPhoto(null);
+    } catch (err) {
+      setLoadError(err.message || 'Failed to load your profile.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+  useEffect(() => () => { if (photo) URL.revokeObjectURL(photo); }, [photo]);
+
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const digits = (key, len) => (e) =>
+    setForm((f) => ({ ...f, [key]: e.target.value.replace(/\D/g, '').slice(0, len) }));
+
+  const initials = `${(form?.firstName || userData?.name || 'S').charAt(0)}${(form?.lastName || '').charAt(0)}`.toUpperCase();
 
   const handleSave = async (e) => {
     e.preventDefault();
-    setFieldErrors({});
+    if (form.mobileNumber && !/^\d{10}$/.test(form.mobileNumber)) return toast.error('Mobile number must be 10 digits.');
+    if (form.parentMobile && !/^\d{10}$/.test(form.parentMobile)) return toast.error('Parent mobile must be 10 digits.');
+    if (form.emergencyContact && !/^\d{10}$/.test(form.emergencyContact)) return toast.error('Emergency number must be 10 digits.');
+    if (form.pincode && !/^\d{6}$/.test(form.pincode)) return toast.error('Pincode must be 6 digits.');
+    if (form.aadhaarNumber && !/^\d{12}$/.test(form.aadhaarNumber)) return toast.error('Aadhaar must be 12 digits.');
 
-    if (isEmailChanged && !formData.currentPassword) {
-      setFieldErrors(prev => ({
-        ...prev,
-        currentPassword: 'Current password is required to change your email.'
-      }));
-      return;
-    }
-
-    if (formData.phone && formData.phone.length !== 10) {
-      setFieldErrors(prev => ({
-        ...prev,
-        phone: 'Mobile Phone Number must be exactly 10 digits.'
-      }));
-      return;
-    }
-
-    setIsSaving(true);
+    setSaving(true);
     try {
-      const payload = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.phone
-      };
-
-      if (isEmailChanged) {
-        payload.email = formData.email.trim();
-        payload.currentPassword = formData.currentPassword;
-      }
-
-      await api.put('/users/profile', payload);
-
-      updateUserData({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.phone,
-        ...(isEmailChanged ? { email: formData.email.trim().toLowerCase() } : {})
+      const res = await api.put('/student/settings', form);
+      const data = res?.data ?? res;
+      setForm(data.editable);
+      updateUserData?.({
+        name: `${data.editable.firstName} ${data.editable.lastName}`.trim(),
+        firstName: data.editable.firstName,
+        lastName: data.editable.lastName,
       });
-
-      setFormData(prev => ({ ...prev, currentPassword: '' }));
-      toast.success('Profile information updated successfully!');
-      refetchProfile();
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      const code = error?.code || error?.response?.data?.error?.code || error?.data?.error?.code;
-      const msg = error?.message || error?.response?.data?.error?.message || error?.data?.error?.message || 'Failed to update profile';
-
-      if (code === 'PASSWORD_REQUIRED') {
-        setFieldErrors(prev => ({ ...prev, currentPassword: msg || 'Current password is required.' }));
-      } else if (code === 'INVALID_PASSWORD') {
-        setFieldErrors(prev => ({ ...prev, currentPassword: msg || 'Invalid current password. Please try again.' }));
-      } else if (code === 'EMAIL_DOMAIN_NOT_ALLOWED') {
-        setFieldErrors(prev => ({ ...prev, email: msg || 'Email domain is not authorized for this college.' }));
-      } else if (code === 'EMAIL_IN_USE') {
-        setFieldErrors(prev => ({ ...prev, email: msg || 'This email is already in use by another account.' }));
-      } else if (code === 'INVALID_PHONE') {
-        setFieldErrors(prev => ({ ...prev, phone: msg || 'Mobile Phone Number must be exactly 10 digits.' }));
-      } else {
-        toast.error('Failed to update profile. ' + msg);
-      }
+      queryClient.invalidateQueries({ queryKey: ['student'] });
+      toast.success('Profile updated successfully.');
+    } catch (err) {
+      toast.error(err.message || 'Failed to update profile.');
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
   };
 
-  const authToken = localStorage.getItem('zuna_token');
-  const hasPhoto = Boolean(profile?.hasProfileImage);
-  const imageUrl = previewUrl || (hasPhoto ? `/api/v1/student/profile/image?t=${imageTimestamp}${authToken ? `&token=${encodeURIComponent(authToken)}` : ''}` : null);
+  const handlePhotoPick = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!PHOTO_TYPES.includes(file.type)) return toast.error('Only JPEG, PNG or WebP images are allowed.');
+    if (file.size > MAX_PHOTO_BYTES) return toast.error('Image must be 2 MB or smaller.');
+
+    setPhotoBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('profileImage', file);
+      await api.post('/student/profile/image', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      await loadPhoto();
+      queryClient.invalidateQueries({ queryKey: ['student', 'profile'] });
+      toast.success('Profile photo updated.');
+    } catch (err) {
+      toast.error(err.message || 'Failed to upload photo.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const handlePhotoRemove = async () => {
+    setPhotoBusy(true);
+    try {
+      await api.delete('/student/profile/image');
+      setPhoto(null);
+      queryClient.invalidateQueries({ queryKey: ['student', 'profile'] });
+      toast.success('Profile photo removed.');
+    } catch (err) {
+      toast.error(err.message || 'Failed to remove photo.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const handlePassword = async (e) => {
+    e.preventDefault();
+    if (pw.newPassword.length < 8) return toast.error('New password must be at least 8 characters.');
+    if (pw.newPassword !== pw.confirmPassword) return toast.error('New passwords do not match.');
+    setSavingPw(true);
+    try {
+      await api.put('/student/settings/password', {
+        currentPassword: pw.currentPassword,
+        newPassword: pw.newPassword,
+      });
+      toast.success('Password updated successfully.');
+      setPw({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err) {
+      toast.error(err.message || 'Failed to update password.');
+    } finally {
+      setSavingPw(false);
+    }
+  };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="space-y-6 max-w-6xl mx-auto">
       <div>
-        <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Student Settings & Profile</h1>
-        <p className="text-slate-500 dark:text-slate-400 mt-1">Manage your official student avatar, contact details, and preferences.</p>
-      </div>
-
-      {/* Profile Photo Card */}
-      <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-3xl p-6 md:p-8 shadow-sm">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-          <Camera className="w-5 h-5 text-primary-500" />
-          Profile Photo
-        </h2>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mb-6">
-          Upload a high-resolution portrait photo for your student ID and academic records. Max size 2 MB (JPEG, PNG, WebP).
+        <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Profile & Security</h1>
+        <p className="text-slate-500 dark:text-slate-400 mt-1">
+          Complete your profile and manage your password.
         </p>
-
-        <div className="flex flex-col sm:flex-row items-center gap-6">
-          {/* Avatar Container */}
-          <div className="relative group">
-            <div className="w-28 h-28 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-0.5 shadow-xl overflow-hidden flex items-center justify-center border-2 border-white dark:border-white/10">
-              {imageUrl ? (
-                <img 
-                  src={imageUrl} 
-                  alt="Student Avatar" 
-                  className="w-full h-full object-cover rounded-2xl"
-                  onError={() => {
-                    // Fallback to initials on load failure
-                  }}
-                />
-              ) : (
-                <div className="w-full h-full rounded-2xl bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-extrabold text-3xl">
-                  {profile?.firstName?.charAt(0) || userData?.firstName?.charAt(0) || 'S'}
-                  {profile?.lastName?.charAt(0) || userData?.lastName?.charAt(0) || 'T'}
-                </div>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="absolute -bottom-2 -right-2 p-2 bg-primary-600 hover:bg-primary-700 text-white rounded-xl shadow-lg transition-transform hover:scale-105"
-              title="Change Photo"
-            >
-              <Camera className="w-4 h-4" />
-            </button>
-          </div>
-
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleFileSelect} 
-            accept="image/jpeg,image/png,image/webp" 
-            className="hidden" 
-          />
-
-          {/* Action Buttons */}
-          <div className="flex-1 space-y-3 text-center sm:text-left">
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="px-4 py-2.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-2 border border-slate-200 dark:border-white/10"
-              >
-                <Upload className="w-4 h-4" />
-                Select Photo
-              </button>
-
-              {selectedFile && (
-                <>
-                  <button
-                    type="button"
-                    onClick={handleUploadPhoto}
-                    disabled={uploadImageMutation.isPending}
-                    className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-primary-500/20 flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {uploadImageMutation.isPending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" /> Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4" /> Save Photo
-                      </>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCancelSelection}
-                    className="px-3 py-2.5 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 font-semibold"
-                  >
-                    Cancel
-                  </button>
-                </>
-              )}
-
-              {hasPhoto && !selectedFile && (
-                <button
-                  type="button"
-                  onClick={handleDeletePhoto}
-                  disabled={deleteImageMutation.isPending}
-                  className="px-4 py-2.5 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 border border-rose-200 dark:border-rose-500/20"
-                >
-                  {deleteImageMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                  Remove Photo
-                </button>
-              )}
-            </div>
-
-            {selectedFile && (
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB) — Click &quot;Save Photo&quot; to apply.
-              </p>
-            )}
-
-            {imageError && (
-              <div className="flex items-center gap-1.5 text-xs text-rose-600 dark:text-rose-400 font-medium">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                {imageError}
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
-      {/* Personal Information Form */}
-      <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-3xl p-6 md:p-8 shadow-sm">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-6">Personal & Academic Details</h2>
-        
-        <form onSubmit={handleSave} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">First Name</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  type="text"
-                  name="firstName"
-                  value={formData.firstName}
-                  onChange={handleChange}
-                  required
-                  className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/50 transition-all"
-                />
-              </div>
-            </div>
+      <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-3xl shadow-sm overflow-hidden flex flex-col md:flex-row">
+        {/* Tabs */}
+        <div className="md:w-72 shrink-0 p-4 border-b md:border-b-0 md:border-r border-slate-100 dark:border-white/5 flex md:flex-col gap-2">
+          {TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-left flex-1 md:flex-none ${
+                tab === id
+                  ? 'bg-white dark:bg-primary-500/10 text-primary-700 dark:text-primary-300 shadow-sm border border-slate-200 dark:border-primary-500/20'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 border border-transparent'
+              }`}
+            >
+              <Icon className={`w-5 h-5 ${tab === id ? 'text-primary-600 dark:text-primary-400' : 'text-slate-400'}`} />
+              {label}
+            </button>
+          ))}
+        </div>
 
-            <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Last Name</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  type="text"
-                  name="lastName"
-                  value={formData.lastName}
-                  onChange={handleChange}
-                  className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/50 transition-all"
-                />
+        {/* Content */}
+        <div className="flex-1 min-w-0 p-6 sm:p-8">
+          {tab === 'personal' && (
+            loading ? (
+              <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary-600" /></div>
+            ) : loadError ? (
+              <div className="text-center py-16">
+                <p className="text-sm text-red-500 mb-3">{loadError}</p>
+                <button onClick={load} className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-white/10 text-sm font-semibold">Retry</button>
               </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Registered Email Address</label>
-                {isEmailChanged && (
-                  <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">
-                    Email change requires password
-                  </span>
-                )}
-              </div>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className={`block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-white/5 border rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/50 transition-all ${
-                    fieldErrors.email ? 'border-red-500 ring-1 ring-red-500' : 'border-slate-200 dark:border-white/10'
-                  }`}
-                  required
-                />
-              </div>
-              {fieldErrors.email ? (
-                <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1 font-medium">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  {fieldErrors.email}
-                </p>
-              ) : (
-                <p className="text-xs text-slate-500 mt-1">Official institution email used for login.</p>
-              )}
-            </div>
-
-            {isEmailChanged && (
-              <div className="col-span-1 md:col-span-2 p-4 bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 rounded-2xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
-                    Current Password <span className="text-red-500">*</span>
-                  </label>
-                  <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-                    Confirm your identity to save new email
-                  </span>
-                </div>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-slate-400" />
+            ) : (
+              <motion.form initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} onSubmit={handleSave} className="space-y-8">
+                {/* Photo */}
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Camera className="w-5 h-5 text-primary-500" /> Profile Photo
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Upload a clear portrait photo. Max size 2 MB (JPEG, PNG, WebP).
+                  </p>
+                  <div className="mt-4 flex items-center gap-5">
+                    <div className="relative w-24 h-24 rounded-2xl border-2 border-primary-500 bg-primary-50 dark:bg-primary-500/10 flex items-center justify-center overflow-hidden shadow-md">
+                      {photo ? (
+                        <img src={photo} alt="Profile" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-3xl font-extrabold text-primary-700 dark:text-primary-300">{initials}</span>
+                      )}
+                      {photoBusy && (
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                          <Loader2 className="w-6 h-6 animate-spin text-white" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <input ref={fileRef} type="file" accept={PHOTO_TYPES.join(',')} className="hidden" onChange={handlePhotoPick} />
+                      <button
+                        type="button"
+                        disabled={photoBusy}
+                        onClick={() => fileRef.current?.click()}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-xs font-bold text-slate-700 dark:text-slate-200 disabled:opacity-50"
+                      >
+                        <Upload className="w-4 h-4" /> Upload
+                      </button>
+                      {photo && (
+                        <button
+                          type="button"
+                          disabled={photoBusy}
+                          onClick={handlePhotoRemove}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" /> Remove
+                        </button>
+                      )}
+                    </div>
                   </div>
+                </div>
+
+                {/* Locked */}
+                <div>
+                  <SectionTitle>Assigned by admin</SectionTitle>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <LockedField label="Email ID" value={locked.email} />
+                    <LockedField label="Admission No" value={locked.admissionNumber} />
+                    <LockedField label="Roll No" value={locked.rollNumber} />
+                    <LockedField label="University Reg. No" value={locked.registerNumber} />
+                    <LockedField label="Department" value={locked.department} />
+                    <LockedField label="Course" value={locked.course} />
+                    <LockedField label="Section" value={locked.section} />
+                    <LockedField label="Current Semester" value={locked.currentSemester} />
+                  </div>
+                </div>
+
+                {/* Personal */}
+                <div>
+                  <SectionTitle>Personal details</SectionTitle>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <Field label="First Name">
+                      <input className={inputCls} value={form.firstName} onChange={set('firstName')} required />
+                    </Field>
+                    <Field label="Last Name">
+                      <input className={inputCls} value={form.lastName} onChange={set('lastName')} />
+                    </Field>
+                    <Field label="Mobile Number" hint="10 digits">
+                      <input className={inputCls} inputMode="numeric" value={form.mobileNumber} onChange={digits('mobileNumber', 10)} placeholder="e.g. 9876543210" />
+                    </Field>
+                    <Field label="Gender">
+                      <select className={inputCls} value={form.gender} onChange={set('gender')}>
+                        <option value="">Select</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </Field>
+                    <Field label="Date of Birth">
+                      <input type="date" className={inputCls} value={form.dateOfBirth} max={new Date().toISOString().slice(0, 10)} onChange={set('dateOfBirth')} />
+                    </Field>
+                    <Field label="Blood Group">
+                      <select className={inputCls} value={form.bloodGroup} onChange={set('bloodGroup')}>
+                        <option value="">Select</option>
+                        {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((g) => <option key={g} value={g}>{g}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Aadhaar Number" hint="12 digits">
+                      <input className={inputCls} inputMode="numeric" value={form.aadhaarNumber} onChange={digits('aadhaarNumber', 12)} placeholder="e.g. 123456789012" />
+                    </Field>
+                    <Field label="Community Category">
+                      <input className={inputCls} list="community-categories" value={form.communityCategory} onChange={set('communityCategory')} placeholder="e.g. BC" />
+                      <datalist id="community-categories">
+                        <option value="OC" /><option value="BC" /><option value="MBC" />
+                        <option value="SC" /><option value="ST" />
+                      </datalist>
+                    </Field>
+                    <Field label="Nationality">
+                      <input className={inputCls} value={form.nationality} onChange={set('nationality')} placeholder="e.g. Indian" />
+                    </Field>
+                  </div>
+                </div>
+
+                {/* Parent */}
+                <div>
+                  <SectionTitle>Parent / Guardian</SectionTitle>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <Field label="Father's Name">
+                      <input className={inputCls} value={form.fatherName} onChange={set('fatherName')} />
+                    </Field>
+                    <Field label="Mother's Name">
+                      <input className={inputCls} value={form.motherName} onChange={set('motherName')} />
+                    </Field>
+                    <Field label="Parent Mobile" hint="10 digits">
+                      <input className={inputCls} inputMode="numeric" value={form.parentMobile} onChange={digits('parentMobile', 10)} />
+                    </Field>
+                  </div>
+                </div>
+
+                {/* Address */}
+                <div>
+                  <SectionTitle>Address</SectionTitle>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div className="sm:col-span-2">
+                      <Field label="Address">
+                        <textarea rows={2} className={inputCls} value={form.address} onChange={set('address')} />
+                      </Field>
+                    </div>
+                    <Field label="City"><input className={inputCls} value={form.city} onChange={set('city')} /></Field>
+                    <Field label="District"><input className={inputCls} value={form.district} onChange={set('district')} /></Field>
+                    <Field label="State"><input className={inputCls} value={form.state} onChange={set('state')} /></Field>
+                    <Field label="Pincode" hint="6 digits">
+                      <input className={inputCls} inputMode="numeric" value={form.pincode} onChange={digits('pincode', 6)} />
+                    </Field>
+                  </div>
+                </div>
+
+                {/* Emergency */}
+                <div>
+                  <SectionTitle>Emergency contact</SectionTitle>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <Field label="Contact Number" hint="10 digits">
+                      <input className={inputCls} inputMode="numeric" value={form.emergencyContact} onChange={digits('emergencyContact', 10)} />
+                    </Field>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-5 border-t border-slate-100 dark:border-white/5">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-xl font-bold shadow-lg shadow-primary-500/30 transition-all"
+                  >
+                    {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                    {saving ? 'Saving...' : 'Save Information'}
+                  </button>
+                </div>
+              </motion.form>
+            )
+          )}
+
+          {tab === 'security' && (
+            <motion.form initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} onSubmit={handlePassword} className="max-w-md space-y-5">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white pb-4 border-b border-slate-100 dark:border-white/5">
+                Change Password
+              </h2>
+
+              <Field label="Current Password">
+                <div className="relative">
                   <input
-                    type="password"
-                    name="currentPassword"
-                    value={formData.currentPassword}
-                    onChange={handleChange}
-                    placeholder="Enter current password"
-                    className={`block w-full pl-10 pr-4 py-2.5 bg-white dark:bg-[#0A0F1C] border rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/50 transition-all ${
-                      fieldErrors.currentPassword ? 'border-red-500 ring-1 ring-red-500' : 'border-slate-200 dark:border-white/10'
-                    }`}
+                    type={showPw ? 'text' : 'password'}
+                    className={`${inputCls} pr-12`}
+                    value={pw.currentPassword}
+                    onChange={(e) => setPw({ ...pw, currentPassword: e.target.value })}
+                    autoComplete="current-password"
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw((s) => !s)}
+                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    {showPw ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
-                {fieldErrors.currentPassword && (
-                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1 font-medium">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    {fieldErrors.currentPassword}
-                  </p>
-                )}
-              </div>
-            )}
+              </Field>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Mobile Phone Number</label>
-                <span className="text-[11px] text-slate-400 font-medium">10 digits</span>
-              </div>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Phone className="h-5 w-5 text-slate-400" />
-                </div>
+              <Field label="New Password" hint="min 8 characters">
                 <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  maxLength={10}
-                  pattern="[0-9]{10}"
-                  placeholder="Enter 10-digit mobile number"
-                  className={`block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-white/5 border rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/50 transition-all ${
-                    fieldErrors.phone ? 'border-red-500 ring-1 ring-red-500' : 'border-slate-200 dark:border-white/10'
-                  }`}
+                  type={showPw ? 'text' : 'password'}
+                  className={inputCls}
+                  value={pw.newPassword}
+                  onChange={(e) => setPw({ ...pw, newPassword: e.target.value })}
+                  autoComplete="new-password"
+                  required
                 />
-              </div>
-              {fieldErrors.phone ? (
-                <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1 font-medium">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  {fieldErrors.phone}
-                </p>
-              ) : formData.phone && formData.phone.length > 0 && formData.phone.length < 10 ? (
-                <p className="text-xs text-amber-500 mt-1">Must be exactly 10 digits ({formData.phone.length}/10 entered)</p>
-              ) : null}
-            </div>
+              </Field>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Department</label>
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/10 px-2 py-0.5 rounded-full">
-                  <Lock className="w-3 h-3 text-slate-400" /> Locked
-                </span>
-              </div>
-              <div className="relative cursor-not-allowed">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Book className="h-5 w-5 text-slate-400" />
-                </div>
+              <Field label="Confirm New Password">
                 <input
-                  type="text"
-                  value={profile?.department || 'Academic Department'}
-                  readOnly={true}
-                  disabled={true}
-                  tabIndex={-1}
-                  aria-readonly="true"
-                  className="block w-full pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-500 dark:text-slate-400 cursor-not-allowed select-none pointer-events-none"
+                  type={showPw ? 'text' : 'password'}
+                  className={inputCls}
+                  value={pw.confirmPassword}
+                  onChange={(e) => setPw({ ...pw, confirmPassword: e.target.value })}
+                  autoComplete="new-password"
+                  required
                 />
-              </div>
-            </div>
+              </Field>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Admission Number</label>
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/10 px-2 py-0.5 rounded-full">
-                  <Lock className="w-3 h-3 text-slate-400" /> Locked
-                </span>
-              </div>
-              <div className="relative cursor-not-allowed">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <ShieldCheck className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  type="text"
-                  value={profile?.admissionNumber || 'ADM-N/A'}
-                  readOnly={true}
-                  disabled={true}
-                  tabIndex={-1}
-                  aria-readonly="true"
-                  className="block w-full pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-500 dark:text-slate-400 cursor-not-allowed font-mono select-none pointer-events-none"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-4 border-t border-slate-200 dark:border-white/10">
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="flex items-center gap-2 px-6 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg shadow-primary-500/30 transition-all"
-            >
-              {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-              Save Information
-            </button>
-          </div>
-        </form>
+              <button
+                type="submit"
+                disabled={savingPw}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold shadow-lg disabled:opacity-50 transition-all"
+              >
+                {savingPw && <Loader2 className="w-4 h-4 animate-spin" />}
+                Update Password
+              </button>
+            </motion.form>
+          )}
+        </div>
       </div>
     </div>
   );
-};
-
-export default StudentSettings;
+}

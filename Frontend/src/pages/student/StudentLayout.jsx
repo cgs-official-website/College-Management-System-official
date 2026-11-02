@@ -33,7 +33,7 @@ import {
 import { useTheme } from '../../hooks/useTheme';
 import { useQueryClient } from '@tanstack/react-query';
 import { subscribeToSync } from '../../utils/syncChannel';
-import { useStudentProfile, useStudentDashboard } from '../../hooks/useStudentPortal';
+import { useStudentProfile, useStudentDashboard, useStudentAvatar } from '../../hooks/useStudentPortal';
 import { NotificationBell } from '../../components/ui/NotificationBell';
 import StudentCoursesDashboard from './StudentCoursesDashboard'; 
 import StudentAssignmentsDashboard from './StudentAssignmentsDashboard'; 
@@ -64,7 +64,7 @@ const StudentLayout = () => {
   const { data: profileData } = useStudentProfile();
 
   const profile = profileData?.data ?? profileData;
-
+  const avatarUrl = useStudentAvatar(profile?.hasProfileImage);
   const studentFullName = 
     profile?.name?.trim() || 
     `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 
@@ -211,11 +211,11 @@ const StudentLayout = () => {
            <div className="flex items-center justify-between group cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 p-2 rounded-xl transition-colors" onClick={handleLogout}>
              <div className="flex items-center gap-3 overflow-hidden">
                <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
-                 {profile?.hasProfileImage ? (
-                   <img src="/api/v1/student/profile/image" alt="Avatar" className="w-full h-full object-cover" />
-                 ) : (
-                   studentInitials
-                 )}
+                 {avatarUrl ? (
+                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  studentInitials
+                )}
                </div>
                <div className="truncate">
                  <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate">{studentFullName}</p>
@@ -271,8 +271,8 @@ const StudentLayout = () => {
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Student</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold shadow-md overflow-hidden">
-                {profile?.hasProfileImage ? (
-                  <img src="/api/v1/student/profile/image" alt="Avatar" className="w-full h-full object-cover" />
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
                   studentInitials
                 )}
@@ -324,6 +324,7 @@ const StudentDashboardHome = ({ isHosteller, isDayScholar, studentFullName: prop
   const navigate = useNavigate();
 
   const profile = profileData?.data ?? profileData;
+  const avatarUrl = useStudentAvatar(profile?.hasProfileImage);
   const metrics = dashboardData?.data?.metrics ?? dashboardData?.metrics;
   const notices = (dashboardData?.data?.recentNotices ?? dashboardData?.recentNotices) || [];
 

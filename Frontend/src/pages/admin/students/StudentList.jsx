@@ -1,145 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStudents } from '../../../hooks/useStudents';
 import { useAuth } from '../../../contexts/AuthContext';
 import { DataTable } from '../../../components/tables/DataTable';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
-import { Search, Plus, Edit, Trash2, CheckCircle, Clock, Link as LinkIcon } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, CheckCircle, Clock, Link as LinkIcon, Link2, Mail, Loader2 } from 'lucide-react';
 import { StudentFormModal } from './StudentFormModal';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { ExcelUploadButton } from '../../../components/ui/ExcelUploadButton';
-import { api } from '../../../services/api';
+import { api } from '../../../services/apiClient';
 import { useQueryClient } from '@tanstack/react-query';
 import { StudentRegistrationLinkModal } from './StudentRegistrationLinkModal';
 
 const STUDENT_IMPORT_FIELDS = [
-  {
-    name: 'Admission_No',
-    required: true,
-    type: 'String',
-    description: 'Unique Student Admission Number / ID',
-    example: 'ADM-2026-001'
-  },
-  {
-    name: 'Student_Name',
-    required: true,
-    type: 'String',
-    description: 'Full name of the student',
-    example: 'Rahul Sharma'
-  },
-  {
-    name: 'Email_ID',
-    required: false,
-    type: 'String',
-    description: 'Student login email address (auto-generated if omitted)',
-    example: 'rahul.sharma@example.com'
-  },
-  {
-    name: 'Department',
-    required: false,
-    type: 'String',
-    description: 'Department name (e.g. Computer Science & Engineering)',
-    example: 'Computer Science & Engineering'
-  },
-  {
-    name: 'Course',
-    required: false,
-    type: 'String',
-    description: 'Degree program / course (e.g. B.Tech CSE, MBA)',
-    example: 'B.Tech Computer Science'
-  },
-  {
-    name: 'Section',
-    required: false,
-    type: 'String',
-    description: 'Class section name (e.g. Section A)',
-    example: 'Section A'
-  },
-  {
-    name: 'Roll_No',
-    required: false,
-    type: 'String',
-    description: 'Class Roll Number',
-    example: '2026-CS-001'
-  },
-  {
-    name: 'Student_Reg_No',
-    required: false,
-    type: 'String',
-    description: 'University / Board Registration Number',
-    example: 'REG-2026-089'
-  },
-  {
-    name: 'Date_of_Birth',
-    required: false,
-    type: 'Date (YYYY-MM-DD)',
-    description: 'Student date of birth',
-    example: '2005-06-15'
-  },
-  {
-    name: 'Gender',
-    required: false,
-    type: 'String',
-    description: 'Male / Female / Other',
-    example: 'Male'
-  },
-  {
-    name: 'Student_Mobile',
-    required: false,
-    type: 'String',
-    description: '10-digit mobile number',
-    example: '9876543210'
-  },
-  {
-    name: 'Parent_Name',
-    required: false,
-    type: 'String',
-    description: 'Father / Mother / Guardian Name',
-    example: 'Rajesh Sharma'
-  },
-  {
-    name: 'Parent_Mobile',
-    required: false,
-    type: 'String',
-    description: 'Parent 10-digit mobile number',
-    example: '9876543211'
-  },
-  {
-    name: 'Address',
-    required: false,
-    type: 'String',
-    description: 'Residential address',
-    example: '123 Anna Salai, Chennai, TN'
-  },
-  {
-    name: 'Residence_Type',
-    required: false,
-    type: 'String',
-    description: 'Day Scholar or Hosteller',
-    example: 'Day Scholar'
-  },
-  {
-    name: 'Transport_Required',
-    required: false,
-    type: 'String',
-    description: 'Yes if the student uses the college bus (Day Scholars only)',
-    example: 'No'
-  },
-  {
-    name: 'Blood_Group',
-    required: false,
-    type: 'String',
-    description: 'Blood Group (e.g. O+, A+, B+)',
-    example: 'O+'
-  },
-  {
-    name: 'Year_of_Study',
-    required: false,
-    type: 'String',
-    description: 'Batch Year / Year of study (e.g. 2026)',
-    example: '2026'
-  }
+  { name: 'Admission_No', required: true, type: 'String', description: 'Unique Student Admission Number / ID', example: 'ADM-2026-001' },
+  { name: 'Student_Name', required: true, type: 'String', description: 'Full name of the student', example: 'Rahul Sharma' },
+  { name: 'Email_ID', required: true, type: 'String', description: 'Student login email. The password setup link is sent here (must be unique)', example: 'rahul.sharma@example.com' },
+  { name: 'Roll_No', required: true, type: 'String', description: 'Class Roll Number', example: '2026-CS-001' },
+  { name: 'Student_Reg_No', required: true, type: 'String', description: 'University / Board Registration Number', example: 'REG-2026-089' },
+  { name: 'Department', required: false, type: 'String', description: 'Department name (e.g. Computer Science & Engineering)', example: 'Computer Science & Engineering' },
+  { name: 'Course', required: false, type: 'String', description: 'Degree program / course (e.g. B.Tech CSE, MBA)', example: 'B.Tech Computer Science' },
+  { name: 'Section', required: false, type: 'String', description: 'Class section name (e.g. Section A)', example: 'Section A' },
+  { name: 'Date_of_Birth', required: false, type: 'Date (YYYY-MM-DD)', description: 'Student date of birth', example: '2005-06-15' },
+  { name: 'Gender', required: false, type: 'String', description: 'Male / Female / Other', example: 'Male' },
+  { name: 'Student_Mobile', required: false, type: 'String', description: '10-digit mobile number', example: '9876543210' },
+  { name: 'Parent_Name', required: false, type: 'String', description: 'Father / Mother / Guardian Name', example: 'Rajesh Sharma' },
+  { name: 'Parent_Mobile', required: false, type: 'String', description: 'Parent 10-digit mobile number', example: '9876543211' },
+  { name: 'Address', required: false, type: 'String', description: 'Residential address', example: '123 Anna Salai, Chennai, TN' },
+  { name: 'Residence_Type', required: false, type: 'String', description: 'Day Scholar or Hosteller', example: 'Day Scholar' },
+  { name: 'Transport_Required', required: false, type: 'String', description: 'Yes if the student uses the college bus (Day Scholars only)', example: 'No' },
+  { name: 'Blood_Group', required: false, type: 'String', description: 'Blood Group (e.g. O+, A+, B+)', example: 'O+' },
+  { name: 'Year_of_Study', required: false, type: 'String', description: 'Batch Year / Year of study (e.g. 2026)', example: '2026' }
 ];
 
 export default function StudentList() {
@@ -155,17 +47,35 @@ export default function StudentList() {
   const { students, isLoading, addStudent, updateStudent, deleteStudent, isAdding, isUpdating, isImporting, bulkImport } = useStudents(collegeId);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'pending' | 'active'
+  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'pending_setup' | 'pending' | 'active'
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
   const [activatingId, setActivatingId] = useState(null);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
 
+  const [generatingLinkId, setGeneratingLinkId] = useState(null);
+  const [sendingMailId, setSendingMailId] = useState(null);
+  const [mailCooldowns, setMailCooldowns] = useState({});
+
+  useEffect(() => {
+    if (!Object.values(mailCooldowns).some((s) => s > 0)) return;
+    const timer = setInterval(() => {
+      setMailCooldowns((prev) => {
+        const next = {};
+        for (const [id, secs] of Object.entries(prev)) if (secs > 1) next[id] = secs - 1;
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [mailCooldowns]);
+
   // Split students by status
   const pendingStudents = students.filter(s => (s.status || '').toLowerCase() === 'pending');
+  const pendingSetupStudents = students.filter(s => (s.status || '').toLowerCase() === 'pending_setup');
   const activeStudents = students.filter(s => (s.status || '').toLowerCase() === 'active');
 
   const tabStudents = activeTab === 'pending' ? pendingStudents
+    : activeTab === 'pending_setup' ? pendingSetupStudents
     : activeTab === 'active' ? activeStudents
     : students;
 
@@ -200,12 +110,71 @@ export default function StudentList() {
     try {
       await api.patch(`/students/${student.id}/activate`);
       toast.success(`${student.firstName} ${student.lastName}'s account has been activated.`);
-      // Invalidate the students query so the list refreshes
       queryClient.invalidateQueries({ queryKey: ['students', collegeId] });
     } catch (err) {
       toast.error(err.message || 'Failed to activate student account.');
     } finally {
       setActivatingId(null);
+    }
+  };
+
+  const copyToClipboard = async (text, successMsg) => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-999999px';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (!ok) throw new Error('copy failed');
+      }
+      toast.success(successMsg);
+    } catch {
+      toast.error(
+        <div className="flex flex-col gap-2">
+          <span className="font-bold">Manual copy required:</span>
+          <input readOnly value={text} className="text-xs p-1 rounded bg-slate-100 dark:bg-slate-800 w-full" onClick={(e) => e.target.select()} />
+        </div>,
+        { duration: 8000 }
+      );
+    }
+  };
+
+  const errMsg = (err, fallback) => err.message || err.response?.data?.error?.message || fallback;
+
+  const handleGenerateSetupLink = async (student) => {
+    setGeneratingLinkId(student.id);
+    try {
+      const response = await api.post(`/students/${student.id}/setup-link`);
+      const d = response?.data ?? response;
+      const setupUrl = d?.setupUrl || d?.data?.setupUrl;
+      if (!setupUrl) throw new Error('Failed to generate setup link.');
+      await copyToClipboard(setupUrl, 'Student setup link copied to clipboard!');
+    } catch (err) {
+      toast.error(errMsg(err, 'Failed to generate setup link.'));
+    } finally {
+      setGeneratingLinkId(null);
+    }
+  };
+
+  const handleSendSetupMail = async (student) => {
+    if (sendingMailId === student.id || mailCooldowns[student.id]) return;
+    setSendingMailId(student.id);
+    try {
+      const response = await api.post(`/students/${student.id}/send-setup-mail`);
+      const d = response?.data ?? response;
+      const masked = d?.maskedEmail || d?.data?.maskedEmail || student.email;
+      toast.success(`Setup link sent to ${masked}`);
+      setMailCooldowns((prev) => ({ ...prev, [student.id]: 30 }));
+    } catch (err) {
+      toast.error(errMsg(err, 'Could not send the email. Please try again or use Generate Link.'));
+    } finally {
+      setSendingMailId(null);
     }
   };
 
@@ -222,7 +191,6 @@ export default function StudentList() {
     }
   };
 
-  // Columns for active / all tabs
   const baseColumns = [
     {
       header: 'Admission No',
@@ -284,16 +252,17 @@ export default function StudentList() {
       header: 'Status',
       accessorKey: 'status',
       cell: (row) => {
-        const isPending = row.status === 'pending';
-        return (
-          <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-            isPending
-              ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
-              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
-          }`}>
-            {isPending ? 'Pending Approval' : 'Active'}
-          </span>
-        );
+        if (row.status === 'pending') {
+          return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400">Pending Approval</span>;
+        }
+        if (row.status === 'pending_setup') {
+          return (
+            <span className="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400">
+              <span className="w-2 h-2 rounded-full bg-slate-400" /> pending setup
+            </span>
+          );
+        }
+        return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400">Active</span>;
       }
     },
     {
@@ -301,7 +270,28 @@ export default function StudentList() {
       accessorKey: 'id',
       cell: (row) => (
         <div className="flex items-center gap-2">
-          {/* Activate button — only for pending students if canUpdate */}
+          {row.status === 'pending_setup' && canUpdateStudent && (
+            <>
+              <button
+                onClick={() => handleGenerateSetupLink(row)}
+                disabled={generatingLinkId === row.id}
+                className="inline-flex items-center p-2 text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-500/10 hover:bg-primary-100 dark:hover:bg-primary-500/20 border border-primary-200 dark:border-primary-500/30 rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                title="Generate Setup Link"
+                aria-label="Generate Setup Link"
+              >
+                {generatingLinkId === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={() => handleSendSetupMail(row)}
+                disabled={sendingMailId === row.id || !!mailCooldowns[row.id]}
+                className="inline-flex items-center p-2 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 border border-indigo-200 dark:border-indigo-500/30 rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                title={mailCooldowns[row.id] ? `Please wait ${mailCooldowns[row.id]}s before resending` : 'Send Setup Email'}
+                aria-label="Send Setup Email"
+              >
+                {sendingMailId === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+              </button>
+            </>
+          )}
           {row.status === 'pending' && canUpdateStudent && (
             <button
               onClick={() => handleActivate(row)}
@@ -340,6 +330,7 @@ export default function StudentList() {
 
   const tabs = [
     { key: 'all', label: 'All Students', count: students.length },
+    { key: 'pending_setup', label: 'Pending Setup', count: pendingSetupStudents.length },
     {
       key: 'pending',
       label: 'Pending Approval',
@@ -364,7 +355,8 @@ export default function StudentList() {
               title="Import Students"
               label="Import"
               sampleFileName="students_import_template.xlsx"
-              description="Upload an Excel (.xlsx, .xls) or CSV file with student records. Required: Admission_No and Student_Name."
+              description="Upload an Excel (.xlsx, .xls) or CSV file. Required: Admission_No, Student_Name, Email_ID, Roll_No and Student_Reg_No."
+              notes={'Imported students are created with status "pending setup" and no password. Send each student their setup link from the Students list (Pending Setup tab).'}
               fields={STUDENT_IMPORT_FIELDS}
             />
           )}
@@ -387,12 +379,12 @@ export default function StudentList() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-slate-200 dark:border-white/10">
+      <div className="flex items-center gap-1 border-b border-slate-200 dark:border-white/10 overflow-x-auto">
         {tabs.map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
               activeTab === tab.key
                 ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
@@ -447,7 +439,9 @@ export default function StudentList() {
         emptyMessage={
           activeTab === 'pending'
             ? 'No students pending approval.'
-            : 'No students found. Add one to get started.'
+            : activeTab === 'pending_setup'
+              ? 'No students waiting to set up their password.'
+              : 'No students found. Add one to get started.'
         }
       />
 

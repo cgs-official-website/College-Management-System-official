@@ -256,7 +256,23 @@ export const DEFAULT_TEMPLATES = [
       Need assistance or wish to renew? Contact support at <a href="mailto:support@teamzuna.in" style="color: #0d9488; font-weight: 600;">support@teamzuna.in</a>.
     </p>
     `
-  }
+  },
+  {
+  name: 'Student Account Setup',
+  subject: 'Set up your student account - {{collegeName}}',
+  status: 'Active',
+  contentHtml: `
+  <h2 style="color: #0f172a; margin-top: 0;">Welcome, {{name}}!</h2>
+  <p><strong>{{collegeName}}</strong> has created a student account for you. Use the button below to create your password and activate it.</p>
+  <div class="highlight" style="text-align: left; font-family: sans-serif; font-size: 14px; letter-spacing: normal;">
+    <div style="margin-bottom: 8px;"><strong>Admission No:</strong> {{admissionNumber}}</div>
+    <div><strong>Login email:</strong> {{email}}</div>
+  </div>
+  <div style="text-align: center;"><a href="{{setupUrl}}" class="button">Set Up Your Account</a></div>
+  <p style="font-size: 13px; color: #64748b;">This link expires in {{expiresIn}} and can only be used once. Please don't share it.</p>
+  <p style="font-size: 12px; color: #94a3b8; word-break: break-all;">Button not working? Copy and paste this link into your browser:<br><a href="{{setupUrl}}" style="color: #94a3b8;">{{setupUrl}}</a></p>
+  `
+  },
 ];
 
 export async function ensureEmailTemplates() {

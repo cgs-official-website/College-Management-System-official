@@ -31,6 +31,16 @@ async function sectionSemester(collegeId, sectionId) {
   return rows.reduce((a, b) => (b._count._all > a._count._all ? b : a)).currentSemester;
 }
 
+async function sectionBatch(collegeId, sectionId) {
+  const rows = await prisma.student.groupBy({
+    by: ['batchYear'],
+    where: { collegeId, sectionId, deletedAt: null },
+    _count: { _all: true },
+  });
+  if (!rows.length) return null;
+  return rows.reduce((a, b) => (b._count._all > a._count._all ? b : a)).batchYear;
+}
+
 async function notifySection(collegeId, sectionId, title, message) {
   try {
     const students = await prisma.student.findMany({
@@ -134,6 +144,7 @@ const scheduleSchema = z.object({
   examTypeId: z.string().uuid(),
   courseId: z.string().uuid(),
   semester: z.number().int().min(1),
+  batchYear: z.string().trim().min(1, 'Select a batch'),
   items: z.array(itemSchema).min(1, 'Select at least one subject'),
 });
 
@@ -168,12 +179,21 @@ export const previewSchedule = async (req, res) => {
     where: { collegeId, courseId, semester, isActive: true },
     orderBy: { code: 'asc' },
   });
+
+  const batchRows = await prisma.student.findMany({
+    where: { collegeId, courseId, currentSemester: semester, deletedAt: null },
+    distinct: ['batchYear'],
+    select: { batchYear: true },
+  });
+  const batches = batchRows.map((b) => b.batchYear).filter(Boolean).sort();
+
   res.json({
     success: true,
     data: {
       examType: { id: type.id, name: type.name, defaultMaxMarks: type.defaultMaxMarks },
       course: { id: course.id, name: course.name, totalSemesters: course.semester },
       semester,
+      batches,
       subjects: subjects.map((s) => ({
         id: s.id, code: s.code, name: s.name, type: s.type, maxMarks: type.defaultMaxMarks,
       })),
@@ -221,14 +241,10 @@ export const createSchedule = async (req, res) => {
     }
   }
 
-  for (const item of body.items) {
+    for (const item of body.items) {
     const subject = byId.get(item.subjectId);
-    const d = new Date(item.date);
     const dup = await prisma.exam.findFirst({
-      where: {
-        collegeId, examTypeId: type.id, subjectId: item.subjectId,
-        date: { gte: new Date(d.getTime() - 150 * DAY_MS), lte: new Date(d.getTime() + 150 * DAY_MS) },
-      },
+      where: { collegeId, examTypeId: type.id, subjectId: item.subjectId, batchYear: body.batchYear },
     });
     if (dup) return fail(res, 409, `${subject.name} is already scheduled for ${type.name}`, 'ALREADY_SCHEDULED');
 
@@ -237,7 +253,6 @@ export const createSchedule = async (req, res) => {
     });
     if (conflict) return fail(res, 409, conflict, 'HALL_CONFLICT');
   }
-
   const created = await prisma.$transaction(
     body.items.map((item) => {
       const subject = byId.get(item.subjectId);
@@ -246,6 +261,7 @@ export const createSchedule = async (req, res) => {
           collegeId,
           courseId: body.courseId,
           semester: body.semester,
+          batchYear: body.batchYear,
           subjectId: subject.id,
           examTypeId: type.id,
           name: type.name,
@@ -264,7 +280,7 @@ export const createSchedule = async (req, res) => {
 
   try {
     const students = await prisma.student.findMany({
-      where: { collegeId, courseId: body.courseId, currentSemester: body.semester, deletedAt: null, userId: { not: null } },
+      where: { collegeId, courseId: body.courseId, currentSemester: body.semester, batchYear: body.batchYear, deletedAt: null, userId: { not: null } },
       select: { userId: true },
     });
     const userIds = [...new Set(students.map((s) => s.userId).filter(Boolean))];
@@ -291,7 +307,7 @@ export const listSchedule = async (req, res) => {
   const where = { collegeId, examTypeId: examTypeId || { not: null } };
   if (courseId) where.courseId = courseId;
   if (req.query.semester) where.semester = parseInt(req.query.semester, 10);
-
+  if (req.query.batchYear) where.batchYear = req.query.batchYear;
   const exams = await prisma.exam.findMany({
     where,
     include: {
@@ -310,6 +326,7 @@ export const listSchedule = async (req, res) => {
       examTypeName: e.examTypeRef?.name || e.type,
       courseId: e.courseId,
       courseName: e.course?.name,
+      batchYear: e.batchYear,
       semester: e.semester,
       subject: e.subjectRef,
       date: dayKey(e.date),
@@ -376,9 +393,9 @@ export const deleteScheduleItem = async (req, res) => {
 };
 
 
-async function currentExams(collegeId, { examTypeId, courseId, semester }) {
+async function currentExams(collegeId, { examTypeId, courseId, semester, batchYear }) {
   const exams = await prisma.exam.findMany({
-    where: { collegeId, examTypeId, courseId, semester },
+    where: { collegeId, examTypeId, courseId, semester, batchYear },
     include: { subjectRef: { select: { id: true, code: true, name: true, type: true } } },
     orderBy: { date: 'desc' },
   });
@@ -394,19 +411,19 @@ async function currentExams(collegeId, { examTypeId, courseId, semester }) {
 
 export const getReview = async (req, res) => {
   const { collegeId } = ctx(req);
-  const { examTypeId, courseId } = req.query;
+  const { examTypeId, courseId, batchYear } = req.query;
   const semester = parseInt(req.query.semester, 10);
-  if (!examTypeId || !courseId || !Number.isInteger(semester)) {
-    return fail(res, 400, 'examTypeId, courseId and semester are required');
+  if (!examTypeId || !courseId || !batchYear || !Number.isInteger(semester)) {
+    return fail(res, 400, 'examTypeId, courseId, batchYear and semester are required');
   }
 
-  const exams = await currentExams(collegeId, { examTypeId, courseId, semester });
+  const exams = await currentExams(collegeId, { examTypeId, courseId, semester, batchYear });
   const allSections = await prisma.section.findMany({ where: { collegeId, courseId }, orderBy: { name: 'asc' } });
 
   const sections = [];
   for (const s of allSections) {
     const sem = await sectionSemester(collegeId, s.id);
-    if (sem === semester) sections.push(s);
+    if (sem === semester && (await sectionBatch(collegeId, s.id)) === batchYear) sections.push(s);
   }
 
   if (!exams.length || !sections.length) {
@@ -524,6 +541,7 @@ const publishAllSchema = z.object({
   examTypeId: z.string().uuid(),
   courseId: z.string().uuid(),
   semester: z.number().int().min(1),
+  batchYear: z.string().trim().min(1),
   sectionId: z.string().uuid(),
 });
 
@@ -536,7 +554,7 @@ export const publishAll = async (req, res) => {
       collegeId,
       sectionId: body.sectionId,
       status: 'SENT_TO_ADMIN',
-      exam: { examTypeId: body.examTypeId, courseId: body.courseId, semester: body.semester },
+      exam: { examTypeId: body.examTypeId, courseId: body.courseId, semester: body.semester, batchYear: body.batchYear },
     },
     data: { status: 'PUBLISHED', publishedAt: new Date(), adminRemark: null },
   });
@@ -571,10 +589,11 @@ export const teacherClasses = async (req, res) => {
   for (const a of assignments) {
     if (!semCache.has(a.sectionId)) semCache.set(a.sectionId, await sectionSemester(collegeId, a.sectionId));
     const sem = semCache.get(a.sectionId);
-    if (sem === null || sem !== a.subject.semester) continue; 
+    if (sem === null || sem !== a.subject.semester) continue;
+    const batch = await sectionBatch(collegeId, a.sectionId);
 
     const exams = await prisma.exam.findMany({
-      where: { collegeId, subjectId: a.subjectId, semester: sem, examTypeId: { not: null } },
+      where: { collegeId, subjectId: a.subjectId, semester: sem, batchYear: batch, examTypeId: { not: null } },
       include: {
         examTypeRef: { select: { id: true, name: true } },
         sectionStatuses: { where: { sectionId: a.sectionId } },
@@ -623,6 +642,10 @@ async function authorizeMarks(req, res, examId, sectionId) {
 
   const section = await prisma.section.findFirst({ where: { id: sectionId, collegeId } });
   if (!section || section.courseId !== exam.courseId) { fail(res, 400, 'This section does not belong to the exam\'s program'); return null; }
+
+  if (exam.batchYear && (await sectionBatch(collegeId, sectionId)) !== exam.batchYear) {
+    fail(res, 400, 'This exam belongs to a different batch'); return null;
+  }
 
   let teacher = null;
   if (!isAdminRole(role)) {

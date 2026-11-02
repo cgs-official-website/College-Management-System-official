@@ -70,6 +70,7 @@ export default function StaffSettings() {
       setForm(res.data.editable);
       setLocked(res.data.locked);
       setPhoto(res.data.profileImage);
+      updateUserData?.({ profileImage: res.data.profileImage || null });
     } catch (err) {
       setLoadError(err.message || 'Failed to load your profile.');
     } finally {
@@ -120,6 +121,7 @@ export default function StaffSettings() {
       try {
         const res = await api.put('/staff-profile/photo', { image: reader.result });
         setPhoto(res.data.profileImage);
+        updateUserData?.({ profileImage: res.data.profileImage || null });
         toast.success('Profile photo updated.');
       } catch (err) {
         toast.error(err.message || 'Failed to upload photo.');
@@ -135,6 +137,7 @@ export default function StaffSettings() {
     try {
       await api.delete('/staff-profile/photo');
       setPhoto(null);
+      updateUserData?.({ profileImage: null });
       toast.success('Profile photo removed.');
     } catch (err) {
       toast.error(err.message || 'Failed to remove photo.');
@@ -232,7 +235,7 @@ export default function StaffSettings() {
                         onClick={() => fileRef.current?.click()}
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-xs font-bold text-slate-700 dark:text-slate-200 disabled:opacity-50"
                       >
-                        <Upload className="w-4 h-4" /> Select Photo
+                        <Upload className="w-4 h-4" /> Upload
                       </button>
                       {photo && (
                         <button

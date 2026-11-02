@@ -14,8 +14,14 @@ const SUBJECT_IMPORT_FIELDS = [
   { name: 'Subject_Code', required: true, type: 'String', description: 'Unique subject code within the program', example: 'CS301' },
   { name: 'Subject_Name', required: true, type: 'String', description: 'Name of the subject', example: 'Data Structures' },
   { name: 'Credits', required: false, type: 'Number', description: 'Credits of this subject (default 0)', example: '4' },
-  { name: 'Type', required: false, type: 'String', description: 'THEORY, LAB or PROJECT (default THEORY)', example: 'THEORY' },
+  { name: 'Type', required: false, type: 'String', description: 'Any type, e.g. THEORY, LAB, PROJECT or a custom one (default THEORY)', example: 'THEORY' },
 ];
+
+const DEFAULT_TYPES = ['THEORY', 'LAB', 'PROJECT'];
+const CUSTOM_VALUE = '__custom__';
+const FALLBACK_TYPE_STYLE = 'bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300';
+const normalizeType = (v) => v.trim().replace(/\s+/g, ' ').toUpperCase();
+const typeLabel = (t) => t.charAt(0) + t.slice(1).toLowerCase();
 
 const TYPE_STYLES = {
   THEORY: 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400',
@@ -46,10 +52,28 @@ export default function SubjectsTab({ courseId: initialCourseId }) {
     ? Array.from({ length: selectedCourse.semester }, (_, i) => i + 1)
     : [];
 
-  const { subjects, isLoading, createSubject, updateSubject, deleteSubject, bulkImport } =
+  const { subjects, subjectTypes, isLoading, createSubject, updateSubject, deleteSubject, bulkImport } =
     useSubjects(courseId || null, semester || null);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm();
+
+  const [showCustomType, setShowCustomType] = useState(false);
+  const [customTypeInput, setCustomTypeInput] = useState('');
+  const [localTypes, setLocalTypes] = useState([]); // added but not yet saved with a subject
+
+  const typeOptions = [...new Set([...DEFAULT_TYPES, ...(subjectTypes || []), ...localTypes])];
+  const currentType = watch('type');
+  const typeField = register('type');
+
+  const handleAddCustomType = () => {
+    const t = normalizeType(customTypeInput);
+    if (t.length < 2 || t.length > 30) return;
+    setLocalTypes((prev) => (prev.includes(t) ? prev : [...prev, t]));
+    // wait for React to render the new <option> before selecting it
+    setTimeout(() => setValue('type', t), 0);
+    setCustomTypeInput('');
+    setShowCustomType(false);
+  };
 
   const filtered = subjects.filter(
     (s) =>
@@ -60,12 +84,16 @@ export default function SubjectsTab({ courseId: initialCourseId }) {
   const handleOpenAdd = () => {
     setEditingSubject(null);
     reset({ code: '', name: '', credits: 0, type: 'THEORY', semester: semester || 1, isActive: true });
+    setShowCustomType(false);
+    setCustomTypeInput('');
     setIsFormOpen(true);
   };
 
   const handleOpenEdit = (s) => {
     setEditingSubject(s);
     reset({ code: s.code, name: s.name, credits: s.credits, type: s.type, semester: s.semester, isActive: s.isActive });
+    setShowCustomType(false);
+    setCustomTypeInput('');
     setIsFormOpen(true);
   };
 
@@ -146,7 +174,7 @@ export default function SubjectsTab({ courseId: initialCourseId }) {
             title="Import Subjects"
             description="Upload an Excel (.xlsx, .xls) or CSV file with one row per subject."
             fields={SUBJECT_IMPORT_FIELDS}
-            notes="1. Program_Code must match an existing program. 2. Semester must be within the program's total semesters. 3. Type is THEORY, LAB or PROJECT. 4. An existing Subject_Code in the same program is updated."
+            notes="1. Program_Code must match an existing program. 2. Semester must be within the program's total semesters. 3. Type can be THEORY, LAB, PROJECT or any custom type. 4. An existing Subject_Code in the same program is updated."
             sampleFileName="subjects_import_template.xlsx"
           />
           <Button onClick={handleOpenAdd} disabled={!courseId} title={!courseId ? 'Select a program first' : ''}>
@@ -190,11 +218,40 @@ export default function SubjectsTab({ courseId: initialCourseId }) {
               />
               <div className="space-y-1">
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Type</label>
-                <select {...register('type')} className={selectClass}>
-                  <option value="THEORY">Theory</option>
-                  <option value="LAB">Lab</option>
-                  <option value="PROJECT">Project</option>
+                <select
+                  {...typeField}
+                  onChange={(e) => {
+                    if (e.target.value === CUSTOM_VALUE) {
+                      setValue('type', currentType); // keep the previous selection
+                      setShowCustomType(true);
+                    } else {
+                      setShowCustomType(false);
+                      typeField.onChange(e);
+                    }
+                  }}
+                  className={selectClass}
+                >
+                  {typeOptions.map((t) => (
+                    <option key={t} value={t}>{typeLabel(t)}</option>
+                  ))}
+                  <option value={CUSTOM_VALUE}>+ Custom type</option>
                 </select>
+
+                {showCustomType && (
+                  <div className="flex gap-2 pt-2">
+                    <Input
+                      placeholder="e.g. Seminar"
+                      value={customTypeInput}
+                      onChange={(e) => setCustomTypeInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); handleAddCustomType(); }
+                      }}
+                      className="mb-0"
+                      autoFocus
+                    />
+                    <Button type="button" onClick={handleAddCustomType}>Add</Button>
+                  </div>
+                )}
               </div>
               <label className="flex items-center gap-2 pt-8 text-sm font-bold text-slate-700 dark:text-slate-300">
                 <input type="checkbox" {...register('isActive')} className="w-4 h-4" />
@@ -248,7 +305,7 @@ export default function SubjectsTab({ courseId: initialCourseId }) {
                     <td className="py-4 px-6 text-slate-600 dark:text-slate-300">{s.course?.name}</td>
                     <td className="py-4 px-6 text-slate-600 dark:text-slate-300">{s.semester}</td>
                     <td className="py-4 px-6">
-                      <span className={`inline-block px-2 py-1 text-xs font-bold rounded-md ${TYPE_STYLES[s.type]}`}>{s.type}</span>
+                      <span className={`inline-block px-2 py-1 text-xs font-bold rounded-md ${TYPE_STYLES[s.type] || FALLBACK_TYPE_STYLE}`}>{s.type}</span>
                     </td>
                     <td className="py-4 px-6 text-slate-600 dark:text-slate-300">{s.credits}</td>
                     <td className="py-4 px-6 text-sm text-slate-600 dark:text-slate-300">{s.isActive ? 'Active' : 'Inactive'}</td>

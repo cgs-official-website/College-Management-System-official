@@ -160,6 +160,7 @@ apiClient.interceptors.response.use(
                              originalRequest.url?.includes('/auth/student/activate') ||
                              originalRequest.url?.includes('/auth/student/register') ||
                              originalRequest.url?.includes('/auth/staff-setup') ||
+                             originalRequest.url?.includes('/auth/student-setup') ||
                              originalRequest.url?.includes('/auth/forgot-password') ||
                              originalRequest.url?.includes('/auth/reset-password');
 

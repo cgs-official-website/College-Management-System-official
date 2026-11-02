@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { broadcastSync } from '../utils/syncChannel';
+import { useState, useEffect } from 'react';
 
 export const useStudentProfile = () => {
   return useQuery({
@@ -44,7 +45,10 @@ export const useStudentAssignments = () => {
       const response = await api.get('/student/assignments');
       return response;
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    refetchInterval: 15000,
   });
 
   const submitMutation = useMutation({
@@ -325,7 +329,7 @@ export const useUploadStudentProfileImage = () => {
       }
 
       const response = await api.post('/student/profile/image', payload, {
-        headers: payload instanceof FormData ? {} : headers
+        headers: payload instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : headers
       });
       return response.data;
     },
@@ -373,4 +377,24 @@ export const useStudentBookHistory = (page = 1) => {
     staleTime: 0,
     refetchOnMount: 'always',
   });
+};
+
+export const useStudentAvatar = (hasImage) => {
+  const { data: blob } = useQuery({
+    // Starts with ['student','profile'], so uploading or removing a photo refreshes it
+    queryKey: ['student', 'profile', 'avatar'],
+    queryFn: () => api.get('/student/profile/image', { responseType: 'blob' }),
+    enabled: Boolean(hasImage),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    if (!blob) { setUrl(null); return; }
+    const objectUrl = URL.createObjectURL(blob);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [blob]);
+
+  return hasImage ? url : null;
 };

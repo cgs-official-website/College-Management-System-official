@@ -1,11 +1,15 @@
 import crypto from 'crypto';
 import { prisma, logger } from '../../server.js';
-import bcrypt from 'bcryptjs';
 import { createStudentSchema, updateStudentSchema } from './students.schema.js';
 import { deleteStudentProfile } from '../users/deleteUserRecords.js';
 import { releaseTransportFees } from '../transport/transportFees.js';
 import { assertEmailAllowedForCollege } from '../domains/domains.service.js';
+import { getStudentSetupDetails, deliverStudentSetupMail, maskEmail } from './studentSetup.service.js';
 
+const PROFILE_FIELDS = [
+  'motherName', 'nationality', 'communityCategory', 'aadhaarNumber',
+  'city', 'district', 'state', 'pincode'
+];
 
 const resolveCurrentSemester = async (db, collegeId, courseId, requested) => {
   if (!courseId) return { value: requested ?? null };
@@ -91,9 +95,9 @@ export const getStudents = async (req, res) => {
     }
 
     const fullName = `${fName || ''} ${lName || ''}`.trim() || s.user?.name || 'Student';
-    const phone = s.studentMobile || s.emergencyContact || '';
+    const phone = s.studentMobile || '';
     const parentPhone = s.parentMobile || '';
-    const parentName = s.fatherName || s.motherName || custom.parentName || '';
+    const parentName = s.fatherName || custom.parentName || '';
     const address = s.address || '';
     const dob = custom.dob || custom.dateOfBirth || '';
     const gender = custom.gender || '';
@@ -138,6 +142,14 @@ export const getStudents = async (req, res) => {
       customRoleId: s.user?.customRoleId || null,
       createdAt: s.createdAt,
       customFields: custom,
+      motherName: s.motherName || '',
+      nationality: s.nationality || '',
+      communityCategory: s.communityCategory || '',
+      aadhaarNumber: s.aadhaarNumber || '',
+      city: s.city || '',
+      district: s.district || '',
+      state: s.state || '',
+      pincode: s.pincode || '',
     };
   });
 
@@ -181,6 +193,10 @@ export const activateStudent = async (req, res) => {
 
   if (student.user.accountStatus === 'active') {
     return res.status(400).json({ success: false, error: { code: 'ALREADY_ACTIVE', message: 'Student account is already active' } });
+  }
+
+  if (student.user.accountStatus === 'pending_setup') {
+    return res.status(409).json({ success: false, error: { code: 'SETUP_NOT_COMPLETED', message: 'This student has not set a password yet. Send them the setup link instead.' } });
   }
 
   await prisma.user.update({
@@ -245,9 +261,9 @@ export const getStudentById = async (req, res) => {
   }
 
   const fullName = `${fName || ''} ${lName || ''}`.trim() || student.user?.name || 'Student';
-  const phone = student.studentMobile || student.emergencyContact || '';
+  const phone = student.studentMobile ||  '';
   const parentPhone = student.parentMobile || '';
-  const parentName = student.fatherName || student.motherName || custom.parentName || '';
+  const parentName = student.fatherName  || custom.parentName || '';
   const address = student.address || '';
   const dob = custom.dob || custom.dateOfBirth || '';
   const gender = custom.gender || '';
@@ -291,6 +307,14 @@ export const getStudentById = async (req, res) => {
       hostelRoom: student.hostelRoom,
       createdAt: student.createdAt,
       customFields: custom,
+      motherName: student.motherName || '',
+      nationality: student.nationality || '',
+      communityCategory: student.communityCategory || '',
+      aadhaarNumber: student.aadhaarNumber || '',
+      city: student.city || '',
+      district: student.district || '',
+      state: student.state || '',
+      pincode: student.pincode || '',
     }
   });
 };
@@ -316,33 +340,23 @@ export const createStudent = async (req, res) => {
     });
   }
 
-  // Ensure department exists or find/create a default department
-  let deptId = payload.departmentId;
-
-  if (!deptId && payload.courseId) {
-    const course = await prisma.course.findUnique({
-      where: { id: payload.courseId }
+  const courseRecord = await prisma.course.findFirst({
+    where: { id: payload.courseId, collegeId, deletedAt: null },
+    select: { departmentId: true }
+  });
+  const sectionRecord = courseRecord
+    ? await prisma.section.findFirst({
+        where: { id: payload.sectionId, courseId: payload.courseId, collegeId },
+        select: { id: true }
+      })
+    : null;
+  if (!courseRecord || !sectionRecord) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_COURSE_SECTION', message: 'Selected course or section is not valid for this college.' }
     });
-    if (course) {
-      deptId = course.departmentId;
-    }
   }
-
-  if (!deptId) {
-    let dept = await prisma.department.findFirst({
-      where: { collegeId }
-    });
-    if (!dept) {
-      dept = await prisma.department.create({
-        data: {
-          name: payload.department || payload.class || 'General Studies',
-          code: 'GEN',
-          collegeId
-        }
-      });
-    }
-    deptId = dept.id;
-  }
+const deptId = courseRecord.departmentId;
 
   const email = payload.email.toLowerCase().trim();
 
@@ -418,8 +432,6 @@ export const createStudent = async (req, res) => {
     return res.status(400).json({ success: false, error: { code: 'INVALID_SEMESTER', message: semResult.error } });
   }
 
-  const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
-
   let student;
   try {
     student = await prisma.$transaction(async (tx) => {
@@ -461,14 +473,7 @@ export const createStudent = async (req, res) => {
         }
       } else {
         user = await tx.user.create({
-          data: {
-            email,
-            name: fullName,
-            collegeId,
-            role: 'student',
-            passwordHash,
-            accountStatus: 'pending'
-          }
+          data: { email, name: fullName, collegeId, role: 'student', passwordHash: null, accountStatus: 'pending_setup' }
         });
       }
 
@@ -495,7 +500,8 @@ export const createStudent = async (req, res) => {
           registerNumber: registerNumber || null,
           currentSemester: semResult.value,
           batchYear: payload.batchYear || `${new Date().getFullYear()}`,
-          bloodGroup: payload.bloodGroup,
+          bloodGroup: payload.bloodGroup || null,
+          ...Object.fromEntries(PROFILE_FIELDS.map((k) => [k, payload[k] || null])),
           studentMobile: payload.phone || null,
           parentMobile: payload.parentPhone || null,
           fatherName: payload.parentName || payload.fatherName || null,
@@ -534,6 +540,17 @@ export const createStudent = async (req, res) => {
   }
 
   logger.info(`[info] req=${req.id || ''} college=${collegeId} studentId=${student.id} actor=${actorId} Created student '${payload.firstName} ${payload.lastName || ''}'`);
+  const setupPending = student.user?.accountStatus === 'pending_setup';
+  if (setupPending) {
+    // Fire-and-forget so a slow mail server never blocks the admin's request
+    getStudentSetupDetails(student.id, collegeId, req)
+      .then((details) => deliverStudentSetupMail(details))
+      .then((mail) => {
+        if (mail?.success) logger.info(`[STUDENT-SETUP] Setup email sent to ${student.user.email}`);
+        else logger.warn(`[STUDENT-SETUP] Setup email failed for ${student.user.email}: ${mail?.error}`);
+      })
+      .catch((err) => logger.warn(`[STUDENT-SETUP] Setup email exception for student ${student.id}: ${err.message}`));
+  }
 
   res.status(201).json({
     success: true,
@@ -546,6 +563,7 @@ export const createStudent = async (req, res) => {
       email: student.user?.email,
       department: student.department?.name,
       status: student.user?.accountStatus,
+      setupEmailQueued: setupPending
     }
   });
 };
@@ -627,6 +645,22 @@ export const updateStudent = async (req, res) => {
 
   let currentSemesterUpdate;
   const effectiveCourseId = payload.courseId !== undefined ? (payload.courseId || null) : student.courseId;
+  const effectiveSectionId = payload.sectionId !== undefined ? payload.sectionId : student.sectionId;
+  if (effectiveSectionId && effectiveCourseId) {
+    const sectionOk = await prisma.section.findFirst({
+      where: { id: effectiveSectionId, courseId: effectiveCourseId, collegeId },
+      select: { id: true }
+    });
+    if (!sectionOk) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_COURSE_SECTION', message: 'Selected section does not belong to the selected course.' }
+      });
+    }
+  }
+  const profileData = Object.fromEntries(
+    PROFILE_FIELDS.filter((k) => payload[k] !== undefined).map((k) => [k, payload[k] || null])
+  );
   if (payload.currentSemester !== undefined || effectiveCourseId !== student.courseId) {
     const requested = payload.currentSemester !== undefined ? payload.currentSemester : student.currentSemester;
     const semResult = await resolveCurrentSemester(prisma, collegeId, effectiveCourseId, requested);
@@ -715,6 +749,7 @@ export const updateStudent = async (req, res) => {
           ...(deptId !== undefined ? { departmentId: deptId } : {}),
           ...(payload.courseId !== undefined ? { courseId: payload.courseId || null } : {}),
           ...(payload.sectionId !== undefined ? { sectionId: payload.sectionId || null } : {}),
+          ...profileData,
           customFields: mergedCustom
         },
         include: {
@@ -789,7 +824,6 @@ export const bulkImportStudents = async (req, res) => {
   const coursesCache = {};
   const courseTotals = {};
   const sectionsCache = {};
-  const defaultHashedPassword = await bcrypt.hash('Student@123', 10);
 
   // Helper to extract value from row case-insensitively with alias fallback
   const getVal = (row, ...aliases) => {
@@ -1157,8 +1191,8 @@ export const bulkImportStudents = async (req, res) => {
                     name: studentName,
                     collegeId,
                     role: 'student',
-                    passwordHash: defaultHashedPassword,
-                    accountStatus: 'pending'
+                    passwordHash: null, accountStatus: 'pending_setup'
+                    
                   }
                 });
               } else if (existingUser.studentProfile && existingUser.studentProfile.deletedAt !== null) {
@@ -1169,8 +1203,8 @@ export const bulkImportStudents = async (req, res) => {
                     name: studentName,
                     collegeId,
                     role: 'student',
-                    passwordHash: defaultHashedPassword,
-                    accountStatus: 'pending'
+                    passwordHash: null, accountStatus: 'pending_setup'
+                    
                   }
                 });
               } else {
@@ -1188,8 +1222,7 @@ export const bulkImportStudents = async (req, res) => {
                   name: studentName,
                   collegeId,
                   role: 'student',
-                  passwordHash: defaultHashedPassword,
-                  accountStatus: 'pending'
+                  passwordHash: null, accountStatus: 'pending_setup'
                 }
               });
             }
@@ -1510,4 +1543,28 @@ export const getAllStudentDocuments = async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
   }
+};
+
+export const generateStudentSetupLink = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const { setupUrl } = await getStudentSetupDetails(req.params.id, collegeId, req);
+  res.json({ success: true, data: { setupUrl } });
+};
+
+export const sendStudentSetupMail = async (req, res) => {
+  const collegeId = req.tenant?.collegeId || req.user?.collegeId;
+  const details = await getStudentSetupDetails(req.params.id, collegeId, req);
+
+  let result;
+  try {
+    result = await deliverStudentSetupMail(details);
+  } catch (err) {
+    logger.warn(`[STUDENT-SETUP] Exception/timeout sending to ${details.email}: ${err.message}`);
+    return res.status(502).json({ success: false, error: { message: 'Could not send the email. Please try again or use Generate Link.' } });
+  }
+  if (!result?.success) {
+    logger.warn(`[STUDENT-SETUP] Failed sending to ${details.email}: ${result?.error}`);
+    return res.status(502).json({ success: false, error: { message: 'Could not send the email. Please try again or use Generate Link.' } });
+  }
+  res.json({ success: true, data: { maskedEmail: maskEmail(details.email) } });
 };

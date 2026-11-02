@@ -8,6 +8,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useCourses } from '../../../hooks/useCourses';
 import { useSections } from '../../../hooks/useSections';
 import { CustomFieldsSection } from '../../../modules/builder/CustomFieldsSection';
+import { BLOOD_GROUPS, COMMUNITY_CATEGORIES, getBatchYears } from '../../student/studentFormOptions';
 
 const getInitialValues = (initialData) => ({
   firstName: initialData?.firstName || '',
@@ -27,6 +28,17 @@ const getInitialValues = (initialData) => ({
   address: initialData?.address || '',
   residenceType: initialData?.residenceType || 'Day Scholar',
   transportRequired: initialData?.transportRequired === 'Yes' ? 'Yes' : 'No',
+  batchYear: initialData?.batchYear || String(new Date().getFullYear()),
+  bloodGroup: initialData?.bloodGroup || '',
+  motherName: initialData?.motherName || '',
+  emergencyContact: initialData?.emergencyContact || '',
+  nationality: initialData?.nationality || 'Indian',
+  communityCategory: initialData?.communityCategory || '',
+  aadhaarNumber: initialData?.aadhaarNumber || '',
+  city: initialData?.city || '',
+  district: initialData?.district || '',
+  state: initialData?.state || '',
+  pincode: initialData?.pincode || '',
   customFields: initialData?.customFields || {}
 });
 
@@ -168,6 +180,26 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
                 { value: 'other', label: 'Other' }
               ]}
             />
+
+            <Select
+              label="Blood Group"
+              {...register('bloodGroup')}
+              options={[{ value: '', label: 'Select' }, ...BLOOD_GROUPS.map(g => ({ value: g, label: g }))]}
+            />
+            <Input label="Nationality" {...register('nationality')} />
+            <Select
+              label="Community Category"
+              {...register('communityCategory')}
+              options={[{ value: '', label: 'Select' }, ...COMMUNITY_CATEGORIES.map(c => ({ value: c, label: c }))]}
+            />
+            <Input
+              label="Aadhaar Number"
+              inputMode="numeric"
+              maxLength={12}
+              {...register('aadhaarNumber', { pattern: { value: /^[0-9]{12}$/, message: 'Aadhaar must be exactly 12 digits.' } })}
+              onInput={(e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 12); }}
+              error={errors.aadhaarNumber?.message}
+            />
           </div>
         </div>
 
@@ -179,30 +211,42 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Select
               label="Course *"
-              {...register('courseId', { required: "Course is required" })}
+              {...register('courseId', {
+                required: "Course is required",
+                onChange: () => setValue('sectionId', '')
+              })}
               error={errors.courseId?.message}
               options={[{ value: '', label: 'Select a course' }, ...courses.map(c => ({ value: c.id, label: c.name }))]}
             />
             <div className="space-y-1">
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Section</label>
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Section *</label>
               <select
-                {...register('sectionId')}
+                {...register('sectionId', { required: 'Section is required' })}
                 className="w-full px-4 py-3 bg-slate-50 dark:bg-[#020813] border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all dark:text-white"
                 disabled={!selectedCourseId}
               >
-                <option value="">Select a section</option>
+                <option value="">{selectedCourseId ? 'Select a section' : 'Select a course'}</option>
                 {sections?.map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
               {errors.sectionId && <p className="text-red-500 text-sm mt-1">{errors.sectionId.message}</p>}
             </div>
+
             <Select
                 label="Current Semester"
                 {...register('currentSemester')}
                 disabled={!selectedCourseId}
                 options={[{ value: '', label: 'Select semester' }, ...semesterOptions]}
             />
+
+            <Select
+              label="Batch Year *"
+              {...register('batchYear', { required: 'Batch year is required' })}
+              error={errors.batchYear?.message}
+              options={getBatchYears().map(y => ({ value: y, label: y }))}
+            />
+            <Input label="Previous Institution" {...register('previousInstitution')} />
           </div>
         </div>
 
@@ -232,12 +276,33 @@ export function StudentFormModal({ isOpen, onClose, onSubmit, initialData = null
               }}
               error={errors.parentPhone?.message}
             />
+            <Input label="Mother's Name" {...register('motherName')} />
+            <Input
+              label="Emergency Contact"
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
+              {...register('emergencyContact', { pattern: { value: /^[0-9]{10}$/, message: 'Must be exactly 10 digits.' } })}
+              onInput={(e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10); }}
+              error={errors.emergencyContact?.message}
+            />
             <div className="md:col-span-2">
               <Input
                 label="Home Address"
                 {...register('address')}
               />
             </div>
+            <Input label="City" {...register('city')} />
+            <Input label="District" {...register('district')} />
+            <Input label="State" {...register('state')} />
+            <Input
+              label="Pincode"
+              inputMode="numeric"
+              maxLength={6}
+              {...register('pincode', { pattern: { value: /^[0-9]{6}$/, message: 'Pincode must be exactly 6 digits.' } })}
+              onInput={(e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6); }}
+              error={errors.pincode?.message}
+            />
             <Select
               label="Residence Type"
               {...register('residenceType')}

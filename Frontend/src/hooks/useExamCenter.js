@@ -90,14 +90,14 @@ export function useSchedule(filters = {}) {
   };
 }
 
-export function useReview({ examTypeId, courseId, semester }) {
+export function useReview({ examTypeId, courseId, semester, batchYear }) {
   const qc = useQueryClient();
-  const enabled = !!(examTypeId && courseId && semester);
+  const enabled = !!(examTypeId && courseId && semester && batchYear);
   const q = useQuery({
-    queryKey: ['exam-center', 'review', examTypeId, courseId, semester],
+    queryKey: ['exam-center', 'review', examTypeId, courseId, semester, batchYear],
     enabled,
     queryFn: async () => {
-      const p = new URLSearchParams({ examTypeId, courseId, semester });
+      const p = new URLSearchParams({ examTypeId, courseId, semester, batchYear });
       return (await api.get(`/exam-center/review?${p}`)).data || null;
     },
   });

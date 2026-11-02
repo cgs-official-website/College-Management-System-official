@@ -22,6 +22,7 @@ import {
   IdCard
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { BLOOD_GROUPS, COMMUNITY_CATEGORIES, getBatchYears } from '../student/studentFormOptions';
 
 // ─── Reusable labelled input wrapper ────────────────────────────────────────
 function Field({ label, required, error, children }) {
@@ -133,6 +134,8 @@ export default function StudentRegister() {
   // ── Courses from admin panel ───────────────────────────────────────────────
   const [courses, setCourses] = useState([]);
   const [coursesLoading, setCoursesLoading] = useState(false);
+  const [sections, setSections] = useState([]);
+  const [sectionsLoading, setSectionsLoading] = useState(false);
 
   // ── Form fields ────────────────────────────────────────────────────────────
   const [form, setForm] = useState({
@@ -143,20 +146,41 @@ export default function StudentRegister() {
     phone: '',
     dob: '',
     gender: '',
-    course: '',
-    section: '',
+    courseId: '',
+    sectionId: '',
     parentName: '',
     parentPhone: '',
     address: '',
     residenceType: 'Day Scholar',
     password: '',
     confirmPassword: '',
+    registerNumber: '',
+    currentSemester: '',
+    rollNumber: '',
+    batchYear: String(new Date().getFullYear()),
+    bloodGroup: '',
+    motherName: '',
+    emergencyContact: '',
+    nationality: 'Indian',
+    communityCategory: '',
+    aadhaarNumber: '',
+    city: '',
+    district: '',
+    state: '',
+    pincode: '',
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
   const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }));
+  const digits = (field, len) => (e) =>
+    setForm(f => ({ ...f, [field]: e.target.value.replace(/\D/g, '').slice(0, len) }));
+
+  const handleCourseChange = (e) =>
+  setForm(f => ({ ...f, courseId: e.target.value, sectionId: '', currentSemester: '' }));
+
+  const selectedCourse = courses.find(c => c.id === form.courseId);
 
   // ── Validate college link / token on mount ─────────────────────────────────
   useEffect(() => {
@@ -225,19 +249,45 @@ export default function StudentRegister() {
     fetchCourses();
   }, [collegeId, collegeSlug, collegeSlugParam]);
 
+  useEffect(() => {
+    const identifier = collegeId || collegeSlug || collegeSlugParam;
+    if (!form.courseId || !identifier) { setSections([]); return; }
+    let cancelled = false;
+    setSectionsLoading(true);
+    api.get(`/colleges/registration-context/${encodeURIComponent(identifier)}/courses/${form.courseId}/sections`)
+      .then((resp) => {
+        if (cancelled) return;
+        const data = resp.data?.data || resp.data || [];
+        setSections(Array.isArray(data) ? data : []);
+      })
+      .catch(() => { if (!cancelled) setSections([]); })
+      .finally(() => { if (!cancelled) setSectionsLoading(false); });
+    return () => { cancelled = true; };
+  }, [form.courseId, collegeId, collegeSlug, collegeSlugParam]);
+
   // ── Form validation ────────────────────────────────────────────────────────
   const validate = () => {
     const e = {};
     if (!form.firstName.trim()) e.firstName = 'First name is required';
+    if (!form.lastName.trim()) e.lastName = 'Last name is required'; 
     if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Valid email is required';
     if (!form.admissionNumber.trim()) e.admissionNumber = 'Admission ID / Number is required';
     if (!form.dob || !form.dob.trim()) e.dob = 'Date of birth is required';
     if (!form.gender) e.gender = 'Please select your gender';
     if (!form.parentName.trim()) e.parentName = 'Parent/Guardian name is required';
     if (form.phone && !/^\d{10}$/.test(form.phone)) e.phone = 'Phone must be 10 digits';
-    if (form.parentPhone && !/^\d{10}$/.test(form.parentPhone)) e.parentPhone = 'Phone must be 10 digits';
+    if (!form.courseId) e.courseId = 'Please select your course';
+    if (!form.sectionId) e.sectionId = 'Please select your section';
+    if (!form.registerNumber.trim()) e.registerNumber = 'University Reg.No is required';
+    if (!form.rollNumber.trim()) e.rollNumber = 'Roll No is required'; 
+    if (!form.batchYear) e.batchYear = 'Please select your batch year';
+    if (!/^\d{10}$/.test(form.parentPhone)) e.parentPhone = 'Parent phone must be 10 digits';
+    if (form.emergencyContact && !/^\d{10}$/.test(form.emergencyContact)) e.emergencyContact = 'Must be 10 digits';
+    if (form.aadhaarNumber && !/^\d{12}$/.test(form.aadhaarNumber)) e.aadhaarNumber = 'Aadhaar must be 12 digits';
+    if (form.pincode && !/^\d{6}$/.test(form.pincode)) e.pincode = 'Pincode must be 6 digits';
     if (!form.password || form.password.length < 6) e.password = 'Password must be at least 6 characters';
     if (form.password !== form.confirmPassword) e.confirmPassword = 'Passwords do not match';
+    if (!form.currentSemester) e.currentSemester = 'Please select your current semester';
     return e;
   };
 
@@ -259,8 +309,22 @@ export default function StudentRegister() {
         phone: form.phone.trim() || null,
         dob: form.dob || null,
         gender: form.gender || null,
-        course: form.course.trim() || null,
-        section: form.section.trim() || null,
+        courseId: form.courseId,
+        sectionId: form.sectionId,
+        registerNumber: form.registerNumber.trim(),
+        rollNumber: form.rollNumber.trim() || null,
+        batchYear: form.batchYear,
+        currentSemester: parseInt(form.currentSemester, 10),
+        bloodGroup: form.bloodGroup || null,
+        motherName: form.motherName.trim() || null,
+        emergencyContact: form.emergencyContact || null,
+        nationality: form.nationality.trim() || null,
+        communityCategory: form.communityCategory || null,
+        aadhaarNumber: form.aadhaarNumber || null,
+        city: form.city.trim() || null,
+        district: form.district.trim() || null,
+        state: form.state.trim() || null,
+        pincode: form.pincode || null,
         parentName: form.parentName.trim() || null,
         parentPhone: form.parentPhone.trim() || null,
         address: form.address.trim() || null,
@@ -387,7 +451,7 @@ export default function StudentRegister() {
                   <TextInput icon={User} type="text" placeholder="e.g. Ravi" value={form.firstName} onChange={set('firstName')} />
                 </Field>
 
-                <Field label="Last Name" error={errors.lastName}>
+                <Field label="Last Name" required error={errors.lastName}>
                   <TextInput icon={User} type="text" placeholder="e.g. Kumar" value={form.lastName} onChange={set('lastName')} />
                 </Field>
 
@@ -424,34 +488,87 @@ export default function StudentRegister() {
                   </SelectInput>
                 </Field>
 
+                <Field label="Blood Group" error={errors.bloodGroup}>
+                <SelectInput value={form.bloodGroup} onChange={set('bloodGroup')}>
+                  <option value="">Select</option>
+                  {BLOOD_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+                </SelectInput>
+              </Field>
+              <Field label="Nationality">
+                <TextInput type="text" value={form.nationality} onChange={set('nationality')} />
+              </Field>
+              <Field label="Community Category">
+                <SelectInput value={form.communityCategory} onChange={set('communityCategory')}>
+                  <option value="">Select</option>
+                  {COMMUNITY_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </SelectInput>
+              </Field>
+              <Field label="Aadhaar Number" error={errors.aadhaarNumber}>
+                <TextInput inputMode="numeric" maxLength={12} placeholder="12 digits" value={form.aadhaarNumber} onChange={digits('aadhaarNumber', 12)} />
+              </Field>
+
               </div>
 
               {/* ── ACADEMIC INFORMATION ──────────────────────────────────── */}
               <SectionHeading>Academic Information</SectionHeading>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
 
-                <Field label="Class / Course" error={errors.course}>
+                <Field label="Course" required error={errors.courseId}>
                   {coursesLoading ? (
                     <div className="flex items-center gap-2 pl-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-400">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading courses...
+                      <Loader2 className="w-4 h-4 animate-spin" /> Loading courses...
                     </div>
                   ) : courses.length > 0 ? (
-                    <SelectInput icon={BookOpen} value={form.course} onChange={set('course')}>
+                    <SelectInput icon={BookOpen} value={form.courseId} onChange={handleCourseChange}>
                       <option value="">Select Course</option>
                       {courses.map(c => (
-                        <option key={c.id} value={c.name}>{c.name}{c.code ? ` (${c.code})` : ''}</option>
+                        <option key={c.id} value={c.id}>{c.name}{c.code ? ` (${c.code})` : ''}</option>
                       ))}
                     </SelectInput>
                   ) : (
-                    <TextInput icon={BookOpen} type="text" placeholder="e.g. B.Tech Computer Science" value={form.course} onChange={set('course')} />
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      No courses are set up yet. Please contact your college administrator.
+                    </p>
                   )}
                 </Field>
 
-                <Field label="Section" error={errors.section}>
-                  <TextInput icon={Layers} type="text" placeholder="e.g. Year 1 / Section A" value={form.section} onChange={set('section')} />
+                <Field label="Section" required error={errors.sectionId}>
+                  {sectionsLoading ? (
+                    <div className="flex items-center gap-2 pl-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-400">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Loading sections...
+                    </div>
+                  ) : (
+                    <SelectInput icon={Layers} value={form.sectionId} onChange={set('sectionId')} disabled={!form.courseId}>
+                      <option value="">{form.courseId ? 'Select Section' : 'Select a course'}</option>
+                      {sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </SelectInput>
+                  )}
+                  {form.courseId && !sectionsLoading && sections.length === 0 && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      No sections exist for this course yet. Please contact your college administrator.
+                    </p>
+                  )}
                 </Field>
 
+                <Field label="University Reg.No" required error={errors.registerNumber}>
+                  <TextInput icon={IdCard} type="text" placeholder="e.g. 737821CSR001" value={form.registerNumber} onChange={set('registerNumber')} />
+                </Field>
+                <Field label="Roll No" required error={errors.rollNumber}>
+                  <TextInput icon={IdCard} type="text" placeholder="e.g. 21CS045" value={form.rollNumber} onChange={set('rollNumber')} />
+                </Field>
+                <Field label="Batch Year" required error={errors.batchYear}>
+                  <SelectInput icon={Calendar} value={form.batchYear} onChange={set('batchYear')}>
+                    {getBatchYears().map(y => <option key={y} value={y}>{y}</option>)}
+                  </SelectInput>
+                </Field>
+                <Field label="Current Semester" required error={errors.currentSemester}>
+                  <SelectInput icon={Calendar} value={form.currentSemester} onChange={set('currentSemester')} disabled={!selectedCourse}>
+                    <option value="">{selectedCourse ? 'Select Semester' : 'Select a course first'}</option>
+                    {selectedCourse && Array.from({ length: Number(selectedCourse.semester) || 8 }, (_, i) => (
+                      <option key={i + 1} value={String(i + 1)}>Semester {i + 1}</option>
+                    ))}
+                  </SelectInput>
+                </Field>
               </div>
 
               {/* ── PARENT / GUARDIAN INFORMATION ───────────────────────── */}
@@ -474,11 +591,19 @@ export default function StudentRegister() {
                   />
                 </Field>
 
+                <Field label="Mother's Name">
+                  <TextInput icon={User} type="text" placeholder="e.g. Malathi" value={form.motherName} onChange={set('motherName')} />
+                </Field>
+                <Field label="Emergency Contact" error={errors.emergencyContact}>
+                  <TextInput icon={Phone} type="tel" inputMode="numeric" maxLength={10} placeholder="10-digit number" value={form.emergencyContact} onChange={digits('emergencyContact', 10)} />
+                </Field>
+
                 <div className="sm:col-span-2">
                   <Field label="Home Address" error={errors.address}>
                     <TextInput icon={MapPin} type="text" placeholder="Street, City, State" value={form.address} onChange={set('address')} />
                   </Field>
                 </div>
+
 
                 <div className="sm:col-span-2 sm:max-w-xs">
                   <Field label="Residence Type" error={errors.residenceType}>
@@ -488,6 +613,13 @@ export default function StudentRegister() {
                     </SelectInput>
                   </Field>
                 </div>
+
+                <Field label="City"><TextInput icon={MapPin} type="text" value={form.city} onChange={set('city')} /></Field>
+                <Field label="District"><TextInput icon={MapPin} type="text" value={form.district} onChange={set('district')} /></Field>
+                <Field label="State"><TextInput icon={MapPin} type="text" value={form.state} onChange={set('state')} /></Field>
+                <Field label="Pincode" error={errors.pincode}>
+                  <TextInput icon={MapPin} inputMode="numeric" maxLength={6} value={form.pincode} onChange={digits('pincode', 6)} />
+                </Field>
 
               </div>
 

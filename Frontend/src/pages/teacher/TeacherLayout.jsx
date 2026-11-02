@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
+import { api } from '../../services/apiClient';
 import { 
   LayoutDashboard, 
   Users, 
@@ -57,7 +58,7 @@ const TeacherLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout, userData, permissions } = useAuth();
+  const { logout, userData, permissions, updateUserData } = useAuth();
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
   const { theme, toggleTheme } = useTheme();
 
@@ -66,6 +67,13 @@ const TeacherLayout = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+  if (!userData?.uid || userData?.profileImage !== undefined) return;
+  api.get('/staff-profile')
+    .then((res) => updateUserData({ profileImage: res.data?.profileImage || null }))
+    .catch(() => updateUserData({ profileImage: null }));
+  }, [userData?.uid]);  
 
   const handleLogout = async () => {
     await logout();
@@ -111,6 +119,9 @@ const TeacherLayout = () => {
   userData?.teacherProfile?.designation ||
   userData?.role ||
   'Teacher';
+
+  const avatarSrc = userData?.profileImage;
+  const avatarInitial = (userData?.name || userData?.firstName || 'T').charAt(0).toUpperCase();
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-[#020813] text-slate-900 dark:text-slate-200 overflow-hidden font-sans transition-colors duration-300">
@@ -189,9 +200,13 @@ const TeacherLayout = () => {
         <div className="p-4 border-t border-slate-100 dark:border-white/5 mt-auto">
            <div className="flex items-center justify-between group cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 p-2 rounded-xl transition-colors" onClick={handleLogout}>
              <div className="flex items-center gap-3 overflow-hidden">
-               <div className="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-500/20 text-teal-700 dark:text-teal-400 flex items-center justify-center font-bold text-sm shrink-0">
-                 {userData?.name ? userData.name.charAt(0).toUpperCase() : 'F'}
-               </div>
+              <div className="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-500/20 text-teal-700 dark:text-teal-400 flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
+                {avatarSrc ? (
+                  <img src={avatarSrc} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span>{avatarInitial}</span>
+                )}
+              </div>
                <div className="truncate">
                  <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-red-600 transition-colors truncate">{userData?.name || 'Faculty Member'}</p>
                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">{roleLabel}</p>
@@ -249,9 +264,14 @@ const TeacherLayout = () => {
                 <p className="text-sm font-bold text-slate-900 dark:text-white leading-none capitalize">{userData?.name || userData?.firstName || 'Teacher'}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 capitalize">{roleLabel}</p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center text-white font-bold shadow-md uppercase">
-                {(userData?.name || userData?.firstName || 'T').charAt(0)}
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center text-white font-bold shadow-md uppercase overflow-hidden">
+                {avatarSrc ? (
+                  <img src={avatarSrc} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span>{avatarInitial}</span>
+                )}
               </div>
+              
             </button>
           </div>
         </header>
@@ -277,7 +297,7 @@ const TeacherLayout = () => {
               <Route path="/student-leaves" element={<LeaveRequestsDashboard />} />
 
               <Route path="/ptm" element={<TeacherPtm />} />
-              <Route path="/settings" element={<TeacherSettings />} />
+              <Route path="/settings" element={<StaffSettings />} />
               {canViewNotices && <Route path="/notices" element={<NoticeBoard />} />}
               {canUseFacilities && <Route path="/facility-requests" element={<HODFacilityRequests />} />}
               {userData?.role === 'hod' && <Route path="/timetable" element={<Timetable />} />}

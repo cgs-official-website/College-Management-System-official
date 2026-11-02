@@ -445,6 +445,31 @@ export function AuthProvider({ children }) {
   }, [userData, userRole]);
 
   // =========================
+// FAVICON 
+// =========================
+useEffect(() => {
+  let links = Array.from(document.querySelectorAll("link[rel~='icon']"));
+  if (links.length === 0) {
+    const link = document.createElement('link');
+    link.rel = 'icon';
+    document.head.appendChild(link);
+    links = [link];
+  }
+
+  const logo = userRole === 'superadmin' ? null : userData?.collegeLogo;
+
+  links.forEach((link) => {
+    // Remember the original icon so we can restore it
+    if (!link.dataset.defaultHref) {
+      link.dataset.defaultHref = link.getAttribute('href') || '/logo.png';
+    }
+    // Remove a fixed type (e.g. image/svg+xml) so PNG/JPEG logos also load
+    if (logo) link.removeAttribute('type');
+    link.setAttribute('href', logo || link.dataset.defaultHref);
+  });
+}, [userData?.collegeLogo, userRole]);
+
+  // =========================
   // CONTEXT VALUE
   // =========================
   const value = {

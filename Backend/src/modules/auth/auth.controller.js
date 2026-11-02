@@ -15,7 +15,7 @@ import {
   staffSetupSchema,
   teacherRegisterSchema,
 } from './auth.schema.js';
-import { verifyStaffSetupToken, verifyTeacherRegistrationToken, createStaffSetupToken } from './staffSetupToken.js';
+import { verifyStaffSetupToken, verifyTeacherRegistrationToken, createStaffSetupToken, verifyStudentSetupToken } from './staffSetupToken.js';
 import { sendDynamicMail } from '../../services/email/email.service.js';
 import { getNextCollegeCode } from '../../lib/collegeCodeGenerator.js';
 import { notify } from '../notifications/notify.service.js';
@@ -620,14 +620,19 @@ export const activateStudentAccount = async (req, res) => {
   }
 };
 
+const PROFILE_FIELDS = [
+  'motherName', 'nationality', 'communityCategory', 'aadhaarNumber',
+   'city', 'district', 'state', 'pincode'
+];
+
 export const studentRegister = async (req, res) => {
   try {
     const payload = studentRegisterSchema.parse(req.body);
     const {
       token, collegeId: requestedCollegeId, admissionNumber, email,
-      firstName, lastName, phone,
-      dob, gender, course, section,
-      parentName, parentPhone, address, residenceType,
+      firstName, lastName, phone, dob, gender,
+      courseId, sectionId, registerNumber, rollNumber, batchYear, currentSemester,
+      parentName, parentPhone, emergencyContact, address, residenceType,
       password
     } = payload;
     let collegeId = requestedCollegeId;
@@ -713,6 +718,43 @@ export const studentRegister = async (req, res) => {
       });
     }
 
+    const courseRecord = await prisma.course.findFirst({
+      where: { id: courseId, collegeId, deletedAt: null },
+      select: { id: true, departmentId: true, semester: true }
+    });
+    const sectionRecord = courseRecord
+      ? await prisma.section.findFirst({ where: { id: sectionId, courseId, collegeId }, select: { id: true } })
+      : null;
+    if (!courseRecord || !sectionRecord) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_COURSE_SECTION', message: 'Selected course or section is not valid for this college.' }
+      });
+    }
+    if (currentSemester > courseRecord.semester) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_SEMESTER', message: `Semester must be between 1 and ${courseRecord.semester} for this course.` }
+      });
+    }
+
+    const normalizedRegNo = registerNumber.trim();
+    const dupReg = await prisma.student.findFirst({
+      where: {
+        collegeId,
+        registerNumber: { equals: normalizedRegNo, mode: 'insensitive' },
+        deletedAt: null,
+        ...(student ? { NOT: { id: student.id } } : {})
+      },
+      select: { id: true }
+    });
+    if (dupReg) {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'REGISTER_NUMBER_ALREADY_EXISTS', message: 'This University Reg.No is already registered.' }
+      });
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
 
     // Student fills all fields themselves — use supplied values directly.
@@ -732,18 +774,6 @@ export const studentRegister = async (req, res) => {
         });
         const latestSequence = Number.parseInt(latestStudent?.admissionNumber?.slice(admissionPrefix.length) || '0', 10) || 0;
         admissionNo = `${admissionPrefix}${String(latestSequence + 1).padStart(4, '0')}`;
-      }
-
-      let department = await tx.department.findFirst({
-        where: { collegeId },
-        orderBy: { createdAt: 'asc' },
-        select: { id: true }
-      });
-      if (!department) {
-        department = await tx.department.create({
-          data: { name: 'General Studies', code: 'GEN', collegeId },
-          select: { id: true }
-        });
       }
 
       let user = student?.userId
@@ -789,25 +819,24 @@ export const studentRegister = async (req, res) => {
       const studentData = {
         userId: user.id,
         emailId: normalizedEmail,
-        // Student-supplied phone (overrides any admin placeholder)
         studentMobile: phone || student?.studentMobile || null,
-        emergencyContact: student?.emergencyContact || null,
-        // Student-supplied parent/guardian info
+        emergencyContact: emergencyContact || student?.emergencyContact || null,
         fatherName: parentName || student?.fatherName || null,
         parentMobile: parentPhone || student?.parentMobile || null,
         address: address || student?.address || null,
         residenceType: residenceType || student?.residenceType || 'Day Scholar',
+        registerNumber: student?.registerNumber || normalizedRegNo,
+        bloodGroup: payload.bloodGroup || student?.bloodGroup || null,
+        courseId: student?.courseId ?? courseId,
+        sectionId: student?.sectionId ?? sectionId,
+        ...Object.fromEntries(PROFILE_FIELDS.map((k) => [k, payload[k] || student?.[k] || null])),
         customFields: {
           ...existingCustomFields,
           firstName: trustedFirstName,
           lastName: trustedLastName,
-          // Student-supplied personal details
           dob: dob || existingCustomFields?.dob || null,
           dateOfBirth: dob || existingCustomFields?.dateOfBirth || null,
           gender: gender || existingCustomFields?.gender || null,
-          // Student-supplied academic info (free-text, admin assigns official IDs later)
-          courseName: course || existingCustomFields?.courseName || null,
-          sectionName: section || existingCustomFields?.sectionName || null,
         }
       };
 
@@ -817,13 +846,13 @@ export const studentRegister = async (req, res) => {
           data: {
             ...studentData,
             collegeId,
-            departmentId: department.id,
+            departmentId: courseRecord.departmentId,
             admissionNumber: admissionNo,
-            rollNumber: admissionNo,
-            batchYear: String(new Date().getFullYear())
+            rollNumber: rollNumber?.trim() || admissionNo,
+            currentSemester,
+            batchYear,
           }
         });
-
       return { user, student: savedStudent, admissionNumber: admissionNo };
     });
 
@@ -1765,5 +1794,94 @@ export const resetPassword = async (req, res) => {
     res.json({ success: true, message: 'Password has been successfully reset.' });
   } catch (error) {
     res.status(400).json({ success: false, error: { message: error.message } });
+  }
+};
+
+const findStudentForSetup = (client, claims) => client.student.findFirst({
+  where: { id: claims.studentId, userId: claims.userId, collegeId: claims.collegeId, deletedAt: null },
+  include: {
+    user: true,
+    college: { select: { id: true, name: true, slug: true } },
+    course: { select: { name: true } },
+  },
+});
+
+const hasPendingStudentSetupIdentity = (student, claims) => Boolean(
+  student && student.user && student.college &&
+  student.user.collegeId === claims.collegeId &&
+  student.user.role === 'student' &&
+  student.user.email?.toLowerCase() === claims.email.toLowerCase() &&
+  student.user.accountStatus === 'pending_setup' &&
+  student.user.passwordHash === null
+);
+
+export const verifyStudentSetup = async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ success: false, error: { message: 'Token is required' } });
+    const claims = verifyStudentSetupToken(token);
+    const student = await findStudentForSetup(prisma, claims);
+    if (!hasPendingStudentSetupIdentity(student, claims)) throw invalidSetupLink();
+
+    res.json({
+      success: true,
+      data: {
+        email: student.user.email,
+        name: student.user.name,
+        admissionNumber: student.admissionNumber,
+        course: student.course?.name || null,
+        collegeName: student.college.name,
+        collegeSlug: student.college.slug,
+      }
+    });
+  } catch {
+    res.status(400).json({ success: false, error: { message: 'Invalid or expired setup link.' } });
+  }
+};
+
+export const completeStudentSetup = async (req, res) => {
+  let stage = 'validate-request';
+  try {
+    const payload = staffSetupSchema.parse(req.body);
+    stage = 'verify-token';
+    const claims = verifyStudentSetupToken(payload.token);
+
+    stage = 'hash-password';
+    const passwordHash = await bcrypt.hash(payload.password, 10);
+
+    let studentName; let email;
+    await prisma.$transaction(async (tx) => {
+      stage = 'check-association';
+      const student = await findStudentForSetup(tx, claims);
+      if (!hasPendingStudentSetupIdentity(student, claims)) throw invalidSetupLink('SETUP_ASSOCIATION_INVALID');
+      studentName = student.user.name;
+      email = student.user.email;
+
+      stage = 'activate-pending-user';
+      const updated = await tx.user.updateMany({
+        where: { id: claims.userId, collegeId: claims.collegeId, email: student.user.email, accountStatus: 'pending_setup', passwordHash: null },
+        data: { passwordHash, accountStatus: 'active' },
+      });
+      if (updated.count !== 1) throw invalidSetupLink('SETUP_ALREADY_COMPLETED');
+    });
+
+    logger.info(`[STUDENT-SETUP] Account activated | studentId=${claims.studentId} email=${email} college=${claims.collegeId}`);
+
+    await notify({
+      collegeId: claims.collegeId,
+      target: { role: 'admin' },
+      type: 'account_activated',
+      title: 'Student Account Activated',
+      message: `Student account for ${studentName || email} is now active.`,
+      link: '/admin/students',
+    });
+
+    res.json({ success: true, message: 'Account setup complete. You can now log in.' });
+  } catch (error) {
+    logger.warn({ reqId: req.id, stage, errorName: error.name, errorCode: error.code || error.statusCode || 'UNKNOWN' }, 'Student account setup rejected');
+    res.status(error.statusCode || 400).json({
+      success: false,
+      error: { message: error.name === 'ZodError' ? (error.issues?.[0]?.message || 'Invalid request.') : 'Invalid or expired setup link.' }
+    });
   }
 };

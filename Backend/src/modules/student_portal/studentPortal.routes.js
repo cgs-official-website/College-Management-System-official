@@ -34,7 +34,10 @@ import {
   uploadStudentPersonalDocument,
   deleteStudentPersonalDocument,
   getStudentSubjects,
-  getStudentInternalResults
+  getStudentInternalResults,
+  getStudentSettings,
+  updateStudentSettings,
+  changeStudentPassword
 } from './studentPortal.controller.js';
 
 const upload = multer({
@@ -80,5 +83,9 @@ router.post('/documents', catchAsync(uploadStudentPersonalDocument));
 router.delete('/documents/:id', catchAsync(deleteStudentPersonalDocument));
 router.get('/subjects', catchAsync(getStudentSubjects));
 router.get('/internal-results', catchAsync(getStudentInternalResults));
+
+router.get('/settings', catchAsync(getStudentSettings));
+router.put('/settings', catchAsync(updateStudentSettings));
+router.put('/settings/password', catchAsync(changeStudentPassword));
 
 export default router;

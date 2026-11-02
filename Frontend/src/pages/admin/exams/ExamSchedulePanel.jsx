@@ -21,8 +21,11 @@ export default function ExamSchedulePanel() {
   const [semester, setSemester] = useState('');
   const [rows, setRows] = useState([]);
 
+  const [batchYear, setBatchYear] = useState('');
+
   const { preview, isLoading } = useSchedulePreview({ examTypeId, courseId, semester });
-  const { schedule, createSchedule, deleteItem, isCreating } = useSchedule({ examTypeId, courseId, semester });
+  const { schedule, createSchedule, deleteItem, isCreating } = useSchedule({ examTypeId, courseId, semester, batchYear });
+  const batches = preview?.batches || [];
 
   const course = courses.find((c) => c.id === courseId);
   const semesterOptions = course ? Array.from({ length: course.semester }, (_, i) => i + 1) : [];
@@ -46,7 +49,7 @@ export default function ExamSchedulePanel() {
     }));
     if (!items.length) return;
     try {
-      await createSchedule({ examTypeId, courseId, semester: Number(semester), items });
+      await createSchedule({ examTypeId, courseId, semester: Number(semester), batchYear, items });
     } catch { /* toast shown */ }
   };
 
@@ -66,7 +69,7 @@ export default function ExamSchedulePanel() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Exam type</label>
             <select className={sel} value={examTypeId} onChange={(e) => setExamTypeId(e.target.value)}>
@@ -76,16 +79,23 @@ export default function ExamSchedulePanel() {
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Program</label>
-            <select className={sel} value={courseId} onChange={(e) => { setCourseId(e.target.value); setSemester(''); }}>
+            <select className={sel} value={courseId} onChange={(e) => { setCourseId(e.target.value); setSemester(''); setBatchYear(''); }}>
               <option value="">Select program</option>
               {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Semester</label>
-            <select className={sel} value={semester} disabled={!courseId} onChange={(e) => setSemester(e.target.value)}>
+            <select className={sel} value={semester} disabled={!courseId} onChange={(e) => { setSemester(e.target.value); setBatchYear(''); }}>
               <option value="">Select semester</option>
               {semesterOptions.map((n) => <option key={n} value={n}>Semester {n}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Batch</label>
+            <select className={sel} value={batchYear} disabled={!semester || batches.length === 0} onChange={(e) => setBatchYear(e.target.value)}>
+              <option value="">{semester && batches.length === 0 ? 'No students in this semester' : 'Select batch'}</option>
+              {batches.map((b) => <option key={b} value={b}>{b}</option>)}
             </select>
           </div>
         </div>
@@ -96,7 +106,11 @@ export default function ExamSchedulePanel() {
           <p className="text-sm text-slate-500">No active subjects for this semester. Add them in Academic Structure first.</p>
         )}
 
-        {rows.length > 0 && (
+        {rows.length > 0 && !batchYear && (
+          <p className="text-sm text-slate-500">Select a batch to continue.</p>
+        )}
+
+        {rows.length > 0 && batchYear && (
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -131,7 +145,7 @@ export default function ExamSchedulePanel() {
               </table>
             </div>
             <div className="flex justify-end">
-              <button onClick={submit} disabled={isCreating}
+              <button onClick={submit} disabled={isCreating || !batchYear}
                 className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl">
                 <CalendarPlus className="w-4 h-4" /> {isCreating ? 'Scheduling...' : 'Schedule selected subjects'}
               </button>
@@ -148,7 +162,7 @@ export default function ExamSchedulePanel() {
               <thead>
                 <tr className="border-b border-slate-200 dark:border-white/10">
                   <th className={TH}>Date</th><th className={TH}>Time</th><th className={TH}>Course Code</th>
-                  <th className={TH}>Subject</th><th className={TH}>Exam</th><th className={TH}>Program / Sem</th>
+                  <th className={TH}>Subject</th><th className={TH}>Exam</th><th className={TH}>Program / Sem</th><th className={TH}>Batch</th>
                   <th className={TH}>Hall</th><th className={TH}>Max</th><th className={TH}></th>
                 </tr>
               </thead>
@@ -161,6 +175,7 @@ export default function ExamSchedulePanel() {
                     <td className="py-3 px-3 text-slate-700 dark:text-slate-200">{e.subject?.name}</td>
                     <td className="py-3 px-3"><span className="px-2 py-1 text-xs font-bold rounded-md bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">{e.examTypeName}</span></td>
                     <td className="py-3 px-3 text-slate-600 dark:text-slate-300">{e.courseName} / Sem {e.semester}</td>
+                    <td className="py-3 px-3 text-slate-600 dark:text-slate-300">{e.batchYear || '--'}</td>
                     <td className="py-3 px-3 text-slate-600 dark:text-slate-300">{e.room}</td>
                     <td className="py-3 px-3 text-slate-600 dark:text-slate-300">{e.maxMarks}</td>
                     <td className="py-3 px-3 text-right">

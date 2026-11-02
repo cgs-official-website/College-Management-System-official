@@ -18,6 +18,8 @@ import {
   teacherSendSetup,
 } from './auth.controller.js';
 import { authenticate } from '../../middleware/authenticate.js';
+import { verifyStudentSetup } from './auth.controller.js';
+import { completeStudentSetup } from './auth.controller.js';
 
 const router = Router();
 
@@ -50,4 +52,6 @@ router.post('/teacher-register', teacherRegister);
 // Teacher provides College ID + Teacher ID → system sends Setup Link to admin-registered email
 router.post('/teacher-send-setup', teacherSendSetup);
 
+router.get('/student-setup/verify', verifyStudentSetup);
+router.post('/student-setup', completeStudentSetup);
 export default router;

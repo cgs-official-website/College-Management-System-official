@@ -4,11 +4,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../contexts/AuthContext';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
-import { Building, Shield, User, Camera, Eye, EyeOff, Globe, ShieldAlert } from 'lucide-react';
-import DomainManagementPage from '../domains/DomainManagementPage';
-import NonCompliantUsersPage from '../domains/NonCompliantUsersPage';
+import { Building, Shield, Trash2, Camera, Eye, EyeOff, Upload, Loader2 } from 'lucide-react';
 import { api } from '../../../services/apiClient';
 import toast from 'react-hot-toast';
+
+const LOGO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 export default function Settings() {
   const { userData, updateUserData } = useAuth();
@@ -62,17 +62,13 @@ export default function Settings() {
         aicteNumber: col.aicteNumber || '',
         ugcCode: col.ugcCode || ''
       });
-      if (col.logoUrl) {
-        setLogoBase64(col.logoUrl);
-      } else if (col.logoBase64) {
-        setLogoBase64(col.logoBase64);
-      }
+      setLogoBase64(col.logoUrl || col.logoBase64 || '');
     }
   }, [collegeData, reset]);
 
   const updateProfileMutation = useMutation({
     mutationFn: async (data) => {
-      const updateData = { ...data, logoUrl: logoBase64 };
+      const updateData = { ...data, logoUrl: logoBase64 || null };
       const response = await api.put(`/colleges/${collegeId}`, updateData);
       return response?.data || response;
     },
@@ -89,6 +85,21 @@ export default function Settings() {
       toast.error(errorMsg);
     }
   });
+
+  const updateLogoMutation = useMutation({
+  mutationFn: async (logo) => {
+    const response = await api.put(`/colleges/${collegeId}`, { logoUrl: logo || null });
+    return { logo, response: response?.data || response };
+  },
+  onSuccess: ({ logo }) => {
+    queryClient.invalidateQueries({ queryKey: ['college', collegeId] });
+    updateUserData({ collegeLogo: logo || null });
+    toast.success(logo ? 'Logo updated!' : 'Logo removed.');
+  },
+  onError: (err) => {
+    toast.error(err?.response?.data?.error?.message || err?.message || 'Failed to update logo.');
+  }
+});
 
   const changePasswordMutation = useMutation({
     mutationFn: async (payload) => {
@@ -148,19 +159,33 @@ export default function Settings() {
   };
 
   const handleLogoUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        toast.error('File size must be less than 2MB');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setLogoBase64(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  if (file.size > 2 * 1024 * 1024) {
+    toast.error('File size must be less than 2MB');
+    e.target.value = '';
+    return;
+  }
+
+  if (!LOGO_TYPES.includes(file.type)) {
+    toast.error('Only JPEG, PNG or WebP images are allowed.');
+    e.target.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onloadend = () => {
+    setLogoBase64(reader.result);
+    updateLogoMutation.mutate(reader.result);
   };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+};
+
+const handleRemoveLogo = () => {
+  setLogoBase64('');
+  updateLogoMutation.mutate('');
+};
 
   if (isLoading) {
     return <div className="p-8 text-center text-slate-500">Loading settings...</div>;
@@ -181,25 +206,13 @@ export default function Settings() {
               onClick={() => setActiveTab('profile')}
               className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-colors ${activeTab === 'profile' ? 'bg-white dark:bg-[#0A0F1C] text-primary-600 dark:text-primary-400 shadow-sm border border-slate-200 dark:border-white/10' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'}`}
             >
-              <Building className="w-5 h-5" /> College Profile
+              <Building className="w-5 h-5" /> Institution Profile
             </button>
             <button
               onClick={() => setActiveTab('security')}
               className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-colors ${activeTab === 'security' ? 'bg-white dark:bg-[#0A0F1C] text-primary-600 dark:text-primary-400 shadow-sm border border-slate-200 dark:border-white/10' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'}`}
             >
               <Shield className="w-5 h-5" /> Security
-            </button>
-            <button
-              onClick={() => setActiveTab('domains')}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-colors ${activeTab === 'domains' ? 'bg-white dark:bg-[#0A0F1C] text-primary-600 dark:text-primary-400 shadow-sm border border-slate-200 dark:border-white/10' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'}`}
-            >
-              <Globe className="w-5 h-5" /> Domain Management
-            </button>
-            <button
-              onClick={() => setActiveTab('non-compliant')}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-colors ${activeTab === 'non-compliant' ? 'bg-white dark:bg-[#0A0F1C] text-primary-600 dark:text-primary-400 shadow-sm border border-slate-200 dark:border-white/10' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'}`}
-            >
-              <ShieldAlert className="w-5 h-5" /> Domain Compliance
             </button>
           </nav>
         </div>
@@ -208,26 +221,55 @@ export default function Settings() {
         <div className="flex-1 p-6 md:p-8">
           {activeTab === 'profile' && (
             <form onSubmit={handleSubmit(onProfileSubmit)} className="space-y-8">
-              <div className="flex items-center gap-6 pb-6 border-b border-slate-200 dark:border-white/10">
-                <div className="relative group">
-                  <div className="w-24 h-24 rounded-2xl bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center overflow-hidden relative">
+              <div className="pb-6 border-b border-slate-200 dark:border-white/10">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Camera className="w-5 h-5 text-primary-500" /> College Logo
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Upload your institution's logo. Max size 2 MB (JPEG, PNG, WebP).
+                </p>
+
+                <div className="mt-4 flex items-center gap-5">
+                  <div className="relative w-24 h-24 rounded-2xl border-2 border-primary-500 bg-primary-50 dark:bg-primary-500/10 flex items-center justify-center overflow-hidden shadow-md">
                     {logoBase64 ? (
                       <img src={logoBase64} alt="College Logo" className="w-full h-full object-contain" />
                     ) : (
-                      <Building className="w-8 h-8 text-slate-400" />
+                      <Building className="w-8 h-8 text-primary-400" />
                     )}
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <Camera className="w-6 h-6 text-white" />
-                    </div>
+                    {updateLogoMutation.isPending && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <Loader2 className="w-6 h-6 animate-spin text-white" />
+                      </div>
+                    )}
                   </div>
-                  <input type="file" ref={fileInputRef} onChange={handleLogoUpload} accept="image/*" className="hidden" />
-                  <button type="button" onClick={() => fileInputRef.current?.click()} className="absolute bottom-[-10px] right-[-10px] w-8 h-8 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-full flex items-center justify-center text-primary-600 shadow-sm hover:scale-110 transition-transform">
-                    <Camera className="w-4 h-4" />
-                  </button>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">College Logo</h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Upload your institution's logo. Max size 2MB.</p>
+
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleLogoUpload}
+                      accept={LOGO_TYPES.join(',')}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      disabled={updateLogoMutation.isPending}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-xs font-bold text-slate-700 dark:text-slate-200 disabled:opacity-50"
+                    >
+                      <Upload className="w-4 h-4" /> Upload
+                    </button>
+                    {logoBase64 && (
+                      <button
+                        type="button"
+                        disabled={updateLogoMutation.isPending}
+                        onClick={handleRemoveLogo}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-50"
+                      >
+                        <Trash2 className="w-4 h-4" /> Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -305,18 +347,6 @@ export default function Settings() {
                   {changePasswordMutation.isPending ? 'Updating...' : 'Update Password'}
                 </Button>
               </form>
-            </div>
-          )}
-
-          {activeTab === 'domains' && (
-            <div className="pt-2">
-              <DomainManagementPage />
-            </div>
-          )}
-
-          {activeTab === 'non-compliant' && (
-            <div className="pt-2">
-              <NonCompliantUsersPage />
             </div>
           )}
         </div>

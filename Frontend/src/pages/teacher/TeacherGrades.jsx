@@ -164,7 +164,7 @@ export default function TeacherGrades() {
       </div>
 
       <div className="bg-white dark:bg-[#0A0F1C] border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm p-6">
-        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Exam, subject and section</label>
+        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Exam, Subject and Section</label>
         <div className="relative">
           <FileBarChart className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
           <select
